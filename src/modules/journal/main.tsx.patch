@@ -1,0 +1,5 @@
+// ADD after the CALENDAR_MIGRATIONS import line:
+import { JOURNAL_MIGRATIONS } from "@/modules/journal/db";
+
+// ADD after db.registerMigrations(CALENDAR_MIGRATIONS):
+db.registerMigrations(JOURNAL_MIGRATIONS);

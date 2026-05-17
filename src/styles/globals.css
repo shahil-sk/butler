@@ -1,0 +1,252 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 98%;
+    --foreground: 222 20% 8%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 20% 8%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 20% 8%;
+    color-scheme: light;
+
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 16% 95%;
+    --secondary-foreground: 222 16% 22%;
+    --muted: 220 16% 95%;
+    --muted-foreground: 220 10% 50%;
+    --accent: 220 16% 93%;
+    --accent-foreground: 222 16% 22%;
+    --destructive: 0 82% 57%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 14% 89%;
+    --input: 220 14% 89%;
+    --ring: 221 83% 53%;
+
+    --surface-0: 0 0% 98%;
+    --surface-1: 220 16% 96%;
+    --surface-2: 220 16% 93%;
+    --surface-3: 220 14% 89%;
+
+    --text-primary: 222 20% 8%;
+    --text-secondary: 220 10% 40%;
+    --text-tertiary: 220 10% 60%;
+
+    --radius: 0.45rem;
+
+    --duration-fast: 70ms;
+    --duration-normal: 130ms;
+    --duration-slow: 220ms;
+
+    --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.04);
+    --shadow-sm: 0 1px 3px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04);
+    --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.08), 0 2px 4px -1px rgb(0 0 0 / 0.04);
+    --shadow-lg: 0 12px 32px -4px rgb(0 0 0 / 0.10), 0 4px 8px -2px rgb(0 0 0 / 0.05);
+    --shadow-popover: 0 8px 30px -4px rgb(0 0 0 / 0.12), 0 2px 8px -1px rgb(0 0 0 / 0.06), 0 0 0 1px rgb(0 0 0 / 0.04);
+  }
+
+# Added by me
+
+@layer base {
+  select,
+  input,
+  textarea {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    border-color: hsl(var(--border));
+  }
+
+  /* Fix native select arrow color in dark mode */
+  select {
+    color-scheme: dark light;
+  }
+}
+
+  .dark {
+    --background: 222 20% 8%;
+    --foreground: 220 12% 93%;
+    --card: 222 18% 10%;
+    --card-foreground: 220 12% 93%;
+    --popover: 222 18% 11%;
+    --popover-foreground: 220 12% 93%;
+    color-scheme: dark;
+
+    --primary: 221 83% 62%;
+    --primary-foreground: 222 20% 8%;
+    --secondary: 222 16% 14%;
+    --secondary-foreground: 220 12% 82%;
+    --muted: 222 16% 14%;
+    --muted-foreground: 220 10% 55%;
+    --accent: 222 16% 17%;
+    --accent-foreground: 220 12% 82%;
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 222 16% 17%;
+    --input: 222 16% 17%;
+    --ring: 221 83% 62%;
+
+    --surface-0: 222 20% 8%;
+    --surface-1: 222 18% 10%;
+    --surface-2: 222 18% 13%;
+    --surface-3: 222 16% 17%;
+
+    --text-primary: 220 12% 93%;
+    --text-secondary: 220 10% 65%;
+    --text-tertiary: 220 10% 45%;
+
+    --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.2);
+    --shadow-sm: 0 1px 3px rgb(0 0 0 / 0.25), 0 1px 2px rgb(0 0 0 / 0.15);
+    --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.3), 0 2px 4px -1px rgb(0 0 0 / 0.15);
+    --shadow-lg: 0 12px 32px -4px rgb(0 0 0 / 0.4), 0 4px 8px -2px rgb(0 0 0 / 0.2);
+    --shadow-popover: 0 8px 30px -4px rgb(0 0 0 / 0.5), 0 2px 8px -1px rgb(0 0 0 / 0.25), 0 0 0 1px rgb(255 255 255 / 0.05);
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+
+  html {
+    font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-1 ring-offset-background;
+  }
+
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { @apply bg-transparent; }
+  ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 9999px; }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.35); }
+
+  ::selection { background: hsl(var(--primary) / 0.16); }
+}
+
+/* ── Prose ──────────────────────────────────────────────── */
+.prose {
+  color: hsl(var(--foreground));
+  line-height: 1.75;
+  font-size: 0.9375rem;
+}
+.prose h1 { font-size: 1.5rem; font-weight: 650; letter-spacing: -0.025em; margin: 1.5rem 0 0.75rem; }
+.prose h2 { font-size: 1.25rem; font-weight: 600; letter-spacing: -0.02em; margin: 1.25rem 0 0.5rem; }
+.prose h3 { font-size: 1.0625rem; font-weight: 600; letter-spacing: -0.01em; margin: 1rem 0 0.5rem; }
+.prose p  { margin: 0.5rem 0; }
+.prose ul, .prose ol { margin: 0.5rem 0; padding-left: 1.5rem; }
+.prose li { margin: 0.25rem 0; }
+.prose blockquote {
+  border-left: 2px solid hsl(var(--primary) / 0.45);
+  padding-left: 1rem;
+  color: hsl(var(--muted-foreground));
+  margin: 0.75rem 0;
+  font-style: italic;
+}
+.prose code {
+  font-family: 'Geist Mono', 'JetBrains Mono', monospace;
+  font-size: 0.84em;
+  background: hsl(var(--muted));
+  padding: 0.12em 0.38em;
+  border-radius: 0.3rem;
+  border: 1px solid hsl(var(--border));
+}
+.prose pre {
+  background: hsl(var(--surface-2));
+  border: 1px solid hsl(var(--border));
+  padding: 1rem 1.25rem;
+  border-radius: 0.55rem;
+  overflow-x: auto;
+  margin: 0.75rem 0;
+}
+.prose pre code { background: none; padding: 0; border: none; font-size: 0.875em; }
+.prose hr { border-color: hsl(var(--border)); margin: 1.5rem 0; }
+.prose a { color: hsl(var(--primary)); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+.prose a:hover { opacity: 0.8; }
+
+/* Task list */
+.prose ul[data-type="taskList"] { list-style: none; padding-left: 0.25rem; }
+.prose ul[data-type="taskList"] li { display: flex; align-items: flex-start; gap: 0.5rem; }
+.prose ul[data-type="taskList"] li > label { margin-top: 0.2rem; }
+.prose ul[data-type="taskList"] li > div { flex: 1; }
+
+/* Placeholder */
+.ProseMirror p.is-editor-empty:first-child::before,
+.ProseMirror .is-empty::before {
+  content: attr(data-placeholder);
+  color: hsl(var(--muted-foreground));
+  opacity: 0.4;
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* ── Animations ──────────────────────────────────────────── */
+@keyframes fade-in-scale {
+  from { opacity: 0; transform: scale(0.975) translateY(-3px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(12px) scale(0.975); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+
+.animate-fade-in { animation: fade-in-scale var(--duration-slow) cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.animate-toast-in { animation: toast-in var(--duration-slow) cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.animate-pulse-soft { animation: pulse-soft 1.6s ease-in-out infinite; }
+
+@layer utilities {
+  .transition-fast {
+    transition-property: color, background-color, border-color, opacity, box-shadow, transform;
+    transition-duration: var(--duration-fast);
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .transition-normal {
+    transition-property: color, background-color, border-color, opacity, box-shadow, transform;
+    transition-duration: var(--duration-normal);
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .kbd {
+    @apply inline-flex items-center justify-center rounded border border-border/70
+           bg-surface-2 text-muted-foreground;
+    height: 17px;
+    min-width: 17px;
+    padding: 0 3px;
+    font-family: 'Geist Mono', monospace;
+    font-size: 9.5px;
+    font-weight: 500;
+    letter-spacing: 0;
+    box-shadow: 0 1px 0 0 hsl(var(--border));
+  }
+
+  .truncate-1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .truncate-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+  .surface-0 { background: hsl(var(--surface-0)); }
+  .surface-1 { background: hsl(var(--surface-1)); }
+  .surface-2 { background: hsl(var(--surface-2)); }
+  .surface-3 { background: hsl(var(--surface-3)); }
+
+  .shadow-popover { box-shadow: var(--shadow-popover); }
+}
