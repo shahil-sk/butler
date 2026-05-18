@@ -8,6 +8,8 @@ import {
   PanelLeftClose, Settings, Plus,
   LayoutDashboard, ChevronRight, Sun, Moon, Monitor,
 } from "lucide-react";
+// Tauri app icon — resolved by Vite at build time
+import appIcon from "/src-tauri/icons/32x32.png";
 
 // ── Nav sections ─────────────────────────────────────────────
 const NAV_SECTIONS = [
@@ -93,7 +95,10 @@ export function Sidebar() {
               aria-label="Expand sidebar"
               title="Expand sidebar"
               className="rounded-[7px] transition-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              style={{ lineHeight: 0 }}
+              style={{
+                lineHeight: 0,
+                transition: "transform 200ms cubic-bezier(0.16,1,0.3,1), opacity 200ms",
+              }}
               onMouseEnter={(e) => {
                 (e.currentTarget as HTMLButtonElement).style.opacity = "0.75";
                 (e.currentTarget as HTMLButtonElement).style.transform = "scale(1.08)";
@@ -291,24 +296,17 @@ export function Sidebar() {
   );
 }
 
-// ── Logomark ───────────────────────────────────────────────────
+// ── Logomark — uses actual app icon from src-tauri/icons/32x32.png ──────
 function Logomark() {
   return (
-    <div
-      className="w-7 h-7 rounded-[7px] flex items-center justify-center shrink-0 shadow-sm"
-      style={{
-        background:
-          "linear-gradient(135deg, hsl(var(--sidebar-primary)), hsl(221 85% 45%))",
-        transition: "transform 200ms cubic-bezier(0.16,1,0.3,1), opacity 200ms",
-      }}
-    >
-      <svg width="13" height="13" viewBox="0 0 12 12" fill="none" aria-hidden>
-        <rect x="1" y="1" width="4" height="4" rx="1" fill="white" fillOpacity="0.95" />
-        <rect x="7" y="1" width="4" height="4" rx="1" fill="white" fillOpacity="0.95" />
-        <rect x="1" y="7" width="4" height="4" rx="1" fill="white" fillOpacity="0.95" />
-        <rect x="7" y="7" width="4" height="4" rx="1" fill="white" fillOpacity="0.5" />
-      </svg>
-    </div>
+    <img
+      src={appIcon}
+      alt="Butler"
+      width={28}
+      height={28}
+      className="shrink-0 rounded-[7px] shadow-sm"
+      draggable={false}
+    />
   );
 }
 
