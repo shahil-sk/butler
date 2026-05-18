@@ -151,7 +151,7 @@ function rowToSession(row: Record<string, unknown>): FocusSession {
 
 export async function dbLoadSessions(): Promise<FocusSession[]> {
   const rows = await db.select<Record<string, unknown>[]>(SELECT_RECENT_SQL);
-  return rows.map(rowToSession);
+  return (rows as unknown as Record<string, unknown>[]).map(rowToSession);
 }
 
 export async function dbLoadTodaySessions(): Promise<FocusSession[]> {

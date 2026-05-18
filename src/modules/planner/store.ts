@@ -248,7 +248,7 @@ export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get
     set((s) => ({ blocks: [...s.blocks, block] }));
 
     if (block.taskId) {
-      bus.emit("planner:block-linked-task", { taskId: block.taskId, date: block.date });
+      bus.emit("planner:block-linked-task", { blockId: block.id, taskId: block.taskId, date: block.date });
     }
 
     bus.emit("notify", { message: `Block "${block.title}" created`, type: "success" } as never);

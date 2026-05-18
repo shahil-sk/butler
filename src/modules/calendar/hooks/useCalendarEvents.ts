@@ -13,7 +13,7 @@ export function useVisibleEvents(): CalendarEvent[] {
   const focusDate = useCalendarStore(s => s.focusDate)
 
   const visibleCalIds = useMemo(
-    () => new Set(calendars.filter(c => c.visible).map(c => c.id)),
+    () => new Set(calendars.filter(c => c.isVisible).map(c => c.id)),
     [calendars]
   )
 
@@ -27,7 +27,7 @@ export function useEventsForDate(dateStr: string): CalendarEvent[] {
   const events = useCalendarStore(s => s.events)
   const calendars = useCalendarStore(s => s.calendars)
   const visibleCalIds = useMemo(
-    () => new Set(calendars.filter(c => c.visible).map(c => c.id)),
+    () => new Set(calendars.filter(c => c.isVisible).map(c => c.id)),
     [calendars]
   )
   return useMemo(() => {
@@ -45,7 +45,7 @@ export function useEventsForWeek(weekStart: Date): Record<string, CalendarEvent[
   const events    = useCalendarStore(s => s.events)
   const calendars = useCalendarStore(s => s.calendars)
   const visibleCalIds = useMemo(
-    () => new Set(calendars.filter(c => c.visible).map(c => c.id)),
+    () => new Set(calendars.filter(c => c.isVisible).map(c => c.id)),
     [calendars]
   )
 
