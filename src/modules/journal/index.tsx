@@ -45,6 +45,12 @@ const ENTRY_TYPES: { value: JournalEntry["type"]; label: string }[] = [
   { value: "reflection", label: "Reflection" },
 ];
 
+// SubNav items — id is required by SubNav; we derive it from the value field.
+const FILTER_NAV_ITEMS = [
+  { id: "all",        label: "All" },
+  ...ENTRY_TYPES.map((t) => ({ id: t.value, label: t.label })),
+];
+
 // ── MoodPicker ───────────────────────────────────────────────
 
 function MoodPicker({
@@ -158,7 +164,6 @@ function LinkedProjectsPanel({ projectIds }: { projectIds: string[] }) {
 }
 
 // ── DailyNoteButton ──────────────────────────────────────────
-// For daily entries: shows a button to open/create the matching daily note.
 
 function DailyNoteButton({ date }: { date: ISODate }) {
   const notes = useNoteStore((s) => s.notes);
@@ -183,7 +188,6 @@ function DailyNoteButton({ date }: { date: ISODate }) {
   return (
     <GhostButton
       onClick={handleClick}
-      className="text-xs flex items-center gap-1.5"
       title={dailyNote ? "Open daily note" : "Create daily note"}
     >
       <span>{dailyNote ? "📝 Daily Note" : "📝 Create Note"}</span>
@@ -203,7 +207,6 @@ function EntryEditor({
   const [mood, setMood] = useState(entry.mood);
   const [tags, setTags] = useState(entry.tags.join(", "));
 
-  // Reset when entry switches
   useEffect(() => {
     setMood(entry.mood);
     setTags(entry.tags.join(", "));
@@ -229,7 +232,7 @@ function EntryEditor({
         <MoodPicker value={mood} onChange={handleMoodChange} />
       </div>
 
-      {/* Rich text editor — replaces textarea */}
+      {/* Rich text editor */}
       <RichEditor
         content={entry.content}
         onChange={(json) => onSave({ content: json })}
@@ -251,10 +254,7 @@ function EntryEditor({
         />
       </div>
 
-      {/* Linked tasks */}
       <LinkedTasksPanel taskIds={entry.linkedTaskIds} />
-
-      {/* Linked projects */}
       <LinkedProjectsPanel projectIds={entry.linkedProjectIds} />
     </div>
   );
@@ -373,14 +373,12 @@ export default function JournalModule() {
   const [filterType, setFilterType] = useState<JournalEntry["type"] | "all">("all");
   const [showNewModal, setShowNewModal] = useState(false);
 
-  // Register manifest + listeners
   useEffect(() => {
     registry.register(JOURNAL_MANIFEST);
     const cleanup = setupJournalEventListeners();
     return cleanup;
   }, []);
 
-  // Load entries + open today on mount
   useEffect(() => {
     void loadEntries().then(() => getOrCreateDaily(today()));
   }, []);
@@ -411,20 +409,17 @@ export default function JournalModule() {
       {/* Sidebar */}
       <div className="w-64 shrink-0 border-r flex flex-col">
         <div className="p-3 border-b">
-          <PrimaryButton className="w-full" onClick={() => setShowNewModal(true)}>
+          <PrimaryButton onClick={() => setShowNewModal(true)}>
             New Entry
           </PrimaryButton>
         </div>
 
-        {/* Type filter */}
+        {/* Type filter — items use `id` as required by SubNav */}
         <div className="p-2 border-b">
           <SubNav
-            items={[
-              { label: "All", value: "all" },
-              ...ENTRY_TYPES.map((t) => ({ label: t.label, value: t.value })),
-            ]}
-            active={filterType}
-            onChange={(v) => setFilterType(v as typeof filterType)}
+            items={FILTER_NAV_ITEMS}
+            activeId={filterType}
+            onSelect={(id) => setFilterType(id as typeof filterType)}
           />
         </div>
 
@@ -434,7 +429,7 @@ export default function JournalModule() {
             <p className="text-xs text-muted-foreground px-2 py-4 text-center">Loading…</p>
           )}
           {!isLoading && filtered.length === 0 && (
-            <EmptyState icon="BookHeart" title="No entries yet" description="Start writing today" />
+            <EmptyState title="No entries yet" subtitle="Start writing today" />
           )}
           {filtered.map((entry) => (
             <EntryListItem
@@ -458,7 +453,6 @@ export default function JournalModule() {
                   {activeEntry.type}
                 </span>
               </div>
-              {/* Daily entries: quick jump to matching daily note */}
               {activeEntry.type === "daily" && (
                 <DailyNoteButton date={activeEntry.date} />
               )}
@@ -474,9 +468,8 @@ export default function JournalModule() {
         ) : (
           <div className="flex-1 flex items-center justify-center">
             <EmptyState
-              icon="BookHeart"
               title="Select an entry"
-              description="Or create a new one"
+              subtitle="Or create a new one"
             />
           </div>
         )}
