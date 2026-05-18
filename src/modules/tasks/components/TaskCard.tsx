@@ -1,12 +1,12 @@
 // ============================================================
 // TASKS MODULE — TaskCard
-// Card UI matching ProjectCard style. Grid + list variants.
+// Grid card + compact list row variants.
 // ============================================================
 
 import { useRef, useState } from "react";
 import {
   MoreHorizontal, Calendar, Circle, CheckCircle2,
-  Copy, Trash2, Archive, ExternalLink, FolderKanban,
+  Copy, Trash2, Archive, ExternalLink,
   Flag, Clock,
 } from "lucide-react";
 import { cn, formatDate } from "@/shared/utils";
@@ -18,43 +18,37 @@ import type { Task } from "@/shared/types";
 
 // ── Priority config ──────────────────────────────────────────
 
-const PRIORITY_CONFIG: Record<string, { label: string; dot: string; text: string; bg: string }> = {
-  urgent: { label: "Urgent", dot: "bg-red-500",    text: "text-red-600 dark:text-red-400",    bg: "bg-red-500/8 dark:bg-red-500/12" },
-  high:   { label: "High",   dot: "bg-orange-400", text: "text-orange-600 dark:text-orange-400", bg: "bg-orange-400/8 dark:bg-orange-400/12" },
-  medium: { label: "Medium", dot: "bg-yellow-400", text: "text-yellow-600 dark:text-yellow-400", bg: "bg-yellow-400/8 dark:bg-yellow-400/12" },
-  low:    { label: "Low",    dot: "bg-blue-400",   text: "text-blue-500 dark:text-blue-400",   bg: "bg-blue-400/8 dark:bg-blue-400/12" },
-  none:   { label: "None",   dot: "bg-muted-foreground", text: "text-muted-foreground",        bg: "bg-muted" },
+const PRIORITY_DOT: Record<string, string> = {
+  urgent: "bg-red-500",
+  high:   "bg-orange-400",
+  medium: "bg-yellow-400",
+  low:    "bg-blue-400",
+  none:   "bg-transparent",
+};
+
+const PRIORITY_TEXT: Record<string, string> = {
+  urgent: "text-red-500",
+  high:   "text-orange-500",
+  medium: "text-yellow-500",
+  low:    "text-blue-400",
+  none:   "text-muted-foreground",
 };
 
 const STATUS_CONFIG: Record<string, { label: string; dot: string; text: string; bg: string }> = {
-  todo:        { label: "To do",      dot: "bg-muted-foreground",  text: "text-muted-foreground",                              bg: "bg-muted" },
-  in_progress: { label: "In Progress",dot: "bg-blue-500",          text: "text-blue-600 dark:text-blue-400",                   bg: "bg-blue-500/8 dark:bg-blue-500/12" },
-  done:        { label: "Done",       dot: "bg-emerald-500",       text: "text-emerald-600 dark:text-emerald-400",             bg: "bg-emerald-500/8 dark:bg-emerald-500/12" },
-  cancelled:   { label: "Cancelled",  dot: "bg-red-400",           text: "text-red-500 dark:text-red-400",                     bg: "bg-red-400/8 dark:bg-red-400/12" },
+  todo:        { label: "To do",       dot: "bg-muted-foreground",  text: "text-muted-foreground",                    bg: "bg-muted" },
+  in_progress: { label: "In Progress", dot: "bg-blue-500",          text: "text-blue-600 dark:text-blue-400",         bg: "bg-blue-500/8 dark:bg-blue-500/12" },
+  done:        { label: "Done",        dot: "bg-emerald-500",       text: "text-emerald-600 dark:text-emerald-400",   bg: "bg-emerald-500/8 dark:bg-emerald-500/12" },
+  cancelled:   { label: "Cancelled",   dot: "bg-red-400",           text: "text-red-500 dark:text-red-400",           bg: "bg-red-400/8 dark:bg-red-400/12" },
 };
 
 function StatusBadge({ status }: { status: string }) {
   const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.todo;
   return (
     <span className={cn(
-      "inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full",
+      "inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full shrink-0",
       cfg.text, cfg.bg
     )}>
       <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", cfg.dot)} />
-      {cfg.label}
-    </span>
-  );
-}
-
-function PriorityBadge({ priority }: { priority: string }) {
-  const cfg = PRIORITY_CONFIG[priority] ?? PRIORITY_CONFIG.none;
-  if (priority === "none") return null;
-  return (
-    <span className={cn(
-      "inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full",
-      cfg.text, cfg.bg
-    )}>
-      <Flag size={9} />
       {cfg.label}
     </span>
   );
@@ -73,10 +67,10 @@ function CardMenu({ task }: { task: Task }) {
       <button
         ref={anchor}
         onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
-        className="p-1.5 rounded-md opacity-0 group-hover:opacity-100 focus:opacity-100 text-muted-foreground hover:text-foreground hover:bg-accent transition-fast"
+        className="p-1.5 rounded-md opacity-0 group-hover:opacity-100 focus:opacity-100 text-muted-foreground hover:text-foreground hover:bg-accent transition-fast shrink-0"
         aria-label="Task options"
       >
-        <MoreHorizontal size={15} />
+        <MoreHorizontal size={14} />
       </button>
 
       <Popover anchor={anchor} open={open} onClose={() => setOpen(false)} align="right" className="w-44">
@@ -117,14 +111,15 @@ export function TaskCard({ task, view }: TaskCardProps) {
   const today        = new Date().toISOString().slice(0, 10);
   const isOverdue    = !isDone && !isCancelled && !!task.dueDate && task.dueDate < today;
 
+  // ── Compact list row ─────────────────────────────────────
   if (view === "list") {
     return (
       <div
         onClick={() => openTask(task.id)}
         className={cn(
-          "group flex items-center gap-3 px-4 py-3 rounded-xl border border-border bg-card",
-          "hover:shadow-md hover:border-border/80 transition-all duration-150 cursor-pointer",
-          isDone && "opacity-60"
+          "group flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-border/60 bg-card",
+          "hover:border-border hover:bg-accent/30 hover:shadow-sm transition-all duration-150 cursor-pointer",
+          isDone && "opacity-55"
         )}
       >
         {/* Complete toggle */}
@@ -132,27 +127,43 @@ export function TaskCard({ task, view }: TaskCardProps) {
           onClick={(e) => { e.stopPropagation(); isDone ? restoreTask(task.id) : completeTask(task.id); }}
           className={cn(
             "shrink-0 transition-fast rounded-full",
-            isDone ? "text-emerald-500 hover:text-muted-foreground/50" : "text-muted-foreground/25 hover:text-primary"
+            isDone ? "text-emerald-500 hover:text-muted-foreground/40" : "text-muted-foreground/25 hover:text-primary"
           )}
         >
           {isDone
-            ? <CheckCircle2 size={16} strokeWidth={2} />
-            : <Circle size={16} strokeWidth={1.5} />}
+            ? <CheckCircle2 size={15} strokeWidth={2} />
+            : <Circle size={15} strokeWidth={1.5} />}
         </button>
 
-        {/* Title */}
+        {/* Priority dot */}
+        {task.priority && task.priority !== "none" && (
+          <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", PRIORITY_DOT[task.priority])} />
+        )}
+
+        {/* Title — takes remaining space */}
         <span className={cn(
-          "flex-1 text-[13px] font-[440] leading-snug truncate",
+          "flex-1 text-[13px] font-[440] leading-snug truncate min-w-0",
           (isDone || isCancelled) && "line-through text-muted-foreground/40"
         )}>
           {task.title}
         </span>
 
-        {/* Badges row */}
+        {/* Inline meta — hidden until hover, always visible on mobile */}
         <div className="flex items-center gap-2 shrink-0">
-          <StatusBadge status={task.status} />
-          {task.priority !== "none" && <PriorityBadge priority={task.priority ?? "none"} />}
 
+          {/* Subtask counter */}
+          {subtasks.length > 0 && (
+            <span className={cn(
+              "text-[10px] tabular-nums px-1.5 py-0.5 rounded-full font-medium",
+              doneSubtasks === subtasks.length
+                ? "bg-emerald-500/10 text-emerald-500"
+                : "bg-muted text-muted-foreground/55"
+            )}>
+              {doneSubtasks}/{subtasks.length}
+            </span>
+          )}
+
+          {/* Project */}
           {project && (
             <button
               onClick={(e) => {
@@ -160,20 +171,38 @@ export function TaskCard({ task, view }: TaskCardProps) {
                 bus.emit("navigate:to", { path: "/projects" });
                 setTimeout(() => bus.emit("project:open", { projectId: project.id }), 50);
               }}
-              className="flex items-center gap-1 text-muted-foreground/50 hover:text-foreground transition-fast"
+              className="flex items-center gap-1 opacity-0 group-hover:opacity-100 text-muted-foreground/50 hover:text-foreground transition-fast"
             >
               <ProjectDot color={project.color} size={6} />
-              <span className="text-[10px] max-w-[72px] truncate">{project.name}</span>
+              <span className="text-[10px] max-w-[64px] truncate">{project.name}</span>
             </button>
           )}
 
+          {/* Status badge — always visible */}
+          <StatusBadge status={task.status} />
+
+          {/* Due date */}
           {task.dueDate && (
             <span className={cn(
-              "flex items-center gap-1 text-[10px] tabular-nums",
-              isOverdue ? "text-red-500 font-semibold" : isDone ? "text-muted-foreground/25" : "text-muted-foreground/55"
+              "flex items-center gap-1 text-[11px] tabular-nums",
+              isOverdue
+                ? "text-red-500 font-semibold"
+                : isDone
+                  ? "text-muted-foreground/25"
+                  : "text-muted-foreground/55"
             )}>
               <Calendar size={10} strokeWidth={1.75} />
               {formatDate(task.dueDate)}
+            </span>
+          )}
+
+          {/* Estimate */}
+          {task.estimateMinutes && (
+            <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground/35 opacity-0 group-hover:opacity-100 transition-fast">
+              <Clock size={10} strokeWidth={1.75} />
+              {task.estimateMinutes >= 60
+                ? `${Math.round((task.estimateMinutes / 60) * 10) / 10}h`
+                : `${task.estimateMinutes}m`}
             </span>
           )}
 
@@ -183,7 +212,7 @@ export function TaskCard({ task, view }: TaskCardProps) {
     );
   }
 
-  // ── Grid card ──────────────────────────────────────────────
+  // ── Grid card ────────────────────────────────────────────
   return (
     <div
       onClick={() => openTask(task.id)}
@@ -235,7 +264,7 @@ export function TaskCard({ task, view }: TaskCardProps) {
             </h3>
             {task.description && (
               <p className="mt-1 text-[11px] text-muted-foreground/60 leading-relaxed line-clamp-2">
-                {task.description.replace(/[#*`>\[\]]/g, "")}
+                {task.description.replace(/[#*`>[\]]/g, "")}
               </p>
             )}
           </div>
@@ -263,8 +292,11 @@ export function TaskCard({ task, view }: TaskCardProps) {
         {/* Footer */}
         <div className="mt-auto flex items-center justify-between gap-2 pt-1">
           <div className="flex items-center gap-2">
-            {task.priority !== "none" && task.priority && (
-              <PriorityBadge priority={task.priority} />
+            {task.priority && task.priority !== "none" && (
+              <span className={cn("flex items-center gap-1 text-[10px] font-medium", PRIORITY_TEXT[task.priority])}>
+                <Flag size={9} />
+                {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
+              </span>
             )}
             {project && (
               <button
