@@ -1,5 +1,5 @@
 // ============================================================
-// TASKS MODULE — index.tsx  (redesigned to match Projects UI)
+// TASKS MODULE — index.tsx
 // ============================================================
 
 import { useEffect, useState } from "react";
@@ -11,7 +11,6 @@ import { tasksManifest } from "./manifest";
 import { useTaskStore } from "./store";
 import { setupTaskEventListeners } from "./events";
 import { TaskCard } from "./components/TaskCard";
-import { TaskDetail } from "./components/TaskDetail";
 import { QuickAdd } from "./components/QuickAdd";
 import { FilterBar, PrimaryButton, EmptyState, type FilterTab } from "@/shared/ui";
 import { cn } from "@/shared/utils";
@@ -28,9 +27,9 @@ const FILTER_TABS: FilterTab[] = [
 
 export function TasksModule() {
   const {
-    loadTasks, getFilteredTasks, openTaskId, quickAddOpen,
+    loadTasks, getFilteredTasks, quickAddOpen,
     openQuickAdd, setActiveRoute, activeRoute,
-    getOverdueTasks, getTodayTasks, view, setView,
+    getOverdueTasks, getTodayTasks,
   } = useTaskStore();
   const location = useLocation();
   const [localView, setLocalView] = useState<"grid" | "list">("grid");
@@ -46,10 +45,10 @@ export function TasksModule() {
     setActiveRoute(segment || "all");
   }, [location.pathname, setActiveRoute]);
 
-  const tasks        = getFilteredTasks();
-  const todayCount   = getTodayTasks().length;
-  const overdueCount = getOverdueTasks().length;
-  const doneCount    = tasks.filter((t) => t.status === "done").length;
+  const tasks           = getFilteredTasks();
+  const todayCount      = getTodayTasks().length;
+  const overdueCount    = getOverdueTasks().length;
+  const doneCount       = tasks.filter((t) => t.status === "done").length;
   const inProgressCount = tasks.filter((t) => t.status === "in_progress").length;
 
   const handleFilterSelect = (id: string) => {
@@ -163,9 +162,9 @@ export function TasksModule() {
               "No tasks yet"
             }
             subtitle={
-              activeRoute === "today"    ? "Enjoy the clear schedule."         :
-              activeRoute === "upcoming" ? "No upcoming tasks scheduled."      :
-              activeRoute === "overdue"  ? "No overdue tasks."                 :
+              activeRoute === "today"    ? "Enjoy the clear schedule."          :
+              activeRoute === "upcoming" ? "No upcoming tasks scheduled."       :
+              activeRoute === "overdue"  ? "No overdue tasks."                  :
               activeRoute === "inbox"    ? "Unassigned tasks will appear here." :
               "Create your first task to get started."
             }
@@ -186,7 +185,7 @@ export function TasksModule() {
         )}
       </div>
 
-      {openTaskId   && <TaskDetail />}
+      {/* QuickAdd stays local — it's already also in Shell but needs local context */}
       {quickAddOpen && <QuickAdd />}
     </div>
   );
