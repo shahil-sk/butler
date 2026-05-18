@@ -186,6 +186,12 @@ export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get
     };
     await db.execute(INSERT_BLOCK_SQL, insertBlockParams(block));
     set((s) => ({ blocks: [...s.blocks, block] }));
+
+    // ── Sync scheduledDate onto the linked task ─────────────
+    if (block.taskId) {
+      bus.emit("planner:block-linked-task", { taskId: block.taskId, date: block.date });
+    }
+
     bus.emit("notify", { message: `Block "${block.title}" created`, type: "success" } as never);
     return block;
   },
@@ -196,11 +202,33 @@ export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get
     const updated: TimeBlock = { ...existing, ...patch, updatedAt: now() };
     await db.execute(UPDATE_BLOCK_SQL, updateBlockParams(updated));
     set((s) => ({ blocks: s.blocks.map((b) => b.id === id ? updated : b) }));
+
+    // ── Emit task-link / unlink bus events on taskId change ──
+    const prevTaskId = existing.taskId;
+    const nextTaskId = updated.taskId;
+
+    if (prevTaskId && prevTaskId !== nextTaskId) {
+      // Old task unlinked
+      bus.emit("planner:block-unlinked-task", { previousTaskId: prevTaskId });
+    }
+    if (nextTaskId && nextTaskId !== prevTaskId) {
+      // New task linked (or date changed for same task)
+      bus.emit("planner:block-linked-task", { taskId: nextTaskId, date: updated.date });
+    } else if (nextTaskId && updated.date !== existing.date) {
+      // Same task, block moved to different date → update scheduledDate
+      bus.emit("planner:block-linked-task", { taskId: nextTaskId, date: updated.date });
+    }
   },
 
   deleteBlock: async (id) => {
+    const existing = get().blocks.find((b) => b.id === id);
     await db.execute("DELETE FROM planner_blocks WHERE id=?", [id]);
     set((s) => ({ blocks: s.blocks.filter((b) => b.id !== id) }));
+
+    // Unlink task scheduledDate when block is deleted
+    if (existing?.taskId) {
+      bus.emit("planner:block-unlinked-task", { previousTaskId: existing.taskId });
+    }
   },
 
   rescheduleBlock: async (id, newStart, newEnd) => {
