@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { X, Trash2, Link, Unlink } from "lucide-react";
+import { X, Trash2, Unlink } from "lucide-react";
 import { cn } from "@/shared/utils";
 import { usePlannerStore, BLOCK_COLORS, type TimeBlock } from "../store";
 import { useTaskStore } from "@/modules/tasks/store";
+import { bus } from "@/kernel/event-bus";
 
 export function BlockEditModal({ block, onClose }: { block: TimeBlock; onClose: () => void }) {
   const { updateBlock, deleteBlock } = usePlannerStore();
@@ -19,6 +20,9 @@ export function BlockEditModal({ block, onClose }: { block: TimeBlock; onClose: 
   const linkedTask = tasks.find((t) => t.id === taskId);
 
   const save = async () => {
+    const prevTaskId = block.taskId;
+    const nextTaskId = taskId || undefined;
+
     await updateBlock(block.id, {
       title:     title.trim() || block.title,
       startTime,
@@ -26,8 +30,24 @@ export function BlockEditModal({ block, onClose }: { block: TimeBlock; onClose: 
       color,
       isBreak,
       notes:     notes || undefined,
-      taskId:    taskId || undefined,
+      taskId:    nextTaskId,
     });
+
+    // Emit integration events for task link changes
+    if (nextTaskId && nextTaskId !== prevTaskId) {
+      bus.emit("planner:block-linked-task", {
+        blockId: block.id,
+        taskId:  nextTaskId,
+        date:    block.date,
+      });
+    }
+    if (!nextTaskId && prevTaskId) {
+      bus.emit("planner:block-unlinked-task", {
+        blockId:        block.id,
+        previousTaskId: prevTaskId,
+      });
+    }
+
     onClose();
   };
 
@@ -41,12 +61,9 @@ export function BlockEditModal({ block, onClose }: { block: TimeBlock; onClose: 
       className="fixed inset-0 z-50 flex items-center justify-center"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      {/* Backdrop */}
       <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
 
-      {/* Modal */}
       <div className="relative w-full max-w-sm mx-4 rounded-xl bg-card border border-border shadow-xl animate-fade-in">
-        {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <h3 className="text-sm font-semibold">Edit Block</h3>
           <button
@@ -57,10 +74,7 @@ export function BlockEditModal({ block, onClose }: { block: TimeBlock; onClose: 
           </button>
         </div>
 
-        {/* Body */}
         <div className="px-4 py-4 space-y-4">
-
-          {/* Title */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">Title</label>
             <input
@@ -71,7 +85,6 @@ export function BlockEditModal({ block, onClose }: { block: TimeBlock; onClose: 
             />
           </div>
 
-          {/* Time */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Start</label>
@@ -93,7 +106,6 @@ export function BlockEditModal({ block, onClose }: { block: TimeBlock; onClose: 
             </div>
           </div>
 
-          {/* Color */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">Color</label>
             <div className="flex items-center gap-2">
@@ -111,7 +123,6 @@ export function BlockEditModal({ block, onClose }: { block: TimeBlock; onClose: 
             </div>
           </div>
 
-          {/* Break toggle */}
           <div className="flex items-center justify-between">
             <label className="text-xs font-medium text-muted-foreground">Mark as break</label>
             <button
@@ -130,7 +141,6 @@ export function BlockEditModal({ block, onClose }: { block: TimeBlock; onClose: 
             </button>
           </div>
 
-          {/* Link task */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">Linked task</label>
             {linkedTask ? (
@@ -139,6 +149,7 @@ export function BlockEditModal({ block, onClose }: { block: TimeBlock; onClose: 
                 <button
                   onClick={() => setTaskId("")}
                   className="shrink-0 text-muted-foreground hover:text-rose-500 transition-fast"
+                  title="Unlink task"
                 >
                   <Unlink size={12} />
                 </button>
@@ -160,7 +171,6 @@ export function BlockEditModal({ block, onClose }: { block: TimeBlock; onClose: 
             )}
           </div>
 
-          {/* Notes */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">Notes</label>
             <textarea
@@ -173,7 +183,6 @@ export function BlockEditModal({ block, onClose }: { block: TimeBlock; onClose: 
           </div>
         </div>
 
-        {/* Footer */}
         <div className="flex items-center justify-between px-4 py-3 border-t border-border">
           <button
             onClick={handleDelete}
