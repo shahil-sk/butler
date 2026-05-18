@@ -1,11 +1,12 @@
 import { cn } from "@/shared/utils";
 import { useShellStore } from "@/shell/store";
+import { useTheme } from "@/shell/components/ThemeProvider";
 import { bus } from "@/kernel/event-bus";
 import {
   CheckSquare, FolderKanban, CalendarDays, FileText,
   BookOpen, Timer, Focus, Database, Search, FileSearch,
   PanelLeftClose, PanelLeft, Settings, Plus, Command,
-  LayoutDashboard, ChevronRight,
+  LayoutDashboard, ChevronRight, Sun, Moon, Monitor,
 } from "lucide-react";
 
 // ── Nav sections ─────────────────────────────────────────────
@@ -46,6 +47,7 @@ const NAV_SECTIONS = [
 export function Sidebar() {
   const { sidebarCollapsed, activeSidebarItem, toggleSidebar, onNavigate, openCommandPalette } =
     useShellStore();
+  const { theme, setTheme } = useTheme();
 
   const navigate = (item: { id: string; label: string; path: string }) => {
     onNavigate(item.path, item.label, item.id);
@@ -58,133 +60,111 @@ export function Sidebar() {
     <aside
       className={cn(
         "flex flex-col h-full shrink-0 select-none",
-        "transition-[width] duration-200 ease-out",
-        "border-r",
-        collapsed ? "w-[56px]" : "w-[240px]"
+        "transition-[width] duration-[220ms] cubic-bezier(0.16,1,0.3,1)"
       )}
       style={{
+        width: collapsed ? 52 : 220,
         background: "hsl(var(--sidebar-bg))",
-        borderColor: "hsl(var(--sidebar-border))",
+        borderRight: "1px solid hsl(var(--sidebar-border))",
       }}
     >
-      {/* ── Header ────────────────────────────────────────────── */}
+      {/* ── Header ───────────────────────────────────────────────── */}
       <div
-        className={cn(
-          "flex items-center shrink-0 h-[52px] px-3",
-          "border-b",
-          collapsed ? "justify-center" : "justify-between gap-2"
-        )}
+        className="flex items-center h-12 px-2.5 shrink-0 border-b"
         style={{ borderColor: "hsl(var(--sidebar-border))" }}
       >
-        {/* Logo + wordmark */}
-        <div className={cn("flex items-center gap-2.5 min-w-0", collapsed && "hidden")}>
-          <Logomark />
-          <div className="min-w-0">
-            <p
-              className="text-[14px] font-semibold tracking-tight leading-none"
+        {!collapsed && (
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <Logomark />
+            <span
+              className="text-[13px] font-semibold tracking-tight truncate"
               style={{ color: "hsl(var(--sidebar-fg-active))" }}
             >
               Butler
-            </p>
-            <p
-              className="text-[11px] leading-snug font-normal mt-0.5"
-              style={{ color: "hsl(var(--sidebar-fg))" }}
-            >
-              Personal workspace
-            </p>
+            </span>
           </div>
-        </div>
-
-        {collapsed && <Logomark />}
-
-        {/* Collapse toggle — only visible when expanded */}
+        )}
+        {collapsed && (
+          <div className="flex justify-center w-full">
+            <Logomark />
+          </div>
+        )}
         {!collapsed && (
           <button
             onClick={toggleSidebar}
-            className="p-1.5 rounded-md shrink-0 transition-fast hover:bg-black/5 dark:hover:bg-white/8"
-            style={{ color: "hsl(var(--sidebar-fg))" }}
-            title="Collapse sidebar"
             aria-label="Collapse sidebar"
+            className="p-1.5 rounded-md transition-fast shrink-0"
+            style={{ color: "hsl(var(--sidebar-fg))" }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = "hsl(var(--sidebar-accent))";
+              (e.currentTarget as HTMLButtonElement).style.color = "hsl(var(--sidebar-fg-active))";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+              (e.currentTarget as HTMLButtonElement).style.color = "hsl(var(--sidebar-fg))";
+            }}
           >
             <PanelLeftClose size={15} />
           </button>
         )}
       </div>
 
-      {/* ── Expand button (collapsed state) ────────────────────── */}
-      {collapsed && (
-        <div className="flex justify-center pt-2 pb-1">
-          <button
-            onClick={toggleSidebar}
-            className="p-1.5 rounded-md transition-fast hover:bg-black/5 dark:hover:bg-white/8"
-            style={{ color: "hsl(var(--sidebar-fg))" }}
-            title="Expand sidebar"
-            aria-label="Expand sidebar"
-          >
-            <PanelLeft size={15} />
-          </button>
-        </div>
-      )}
-
-      {/* ── Quick actions ───────────────────────────────────────── */}
+      {/* ── Quick actions ─────────────────────────────────────────── */}
       <div
-        className="flex flex-col gap-0.5 px-2 py-2.5 shrink-0 border-b"
+        className="px-2 pt-2 pb-1.5 border-b space-y-0.5"
         style={{ borderColor: "hsl(var(--sidebar-border))" }}
       >
         <QuickAction
-          icon={<Command size={15} />}
-          label="Command Palette"
-          shortcut="⌘K"
+          icon={<Plus size={15} />}
+          label="New Task"
           collapsed={collapsed}
-          onClick={openCommandPalette}
+          shortcut="⌘N"
+          highlight
+          onClick={() => bus.emit("task:quick-add", {})}
         />
         <QuickAction
           icon={<Search size={15} />}
           label="Search"
-          shortcut="⌘/"
           collapsed={collapsed}
-          onClick={() => bus.emit("search:open", {})}
+          shortcut="⌘K"
+          onClick={openCommandPalette}
         />
-        <QuickAction
-          icon={<Plus size={15} />}
-          label="New Task"
-          shortcut="C"
-          collapsed={collapsed}
-          onClick={() => bus.emit("task:quick-add", {})}
-          highlight
-        />
+        {collapsed && (
+          <button
+            onClick={toggleSidebar}
+            aria-label="Expand sidebar"
+            className="w-full flex justify-center p-2 rounded-md transition-fast"
+            style={{ color: "hsl(var(--sidebar-fg))" }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = "hsl(var(--sidebar-accent))";
+              (e.currentTarget as HTMLButtonElement).style.color = "hsl(var(--sidebar-fg-active))";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+              (e.currentTarget as HTMLButtonElement).style.color = "hsl(var(--sidebar-fg))";
+            }}
+          >
+            <PanelLeft size={15} />
+          </button>
+        )}
       </div>
 
-      {/* ── Navigation ──────────────────────────────────────────── */}
-      <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-4 scrollbar-none">
+      {/* ── Nav ──────────────────────────────────────────────────── */}
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-2 space-y-4 min-h-0">
         {NAV_SECTIONS.map((section) => (
           <div key={section.label}>
-            {/* Section label — only in expanded state */}
             {!collapsed && (
               <p
-                className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-widest"
-                style={{ color: "hsl(var(--sidebar-fg) / 0.55)" }}
+                className="text-[10px] font-semibold uppercase tracking-widest px-2.5 mb-1"
+                style={{ color: "hsl(var(--sidebar-fg) / 0.5)" }}
               >
                 {section.label}
               </p>
             )}
-
-            {/* Divider line in collapsed state */}
-            {collapsed && section.label !== NAV_SECTIONS[0].label && (
-              <div
-                className="mx-3 mb-2"
-                style={{
-                  height: "1px",
-                  background: "hsl(var(--sidebar-border))",
-                }}
-              />
-            )}
-
-            <div className="space-y-px">
+            <div className="space-y-0.5">
               {section.items.map((item) => {
                 const Icon = item.icon;
                 const isActive = activeSidebarItem === item.id;
-
                 return (
                   <button
                     key={item.id}
@@ -193,24 +173,21 @@ export function Sidebar() {
                     aria-label={item.label}
                     aria-current={isActive ? "page" : undefined}
                     className={cn(
-                      "group w-full flex items-center rounded-md transition-fast relative",
-                      "text-[13px] font-medium text-left",
-                      collapsed
-                        ? "justify-center p-2 mx-auto"
-                        : "gap-2.5 px-2.5 py-1.5"
+                      "w-full flex items-center rounded-md transition-fast text-[13px] font-medium group",
+                      collapsed ? "justify-center p-2" : "gap-2.5 px-2.5 py-1.5"
                     )}
                     style={{
                       background: isActive
-                        ? "hsl(var(--sidebar-primary) / 0.12)"
+                        ? "hsl(var(--sidebar-primary) / 0.14)"
                         : "transparent",
                       color: isActive
-                        ? "hsl(var(--sidebar-fg-active))"
+                        ? "hsl(var(--sidebar-primary))"
                         : "hsl(var(--sidebar-fg))",
                     }}
                     onMouseEnter={(e) => {
                       if (!isActive) {
                         (e.currentTarget as HTMLButtonElement).style.background =
-                          "hsl(var(--sidebar-primary) / 0.06)";
+                          "hsl(var(--sidebar-accent))";
                         (e.currentTarget as HTMLButtonElement).style.color =
                           "hsl(var(--sidebar-fg-active))";
                       }
@@ -223,30 +200,12 @@ export function Sidebar() {
                       }
                     }}
                   >
-                    {/* Active left indicator bar */}
-                    {isActive && !collapsed && (
-                      <span
-                        className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[55%] rounded-r-full"
-                        style={{ background: "hsl(var(--sidebar-primary))" }}
-                      />
-                    )}
-
-                    <Icon
-                      size={16}
-                      className="shrink-0"
-                      style={{
-                        color: isActive
-                          ? "hsl(var(--sidebar-primary))"
-                          : "hsl(var(--sidebar-fg))",
-                      }}
-                    />
-
+                    <Icon size={15} className="shrink-0" />
                     {!collapsed && (
                       <>
-                        <span className="flex-1 truncate leading-snug">{item.label}</span>
-                        {/* Subtle chevron on hover to indicate navigability */}
+                        <span className="flex-1 text-left truncate">{item.label}</span>
                         <ChevronRight
-                          size={12}
+                          size={11}
                           className="opacity-0 group-hover:opacity-40 shrink-0 transition-fast"
                         />
                       </>
@@ -264,6 +223,9 @@ export function Sidebar() {
         className="px-2 pb-2.5 pt-2 border-t space-y-0.5"
         style={{ borderColor: "hsl(var(--sidebar-border))" }}
       >
+        {/* Theme toggle — cycles light → dark → system */}
+        <ThemeToggle collapsed={collapsed} theme={theme} setTheme={setTheme} />
+
         {/* Settings */}
         <QuickAction
           icon={<Settings size={15} />}
@@ -284,7 +246,7 @@ export function Sidebar() {
               className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0"
               style={{
                 background:
-                  "linear-gradient(135deg, hsl(var(--sidebar-primary)), hsl(260 70% 60%))",
+                  "linear-gradient(135deg, hsl(var(--sidebar-primary)), hsl(221 85% 45%))",
                 color: "white",
               }}
             >
@@ -292,7 +254,7 @@ export function Sidebar() {
             </div>
             <div className="flex-1 min-w-0">
               <p
-                className="text-[13px] font-semibold truncate leading-tight"
+                className="text-[12px] font-semibold truncate leading-tight"
                 style={{ color: "hsl(var(--sidebar-fg-active))" }}
               >
                 Butler User
@@ -345,6 +307,59 @@ function Logomark() {
         <rect x="7" y="7" width="4" height="4" rx="1" fill="white" fillOpacity="0.5" />
       </svg>
     </div>
+  );
+}
+
+// ── ThemeToggle ────────────────────────────────────────────────
+function ThemeToggle({
+  collapsed,
+  theme,
+  setTheme,
+}: {
+  collapsed: boolean;
+  theme: "light" | "dark" | "system";
+  setTheme: (t: "light" | "dark" | "system") => void;
+}) {
+  const order: Array<"light" | "dark" | "system"> = ["light", "dark", "system"];
+  const next = order[(order.indexOf(theme) + 1) % 3];
+
+  const icon =
+    theme === "dark" ? <Moon size={15} /> :
+    theme === "system" ? <Monitor size={15} /> :
+    <Sun size={15} />;
+
+  const label =
+    theme === "dark" ? "Dark mode" :
+    theme === "system" ? "System theme" :
+    "Light mode";
+
+  return (
+    <button
+      onClick={() => setTheme(next)}
+      title={collapsed ? `${label} — click to cycle` : undefined}
+      aria-label={`${label} — click to cycle`}
+      className={cn(
+        "w-full flex items-center rounded-md transition-fast text-[13px] font-medium",
+        collapsed ? "justify-center p-2" : "gap-2.5 px-2.5 py-1.5"
+      )}
+      style={{ color: "hsl(var(--sidebar-fg))" }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLButtonElement).style.background =
+          "hsl(var(--sidebar-primary) / 0.08)";
+        (e.currentTarget as HTMLButtonElement).style.color =
+          "hsl(var(--sidebar-fg-active))";
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+        (e.currentTarget as HTMLButtonElement).style.color =
+          "hsl(var(--sidebar-fg))";
+      }}
+    >
+      <span className="shrink-0 animate-theme-in" key={theme}>{icon}</span>
+      {!collapsed && (
+        <span className="flex-1 text-left truncate">{label}</span>
+      )}
+    </button>
   );
 }
 
