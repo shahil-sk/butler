@@ -1,16 +1,16 @@
 // ============================================================
-// NOTES MODULE — ROOT (Polished UI)
-// Lazy-loaded. Registers manifest on mount.
+// NOTES MODULE — ROOT  (redesign v2)
+// Clean 3-pane layout: sidebar list | editor with inline toolbar
 // ============================================================
 
-import React, { useEffect, useCallback } from "react";
+import { useEffect, useCallback } from "react";
 import { registry } from "@/kernel/router";
 import { useNoteStore } from "./store";
 import { NoteList } from "./components/NoteList";
 import { NoteEditor } from "./components/NoteEditor";
 import { NoteToolbar } from "./components/NoteToolbar";
 import { DailyNoteContext } from "./components/DailyNoteContext";
-import { EmptyState } from "@/shared/ui";
+import { FileText, Plus } from "lucide-react";
 import type { ModuleManifest } from "@/shared/types";
 
 const manifest: ModuleManifest = {
@@ -21,8 +21,8 @@ const manifest: ModuleManifest = {
   isEnabled: true,
   routes: [{ path: "/notes", label: "Notes" }],
   commands: [
-    { id: "note.new", label: "New note", group: "Notes", action: "navigate:to" },
-    { id: "note.today", label: "Open today's note", group: "Notes", action: "navigate:to" },
+    { id: "note.new",   label: "New note",          group: "Notes", action: "navigate:to" },
+    { id: "note.today", label: "Open today's note",  group: "Notes", action: "navigate:to" },
   ],
   shortcuts: [
     { keys: "g n", action: "navigate:to", description: "Go to Notes", global: false },
@@ -38,7 +38,7 @@ export function NotesModule() {
   }, [loadNotes]);
 
   const openedNote = openNoteId ? getNoteById(openNoteId) : null;
-  const isDaily = openedNote?.type === "daily";
+  const isDaily    = openedNote?.type === "daily";
 
   const handleNewNote = useCallback(async () => {
     const note = await createNote();
@@ -46,48 +46,84 @@ export function NotesModule() {
   }, [createNote, openNote]);
 
   return (
-    <div className="grid h-full min-h-0 grid-cols-[320px_minmax(0,1fr)] overflow-hidden rounded-2xl border border-border/60 bg-background shadow-sm">
-      <aside className="min-h-0 border-r border-border/60 bg-card/40">
-        <div className="h-full min-h-0 p-3">
-          <div className="h-full min-h-0 overflow-hidden rounded-xl border border-border/60 bg-background/80 shadow-sm">
-            <NoteList />
-          </div>
-        </div>
+    <div className="flex h-full min-h-0 overflow-hidden bg-background">
+
+      {/* ── Sidebar list ──────────────────────────────────── */}
+      <aside
+        className="flex flex-col shrink-0 overflow-hidden border-r"
+        style={{
+          width: 260,
+          borderColor: "hsl(var(--border))",
+          background: "hsl(var(--sidebar-bg, var(--card)))",
+        }}
+      >
+        <NoteList />
       </aside>
 
-      <section className="flex min-h-0 flex-col overflow-hidden bg-background">
+      {/* ── Editor pane ───────────────────────────────────── */}
+      <main className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden bg-background">
         {openedNote ? (
           <>
-            <div className="border-b border-border/60 bg-card/50 px-4 py-3">
-              <NoteToolbar note={openedNote} />
-            </div>
+            {/* Toolbar (title + meta) */}
+            <NoteToolbar note={openedNote} />
 
+            {/* Daily context ribbon */}
             {isDaily && (
-              <div className="border-b border-border/60 bg-muted/30 px-4 py-3">
+              <div
+                className="px-6 py-2.5 border-b text-xs"
+                style={{ borderColor: "hsl(var(--border))", background: "hsl(var(--muted) / 0.4)" }}
+              >
                 <DailyNoteContext />
               </div>
             )}
 
-            <div className="min-h-0 flex-1 overflow-hidden p-4">
-              <div className="h-full rounded-2xl border border-border/60 bg-card/30 shadow-sm">
-                <NoteEditor
-                  key={openedNote.id}
-                  note={openedNote}
-                  className="flex-1 overflow-y-auto"
-                />
-              </div>
+            {/* Editor — full remaining height */}
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <NoteEditor
+                key={openedNote.id}
+                note={openedNote}
+                className="h-full overflow-y-auto"
+              />
             </div>
           </>
         ) : (
-          <div className="flex h-full items-center justify-center p-6">
-            <EmptyState
-              title="No note selected"
-              subtitle="Pick a note from the list or create a new one."
-              action={{ label: "New note", onClick: () => void handleNewNote() }}
-            />
-          </div>
+          <EmptyEditor onNew={() => void handleNewNote()} />
         )}
-      </section>
+      </main>
+    </div>
+  );
+}
+
+// ── Empty state when no note is open ─────────────────────────
+function EmptyEditor({ onNew }: { onNew: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-4 select-none">
+      <div
+        className="w-12 h-12 rounded-2xl flex items-center justify-center"
+        style={{ background: "hsl(var(--muted))" }}
+      >
+        <FileText size={22} style={{ color: "hsl(var(--muted-foreground))" }} />
+      </div>
+      <div className="text-center">
+        <p className="text-sm font-semibold" style={{ color: "hsl(var(--foreground))" }}>
+          No note selected
+        </p>
+        <p className="text-xs mt-1" style={{ color: "hsl(var(--muted-foreground))" }}>
+          Pick a note from the list or start fresh.
+        </p>
+      </div>
+      <button
+        onClick={onNew}
+        className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+        style={{
+          background: "hsl(var(--primary))",
+          color: "hsl(var(--primary-foreground))",
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.88")}
+        onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
+      >
+        <Plus size={14} /> New note
+      </button>
     </div>
   );
 }
