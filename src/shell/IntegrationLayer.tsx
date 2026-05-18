@@ -13,6 +13,7 @@ import { useNoteStore } from "@/modules/notes/store";
 import { useCalendarStore } from "@/modules/calendar/store";
 import { useJournalStore } from "@/modules/journal/store";
 import { useFocusStore } from "@/modules/focus/store";
+import { useTimeStore } from "@/modules/time-tracking/store";
 import { useShellStore } from "@/shell/store";
 
 export function IntegrationLayer() {
@@ -339,6 +340,105 @@ export function IntegrationLayer() {
       if (interrupts > 0) msg += ` ${interrupts} interruption${interrupts > 1 ? "s" : ""}.`;
 
       notify({ type: "success", message: msg, durationMs: 6000 });
+    }));
+
+
+    // =========================================================
+    // TIME TRACKING ↔ TASKS
+    // =========================================================
+
+    // time:entry-created → accumulate task.actualMinutes
+    unsubs.push(bus.on("time:entry-created", ({ entry }) => {
+      if (!entry.taskId || !entry.durationMinutes) return;
+      const task = useTaskStore.getState().getTaskById(entry.taskId);
+      if (!task) return;
+      void useTaskStore.getState().updateTask(entry.taskId, {
+        actualMinutes: (task.actualMinutes ?? 0) + entry.durationMinutes,
+      });
+    }));
+
+    // time:entry-updated → recompute task.actualMinutes from all entries
+    unsubs.push(bus.on("time:entry-updated", ({ entry }) => {
+      if (!entry.taskId) return;
+      const allEntries = useTimeStore.getState().entries.filter(
+        (e) => e.taskId === entry.taskId && e.durationMinutes && e.endAt
+      );
+      const total = allEntries.reduce((sum, e) => sum + (e.durationMinutes ?? 0), 0);
+      const task = useTaskStore.getState().getTaskById(entry.taskId);
+      if (!task) return;
+      void useTaskStore.getState().updateTask(entry.taskId, { actualMinutes: total });
+    }));
+
+    // time:entry-deleted → recompute task.actualMinutes
+    unsubs.push(bus.on("time:entry-deleted", ({ entryId }) => {
+      // Find which task this entry belonged to before deletion
+      // Entry already removed from store — recompute from remaining entries
+      const store = useTimeStore.getState();
+      // Group remaining entries by taskId and recompute all affected tasks
+      const taskMinutes = new Map<string, number>();
+      store.entries.filter((e) => e.taskId && e.durationMinutes && e.endAt).forEach((e) => {
+        taskMinutes.set(e.taskId!, (taskMinutes.get(e.taskId!) ?? 0) + (e.durationMinutes ?? 0));
+      });
+      taskMinutes.forEach((mins, taskId) => {
+        const task = useTaskStore.getState().getTaskById(taskId);
+        if (task && task.actualMinutes !== mins) {
+          void useTaskStore.getState().updateTask(taskId, { actualMinutes: mins });
+        }
+      });
+    }));
+
+    // =========================================================
+    // TIME TRACKING ↔ PROJECTS
+    // =========================================================
+
+    // project:deleted → delete all time entries for that project
+    unsubs.push(bus.on("project:deleted", ({ projectId }) => {
+      const entries = useTimeStore.getState().entries.filter(
+        (e) => e.projectId === projectId
+      );
+      entries.forEach((e) => void useTimeStore.getState().deleteEntry(e.id));
+    }));
+
+    // =========================================================
+    // TIME TRACKING ↔ FOCUS
+    // =========================================================
+
+    // focus:session-completed → auto-create TimeEntry (focus sessions only)
+    unsubs.push(bus.on("focus:session-completed", ({ session }) => {
+      if (session.type !== "focus") return;
+      if (!session.startedAt || !session.completedAt) return;
+      void useTimeStore.getState().createEntry({
+        taskId:          session.taskId,
+        projectId:       session.projectId,
+        focusSessionId:  session.id,
+        description:     session.goal || "Focus session",
+        startAt:         session.startedAt,
+        endAt:           session.completedAt,
+        durationMinutes: session.actualMinutes,
+        isBillable:      false,
+        tags:            ["focus"],
+      });
+    }));
+
+    // =========================================================
+    // TIME TRACKING — NOTIFICATIONS
+    // =========================================================
+
+    // Warn when a task goes 20%+ over estimate based on logged time
+    unsubs.push(bus.on("time:entry-created", ({ entry }) => {
+      if (!entry.taskId || !entry.durationMinutes) return;
+      const task = useTaskStore.getState().getTaskById(entry.taskId);
+      if (!task?.estimateMinutes) return;
+      const totalLogged = useTimeStore.getState().entries
+        .filter((e) => e.taskId === entry.taskId && e.durationMinutes && e.endAt)
+        .reduce((sum, e) => sum + (e.durationMinutes ?? 0), 0);
+      if (totalLogged > task.estimateMinutes * 1.2) {
+        notify({
+          type: "warning",
+          message: `"${task.title}" is ${Math.round(totalLogged - task.estimateMinutes)}m over estimate.`,
+          durationMs: 6000,
+        });
+      }
     }));
 
     // =========================================================

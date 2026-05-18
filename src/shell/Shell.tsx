@@ -21,6 +21,7 @@ const NotesModule    = lazy(() => import("@/modules/notes").then((m) => ({ defau
 const CalendarModule = lazy(() => import("@/modules/calendar").then((m) => ({ default: m.CalendarModule })));
 const JournalModule  = lazy(() => import("@/modules/journal"));
 const FocusModule    = lazy(() => import("@/modules/focus"));
+const TimeTrackingModule = lazy(() => import("@/modules/time-tracking"));
 
 function ModulePlaceholder({ name }: { name: string }) {
   return (
@@ -100,7 +101,7 @@ export function Shell() {
                       <Route path="/calendar/*" element={<CalendarModule />} />
                       <Route path="/journal/*"  element={<JournalModule />} />
                       <Route path="/focus/*"    element={<FocusModule />} />
-                      <Route path="/time/*"     element={<ModulePlaceholder name="Time Tracking" />} />
+                      <Route path="/time/*"     element={<TimeTrackingModule />} />
                       <Route path="/database/*" element={<ModulePlaceholder name="Database" />} />
                       <Route path="/pdf/*"      element={<ModulePlaceholder name="Research & PDF" />} />
                       <Route path="/settings/*" element={<ModulePlaceholder name="Settings" />} />

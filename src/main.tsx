@@ -14,6 +14,7 @@ import { NOTE_MIGRATIONS }     from "@/modules/notes/db";
 import { CALENDAR_MIGRATIONS } from "@/modules/calendar/db";
 import { JOURNAL_MIGRATIONS }  from "@/modules/journal/db";
 import { FOCUS_MIGRATIONS }    from "@/modules/focus/db";
+import { TIME_MIGRATIONS }     from "@/modules/time-tracking/db";
 
 import "./styles/globals.css";
 
@@ -25,6 +26,7 @@ db.registerMigrations(NOTE_MIGRATIONS);
 db.registerMigrations(CALENDAR_MIGRATIONS);
 db.registerMigrations(JOURNAL_MIGRATIONS);
 db.registerMigrations(FOCUS_MIGRATIONS);
+db.registerMigrations(TIME_MIGRATIONS);
 
 const queryClient = new QueryClient({
   defaultOptions: {
