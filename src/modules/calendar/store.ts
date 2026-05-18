@@ -5,7 +5,7 @@ import { generateId, now, today, toISODate } from "@/shared/utils";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addMonths, subMonths, addWeeks, subWeeks } from "date-fns";
 import type { CalendarEvent, Calendar, ID } from "@/shared/types";
 
-// ── DB row → entity ───────────────────────────────────────────
+// ── DB row → entity ─────────────────────────────────────────────
 
 function rowToEvent(r: Record<string, unknown>): CalendarEvent {
   return {
@@ -73,14 +73,14 @@ function updateEventParams(e: CalendarEvent): unknown[] {
   ];
 }
 
-// ── Types ─────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────
 
 export type CalendarView = "month" | "week" | "day" | "agenda";
 
 interface EventFormState {
-  open: boolean;
-  prefill: Partial<CalendarEvent>;
-  editingId: ID | null;
+  open:      boolean;
+  prefill:   Partial<CalendarEvent>;
+  editingId: ID | undefined;
 }
 
 interface CalendarState {
@@ -112,7 +112,7 @@ interface CalendarActions {
 export const useCalendarStore = create<CalendarState & CalendarActions>()((set, get) => ({
   events: [], calendars: [], loading: false,
   view: "month", activeDate: today(),
-  eventForm: { open: false, prefill: {}, editingId: null },
+  eventForm: { open: false, prefill: {}, editingId: undefined },
 
   loadCalendars: async () => {
     try {
@@ -182,10 +182,10 @@ export const useCalendarStore = create<CalendarState & CalendarActions>()((set, 
   setView:       (v) => set({ view: v }),
   setActiveDate: (d) => set({ activeDate: d }),
 
-  openEventForm:  (prefill = {}, editingId = null) =>
+  openEventForm:  (prefill = {}, editingId?: ID) =>
     set({ eventForm: { open: true, prefill, editingId } }),
   closeEventForm: () =>
-    set({ eventForm: { open: false, prefill: {}, editingId: null } }),
+    set({ eventForm: { open: false, prefill: {}, editingId: undefined } }),
 
   goToday: () => set({ activeDate: today() }),
 
