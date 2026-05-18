@@ -99,6 +99,20 @@ export interface ButlerEventMap {
   "ui:panel-close":            { panelId: string };
   "ui:notification":           { id: ID; type: "info" | "success" | "warning" | "error"; message: string; durationMs?: number };
 
+  // ── Workspace events ──────────────────────────────────────
+  /** Fired when the active layout is switched */
+  "workspace:layout-changed":  { layoutId: ID };
+  /** Fired when a new panel is opened (primary or split) */
+  "workspace:panel-opened":    { panelId: ID; moduleId: string };
+  /** Fired when a panel is closed */
+  "workspace:panel-closed":    { panelId: ID };
+  /** Fired when split view is enabled */
+  "workspace:split-enabled":   { primaryPanelId: ID; splitPanelId: ID };
+  /** Fired when split view is disabled */
+  "workspace:split-disabled":  Record<string, never>;
+  /** Fired when user's keyboard/mouse focus moves to a module */
+  "workspace:module-focused":  { moduleId: string };
+
   // ── Sync / Persistence ────────────────────────────────────
   "sync:autosave":             void;
   "sync:conflict":             { entityType: string; entityId: ID };
