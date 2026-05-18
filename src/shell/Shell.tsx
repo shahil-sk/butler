@@ -10,6 +10,7 @@ import { useAutosave } from "./hooks/useAutosave";
 import { useBusEvent } from "@/kernel/event-bus";
 import { IntegrationLayer } from "./IntegrationLayer";
 import { QuickAdd } from "@/modules/tasks/components/QuickAdd";
+import { TaskDetail } from "@/modules/tasks/components/TaskDetail";
 import { useTaskStore } from "@/modules/tasks/store";
 import { cn } from "@/shared/utils";
 import { ErrorBoundary } from "@/shared/ErrorBoundary";
@@ -41,12 +42,10 @@ function ModulePlaceholder({ name }: { name: string }) {
 function ModuleLoader() {
   return (
     <div className="flex-1 flex flex-col p-5 gap-4 overflow-hidden">
-      {/* Page header skeleton */}
       <div className="flex items-center justify-between">
         <div className="skeleton h-5 w-32 rounded-md" />
         <div className="skeleton h-7 w-20 rounded-md" />
       </div>
-      {/* KPI row skeleton */}
       <div className="grid grid-cols-4 gap-3">
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="dashboard-card">
@@ -55,7 +54,6 @@ function ModuleLoader() {
           </div>
         ))}
       </div>
-      {/* Content skeleton */}
       <div className="grid grid-cols-3 gap-3 flex-1">
         <div className="col-span-2 dashboard-card flex flex-col gap-2">
           {[0, 1, 2, 3, 4].map((i) => (
@@ -143,6 +141,8 @@ export function Shell() {
         <CommandPalette />
         <Notifications />
         <GlobalQuickAdd />
+        {/* GlobalTaskDetail: always mounted so openTask() works from any module */}
+        <GlobalTaskDetail />
         <ErrorBoundary name="IntegrationLayer">
           <IntegrationLayer />
         </ErrorBoundary>
@@ -155,4 +155,12 @@ function GlobalQuickAdd() {
   const { openQuickAdd } = useTaskStore();
   useBusEvent("task:quick-add", (payload) => { openQuickAdd(payload.prefill); });
   return <QuickAdd />;
+}
+
+// Renders TaskDetail at the Shell root (outside module routes) so
+// openTask() pops the modal regardless of which module is active.
+function GlobalTaskDetail() {
+  const openTaskId = useTaskStore((s) => s.openTaskId);
+  if (!openTaskId) return null;
+  return <TaskDetail />;
 }
