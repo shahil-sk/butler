@@ -21,7 +21,21 @@ const PRIORITIES: { value: Priority; label: string; dot: string; text: string }[
 
 export function QuickAdd() {
   const { quickAddOpen, quickAddPrefill, closeQuickAdd, createTask } = useTaskStore();
-  const projects = useProjectStore((s) => s.projects.filter((p) => p.status === "active"));
+
+  // Always subscribe to full projects array — do NOT filter before load
+  const { projects: allProjects, loadProjects } = useProjectStore(
+    (s) => ({ projects: s.projects, loadProjects: s.loadProjects })
+  );
+
+  // Ensure projects are loaded whenever QuickAdd mounts (handles cross-module race)
+  useEffect(() => {
+    if (allProjects.length === 0) {
+      void loadProjects();
+    }
+  }, []);
+
+  // Filter to active projects only after load
+  const projects = allProjects.filter((p) => p.status === "active");
 
   const titleRef = useRef<HTMLInputElement>(null);
   const descRef  = useRef<HTMLTextAreaElement>(null);
@@ -214,23 +228,23 @@ export function QuickAdd() {
               {activePriority.label}
             </button>
 
-            {/* Project */}
-            {projects.length > 0 && (
-              <button
-                ref={projectAnchor}
-                onClick={openProject}
-                className={cn(
-                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] border transition-fast font-medium",
-                  activeProject
-                    ? "text-foreground border-border/80 hover:bg-muted/40"
-                    : "text-muted-foreground/55 border-border/60 hover:border-border hover:text-foreground hover:bg-muted/40"
-                )}
-              >
-                {activeProject
-                  ? <><ProjectDot color={activeProject.color} size={7} />{activeProject.name}</>
-                  : <><FolderKanban size={12} strokeWidth={1.75} />Project</>}
-              </button>
-            )}
+            {/* Project — always render, shows loading state while store hydrates */}
+            <button
+              ref={projectAnchor}
+              onClick={openProject}
+              disabled={allProjects.length === 0}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] border transition-fast font-medium",
+                activeProject
+                  ? "text-foreground border-border/80 hover:bg-muted/40"
+                  : "text-muted-foreground/55 border-border/60 hover:border-border hover:text-foreground hover:bg-muted/40",
+                allProjects.length === 0 && "opacity-40 cursor-not-allowed"
+              )}
+            >
+              {activeProject
+                ? <><ProjectDot color={activeProject.color} size={7} />{activeProject.name}</>
+                : <><FolderKanban size={12} strokeWidth={1.75} />Project</>}
+            </button>
           </div>
         </div>
 
@@ -246,77 +260,85 @@ export function QuickAdd() {
           <div className="flex items-center gap-2 ml-auto">
             <button
               onClick={closeQuickAdd}
-              className="px-3.5 py-1.5 rounded-lg text-[12px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-fast"
+              className="px-3 py-1.5 rounded-lg text-[12px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-fast"
             >
               Cancel
             </button>
             <button
               onClick={() => void submit()}
               disabled={!title.trim()}
-              className="px-4 py-1.5 rounded-lg bg-primary text-primary-foreground text-[12px] font-semibold hover:bg-primary/90 disabled:opacity-30 disabled:cursor-not-allowed transition-fast"
+              className={cn(
+                "px-4 py-1.5 rounded-lg text-[12px] font-semibold transition-fast",
+                "bg-primary text-primary-foreground hover:bg-primary/90",
+                "disabled:opacity-40 disabled:cursor-not-allowed"
+              )}
             >
-              Add task
+              Add Task
             </button>
           </div>
         </div>
       </div>
 
-      {/* Priority popover — portal-level, never clips */}
-      {showPriority && (
-        <>
-          <div className="fixed inset-0 z-[9998]" onClick={() => setShowPriority(false)} />
-          <div
-            className="fixed z-[9999] w-36 rounded-xl border border-border bg-popover shadow-xl py-1.5 animate-fade-in"
-            style={priorityPos}
-          >
-            {PRIORITIES.map((p) => (
-              <button
-                key={p.value}
-                onClick={() => { setPriority(p.value); setShowPriority(false); }}
-                className={cn(
-                  "w-full flex items-center gap-2.5 px-3 py-[7px] text-[12px] hover:bg-accent transition-fast",
-                  p.text
-                )}
-              >
-                <span className={cn("w-2 h-2 rounded-full shrink-0", p.dot)} />
-                {p.label}
-                {priority === p.value && <span className="ml-auto opacity-50 text-[11px]">&#10003;</span>}
-              </button>
-            ))}
-          </div>
-        </>
+      {/* ── Priority popover ────────────────────────────────── */}
+      {showPriority && createPortal(
+        <div
+          className="fixed z-[300] min-w-[140px] bg-popover border border-border rounded-xl shadow-xl py-1 animate-fade-in"
+          style={priorityPos}
+        >
+          {PRIORITIES.map((p) => (
+            <button
+              key={p.value}
+              onClick={() => { setPriority(p.value); setShowPriority(false); }}
+              className={cn(
+                "w-full flex items-center gap-2.5 px-3 py-2 text-[12px] font-medium hover:bg-muted/60 transition-fast text-left",
+                priority === p.value && "bg-muted/40"
+              )}
+            >
+              <span className={cn("w-2 h-2 rounded-full shrink-0", p.dot)} />
+              {p.label}
+            </button>
+          ))}
+        </div>,
+        document.body
       )}
 
-      {/* Project popover */}
-      {showProject && (
-        <>
-          <div className="fixed inset-0 z-[9998]" onClick={() => setShowProject(false)} />
-          <div
-            className="fixed z-[9999] w-52 rounded-xl border border-border bg-popover shadow-xl py-1.5 animate-fade-in"
-            style={projectPos}
+      {/* ── Project popover ─────────────────────────────────── */}
+      {showProject && createPortal(
+        <div
+          className="fixed z-[300] min-w-[180px] max-h-[240px] overflow-y-auto bg-popover border border-border rounded-xl shadow-xl py-1 animate-fade-in"
+          style={projectPos}
+        >
+          {/* Clear selection */}
+          <button
+            onClick={() => { setProjectId(""); setShowProject(false); }}
+            className={cn(
+              "w-full flex items-center gap-2.5 px-3 py-2 text-[12px] font-medium hover:bg-muted/60 transition-fast text-left",
+              !projectId && "bg-muted/40"
+            )}
           >
-            <button
-              onClick={() => { setProjectId(""); setShowProject(false); }}
-              className="w-full flex items-center gap-2 px-3 py-[7px] text-[12px] text-muted-foreground hover:bg-accent transition-fast"
-            >
-              <FolderKanban size={11} strokeWidth={1.75} className="opacity-40" />
-              No project
-              {!projectId && <span className="ml-auto opacity-50 text-[11px]">&#10003;</span>}
-            </button>
-            <div className="my-1 mx-3 h-px bg-border/50" />
-            {projects.map((p) => (
+            <FolderKanban size={12} className="text-muted-foreground" />
+            No project
+          </button>
+          <div className="h-px bg-border/50 mx-2 my-1" />
+          {projects.length === 0 ? (
+            <p className="px-3 py-2 text-[11px] text-muted-foreground/50">No active projects</p>
+          ) : (
+            projects.map((p) => (
               <button
                 key={p.id}
                 onClick={() => { setProjectId(p.id); setShowProject(false); }}
-                className="w-full flex items-center gap-2 px-3 py-[7px] text-[12px] hover:bg-accent transition-fast"
+                className={cn(
+                  "w-full flex items-center gap-2.5 px-3 py-2 text-[12px] font-medium hover:bg-muted/60 transition-fast text-left",
+                  projectId === p.id && "bg-muted/40"
+                )}
               >
                 <ProjectDot color={p.color} size={7} />
-                <span className="flex-1 text-left truncate text-foreground/80">{p.name}</span>
-                {projectId === p.id && <span className="text-primary opacity-60 text-[11px]">&#10003;</span>}
+                {p.name}
               </button>
-            ))}
-          </div>
-        </>
+            ))
+          )}
+        </div>,
+        document.body
       )}
     </div>,
     document.body
