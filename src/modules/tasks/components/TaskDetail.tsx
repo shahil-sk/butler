@@ -4,7 +4,7 @@ import {
   CheckSquare, Circle, ChevronDown, FolderKanban,
   FileText, ExternalLink,
 } from "lucide-react";
-import { cn, formatDate, formatTime, PRIORITY_COLORS, PRIORITY_LABELS, today, now } from "@/shared/utils";
+import { cn, formatDate, PRIORITY_COLORS, PRIORITY_LABELS, today, now } from "@/shared/utils";
 import { Modal, Popover, PopoverItem, PopoverDivider, ProjectDot, SectionLabel } from "@/shared/ui";
 import { useTaskStore } from "../store";
 import { useProjectStore } from "@/modules/projects/store";
@@ -20,10 +20,13 @@ const STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
   { value: "cancelled",   label: "Cancelled" },
 ];
 
+// ── Shared component (view + create mode) ─────────────────────
+
 export function TaskDetail() {
   const {
     openTaskId, closeTask, getTaskById, updateTask,
     addChecklistItem, toggleChecklistItem, deleteChecklistItem, deleteTask,
+    quickAddOpen, quickAddPrefill, closeQuickAdd, createTask,
   } = useTaskStore();
 
   const activeProjects = useProjectStore((s) => s.projects.filter((p) => p.status === "active"));
@@ -31,14 +34,24 @@ export function TaskDetail() {
   const allNotes       = useNoteStore((s) => s.notes);
   const allEvents      = useCalendarStore((s) => s.events);
 
-  const task    = openTaskId ? getTaskById(openTaskId) : null;
-  const project = task?.projectId ? allProjects.find((p) => p.id === task.projectId) : undefined;
-  const linkedNotes  = allNotes.filter((n)  => task?.linkedNoteIds.includes(n.id));
-  const linkedEvents = allEvents.filter((e) => task?.linkedEventIds.includes(e.id));
+  // Determine mode
+  const isCreating = quickAddOpen && !openTaskId;
+  const task       = openTaskId ? getTaskById(openTaskId) : null;
 
+  const project       = task?.projectId ? allProjects.find((p) => p.id === task.projectId) : undefined;
+  const linkedNotes   = allNotes.filter((n)  => task?.linkedNoteIds.includes(n.id));
+  const linkedEvents  = allEvents.filter((e) => task?.linkedEventIds.includes(e.id));
+
+  // ── local state ───────────────────────────────────────────
   const [title,         setTitle]         = useState("");
   const [description,   setDescription]   = useState("");
+  const [dueDate,       setDueDate]       = useState("");
+  const [priority,      setPriority]      = useState<Priority>("none");
+  const [projectId,     setProjectId]     = useState("");
+  const [status,        setStatus]        = useState<TaskStatus>("todo");
+  const [estimateMins,  setEstimateMins]  = useState<number | "">("");
   const [newCheckItem,  setNewCheckItem]   = useState("");
+  const [checklistItems, setChecklistItems] = useState<{ id: string; text: string; checked: boolean }[]>([]);
   const [scheduleOpen,  setScheduleOpen]   = useState(false);
   const [scheduleDate,  setScheduleDate]   = useState(today());
   const [scheduleTime,  setScheduleTime]   = useState("09:00");
@@ -53,18 +66,102 @@ export function TaskDetail() {
   const [priorityOpen, setPriorityOpen] = useState(false);
   const [projectOpen,  setProjectOpen]  = useState(false);
 
+  const titleRef = useRef<HTMLInputElement>(null);
+
+  // Sync local state from task (view mode) or prefill (create mode)
   useEffect(() => {
-    if (task) { setTitle(task.title); setDescription(task.description ?? ""); }
+    if (isCreating) {
+      setTitle(quickAddPrefill.title ?? "");
+      setDescription("");
+      setDueDate(quickAddPrefill.dueDate ?? "");
+      setPriority((quickAddPrefill.priority as Priority) ?? "none");
+      setProjectId(quickAddPrefill.projectId ?? "");
+      setStatus("todo");
+      setEstimateMins("");
+      setChecklistItems([]);
+      setNewCheckItem("");
+      setLinkNoteOpen(false);
+      setNoteSearch("");
+      setTimeout(() => titleRef.current?.focus(), 40);
+    }
+  }, [isCreating, quickAddOpen]);
+
+  useEffect(() => {
+    if (task) {
+      setTitle(task.title);
+      setDescription(task.description ?? "");
+      setDueDate(task.dueDate ?? "");
+      setPriority(task.priority);
+      setProjectId(task.projectId ?? "");
+      setStatus(task.status);
+      setEstimateMins(task.estimateMinutes ?? "");
+    }
   }, [task?.id]);
 
-  const isOpen = openTaskId != null && task != null;
+  // ESC to close create mode
+  useEffect(() => {
+    if (!isCreating) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") closeQuickAdd(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [isCreating, closeQuickAdd]);
 
-  if (!task) return null;
+  const isOpen = (isCreating) || (openTaskId != null && task != null);
+  if (!isOpen) return null;
 
-  const save = (patch: Partial<Task>) => void updateTask(task.id, patch);
-  const completedChecklist = task.checklistItems.filter((i) => i.checked).length;
+  // ── helpers ───────────────────────────────────────────────
+
+  const save = (patch: Partial<Task>) => {
+    if (task) void updateTask(task.id, patch);
+  };
+
+  const handleCreate = async () => {
+    if (!title.trim()) { titleRef.current?.focus(); return; }
+    await createTask({
+      ...quickAddPrefill,
+      title:          title.trim(),
+      description:    description.trim() || undefined,
+      dueDate:        dueDate || undefined,
+      priority,
+      projectId:      projectId || undefined,
+      status,
+      estimateMinutes: estimateMins !== "" ? Number(estimateMins) : undefined,
+      checklistItems: checklistItems.map((item, i) => ({ ...item, order: i })),
+    });
+    closeQuickAdd();
+  };
+
+  const handleClose = isCreating ? closeQuickAdd : closeTask;
+
+  const activeProject = isCreating
+    ? activeProjects.find((p) => p.id === projectId)
+    : project;
+
+  const completedChecklist = isCreating
+    ? checklistItems.filter((i) => i.checked).length
+    : (task?.checklistItems.filter((i) => i.checked).length ?? 0);
+
+  const totalChecklist = isCreating
+    ? checklistItems.length
+    : (task?.checklistItems.length ?? 0);
+
+  const statusLabel   = STATUS_OPTIONS.find((s) => s.value === (isCreating ? status : task?.status))?.label ?? "To do";
+  const priorityLabel = PRIORITY_LABELS[isCreating ? priority : (task?.priority ?? "none")] ?? "None";
+
+  const filteredNotes = allNotes
+    .filter((n) => n.title.toLowerCase().includes(noteSearch.toLowerCase()))
+    .slice(0, 8);
+
+  const handleLinkNote = (noteId: string) => {
+    if (!task) return;
+    if (task.linkedNoteIds.includes(noteId)) return;
+    save({ linkedNoteIds: [...task.linkedNoteIds, noteId] });
+    bus.emit("note:link-to-task", { noteId, taskId: task.id });
+    setLinkNoteOpen(false);
+  };
 
   const handleScheduleToCalendar = async () => {
+    if (!task) return;
     const startAt    = `${scheduleDate}T${scheduleTime}:00`;
     const endMinutes = task.estimateMinutes ?? 60;
     const [h, m]     = scheduleTime.split(":").map(Number);
@@ -76,42 +173,26 @@ export function TaskDetail() {
     save({ scheduledDate: scheduleDate });
     setScheduleOpen(false);
     bus.emit("ui:notification", {
-      id:         task.id + "-sched",
-      type:       "success",
-      message:    `"${task.title}" added to calendar`,
-      durationMs: 2500,
+      id: task.id + "-sched", type: "success",
+      message: `"${task.title}" added to calendar`, durationMs: 2500,
     });
   };
 
-  const handleLinkNote = (noteId: string) => {
-    if (task.linkedNoteIds.includes(noteId)) return;
-    save({ linkedNoteIds: [...task.linkedNoteIds, noteId] });
-    bus.emit("note:link-to-task", { noteId, taskId: task.id });
-    setLinkNoteOpen(false);
-  };
-
-  const filteredNotes = allNotes
-    .filter((n) => n.title.toLowerCase().includes(noteSearch.toLowerCase()))
-    .slice(0, 8);
-
-  const statusLabel   = STATUS_OPTIONS.find((s) => s.value === task.status)?.label ?? task.status;
-  const priorityLabel = PRIORITY_LABELS[task.priority] ?? task.priority;
-
   return (
     <>
-      <Modal open={isOpen} onClose={closeTask} maxWidth="max-w-[580px]" maxHeight="max-h-[90dvh]">
+      <Modal open={isOpen} onClose={handleClose} maxWidth="max-w-[580px]" maxHeight="max-h-[90dvh]">
         {/* ── Header ──────────────────────────────── */}
         <div className="flex items-center gap-2 px-4 h-11 border-b border-border shrink-0">
-          {/* Status button → popover */}
+          {/* Status button */}
           <button
             ref={statusAnchor}
             onClick={() => setStatusOpen((v) => !v)}
             className={cn(
               "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-fast",
-              task.status === "done"        && "bg-green-500/10 text-green-600 dark:text-green-400",
-              task.status === "in_progress" && "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-              task.status === "cancelled"   && "bg-muted text-muted-foreground line-through",
-              task.status === "todo"        && "bg-muted text-muted-foreground",
+              (isCreating ? status : task?.status) === "done"        && "bg-green-500/10 text-green-600 dark:text-green-400",
+              (isCreating ? status : task?.status) === "in_progress" && "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+              (isCreating ? status : task?.status) === "cancelled"   && "bg-muted text-muted-foreground line-through",
+              (isCreating ? status : task?.status) === "todo"        && "bg-muted text-muted-foreground",
             )}
           >
             <ChevronDown size={10} className="opacity-60" />
@@ -119,18 +200,20 @@ export function TaskDetail() {
           </button>
 
           <span className="flex-1 text-xs text-muted-foreground tabular-nums">
-            Updated {formatDate(task.updatedAt)}
+            {isCreating ? "New task" : `Updated ${formatDate(task!.updatedAt)}`}
           </span>
 
+          {!isCreating && (
+            <button
+              onClick={() => { void deleteTask(task!.id); closeTask(); }}
+              className="p-1.5 rounded text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-fast"
+              title="Delete task"
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
           <button
-            onClick={() => { void deleteTask(task.id); closeTask(); }}
-            className="p-1.5 rounded text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-fast"
-            title="Delete task"
-          >
-            <Trash2 size={13} />
-          </button>
-          <button
-            onClick={closeTask}
+            onClick={handleClose}
             className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-fast"
           >
             <X size={14} />
@@ -143,10 +226,17 @@ export function TaskDetail() {
           {/* Title */}
           <div className="px-5 pt-5 pb-1">
             <input
+              ref={titleRef}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              onBlur={() => { if (title.trim() && title !== task.title) save({ title: title.trim() }); }}
-              onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+              onBlur={() => {
+                if (!isCreating && title.trim() && title !== task?.title)
+                  save({ title: title.trim() });
+              }}
+              onKeyDown={(e) => {
+                if (isCreating && e.key === "Enter") { e.preventDefault(); void handleCreate(); }
+                else if (!isCreating && e.key === "Enter") e.currentTarget.blur();
+              }}
               className="w-full text-base font-semibold bg-transparent outline-none leading-snug"
               placeholder="Task title"
             />
@@ -158,7 +248,7 @@ export function TaskDetail() {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               onBlur={() => {
-                if (description !== (task.description ?? ""))
+                if (!isCreating && description !== (task?.description ?? ""))
                   save({ description: description || undefined });
               }}
               className="w-full text-sm text-muted-foreground bg-transparent outline-none resize-none leading-relaxed"
@@ -177,8 +267,8 @@ export function TaskDetail() {
                 onClick={() => setProjectOpen((v) => !v)}
                 className="flex items-center gap-2 text-sm hover:text-primary transition-fast"
               >
-                {project
-                  ? <><ProjectDot color={project.color} size={8} />{project.name}</>
+                {activeProject
+                  ? <><ProjectDot color={activeProject.color} size={8} />{activeProject.name}</>
                   : <span className="text-muted-foreground/60 text-xs">No project</span>}
                 <ChevronDown size={11} className="opacity-40" />
               </button>
@@ -191,11 +281,11 @@ export function TaskDetail() {
                 onClick={() => setPriorityOpen((v) => !v)}
                 className={cn(
                   "flex items-center gap-1.5 text-sm transition-fast",
-                  task.priority === "urgent" && "text-red-500",
-                  task.priority === "high"   && "text-orange-500",
-                  task.priority === "medium" && "text-yellow-500",
-                  task.priority === "low"    && "text-blue-400",
-                  task.priority === "none"   && "text-muted-foreground/60 text-xs",
+                  (isCreating ? priority : task?.priority) === "urgent" && "text-red-500",
+                  (isCreating ? priority : task?.priority) === "high"   && "text-orange-500",
+                  (isCreating ? priority : task?.priority) === "medium" && "text-yellow-500",
+                  (isCreating ? priority : task?.priority) === "low"    && "text-blue-400",
+                  (isCreating ? priority : task?.priority) === "none"   && "text-muted-foreground/60 text-xs",
                 )}
               >
                 <Flag size={12} strokeWidth={1.75} />
@@ -208,8 +298,11 @@ export function TaskDetail() {
             <MetaRow label="Due date" icon={<Calendar size={13} />}>
               <input
                 type="date"
-                value={task.dueDate ?? ""}
-                onChange={(e) => save({ dueDate: e.target.value || undefined })}
+                value={isCreating ? dueDate : (task?.dueDate ?? "")}
+                onChange={(e) => {
+                  if (isCreating) setDueDate(e.target.value);
+                  else save({ dueDate: e.target.value || undefined });
+                }}
                 className="text-sm bg-transparent outline-none text-foreground"
               />
             </MetaRow>
@@ -219,17 +312,20 @@ export function TaskDetail() {
               <div className="flex items-center gap-1.5">
                 <input
                   type="number"
-                  value={task.estimateMinutes ?? ""}
-                  onChange={(e) => save({ estimateMinutes: e.target.value ? Number(e.target.value) : undefined })}
+                  value={isCreating ? estimateMins : (task?.estimateMinutes ?? "")}
+                  onChange={(e) => {
+                    if (isCreating) setEstimateMins(e.target.value ? Number(e.target.value) : "");
+                    else save({ estimateMinutes: e.target.value ? Number(e.target.value) : undefined });
+                  }}
                   className="w-14 text-sm bg-transparent outline-none text-foreground"
                   placeholder="—"
                   min={0}
                   step={5}
                 />
                 <span className="text-xs text-muted-foreground">min</span>
-                {task.estimateMinutes && (
+                {(isCreating ? (estimateMins || 0) : (task?.estimateMinutes ?? 0)) > 0 && (
                   <span className="text-xs text-muted-foreground/50">
-                    ({Math.round(task.estimateMinutes / 60 * 10) / 10}h)
+                    ({Math.round(Number(isCreating ? estimateMins : task?.estimateMinutes) / 60 * 10) / 10}h)
                   </span>
                 )}
               </div>
@@ -241,45 +337,54 @@ export function TaskDetail() {
             <div className="flex items-center justify-between mb-3">
               <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
                 Checklist
-                {task.checklistItems.length > 0 && (
+                {totalChecklist > 0 && (
                   <span className="ml-1.5 normal-case font-normal text-muted-foreground/40">
-                    {completedChecklist}/{task.checklistItems.length}
+                    {completedChecklist}/{totalChecklist}
                   </span>
                 )}
               </span>
             </div>
 
-            {task.checklistItems.length > 0 && (
+            {totalChecklist > 0 && (
               <div className="mb-3 h-1 rounded-full bg-border overflow-hidden">
                 <div
                   className="h-full bg-green-500 rounded-full transition-all duration-500"
-                  style={{ width: `${(completedChecklist / task.checklistItems.length) * 100}%` }}
+                  style={{ width: `${(completedChecklist / totalChecklist) * 100}%` }}
                 />
               </div>
             )}
 
             <div className="space-y-1 mb-2">
-              {task.checklistItems.map((item) => (
+              {(isCreating ? checklistItems : (task?.checklistItems ?? [])).map((item) => (
                 <div key={item.id} className="group flex items-center gap-2 py-1">
                   <button
-                    onClick={() => void toggleChecklistItem(task.id, item.id)}
+                    onClick={() => {
+                      if (isCreating) {
+                        setChecklistItems((prev) =>
+                          prev.map((i) => i.id === item.id ? { ...i, checked: !i.checked } : i)
+                        );
+                      } else {
+                        void toggleChecklistItem(task!.id, item.id);
+                      }
+                    }}
                     className={cn(
                       "shrink-0 transition-fast",
                       item.checked ? "text-green-500" : "text-muted-foreground/30 hover:text-primary"
                     )}
                   >
-                    {item.checked
-                      ? <CheckSquare size={14} />
-                      : <Circle size={14} />}
+                    {item.checked ? <CheckSquare size={14} /> : <Circle size={14} />}
                   </button>
-                  <span className={cn(
-                    "flex-1 text-sm",
-                    item.checked && "line-through text-muted-foreground/40"
-                  )}>
+                  <span className={cn("flex-1 text-sm", item.checked && "line-through text-muted-foreground/40")}>
                     {item.text}
                   </span>
                   <button
-                    onClick={() => void deleteChecklistItem(task.id, item.id)}
+                    onClick={() => {
+                      if (isCreating) {
+                        setChecklistItems((prev) => prev.filter((i) => i.id !== item.id));
+                      } else {
+                        void deleteChecklistItem(task!.id, item.id);
+                      }
+                    }}
                     className="opacity-0 group-hover:opacity-100 p-1 rounded text-muted-foreground/40 hover:text-red-500 transition-fast"
                   >
                     <X size={11} />
@@ -295,7 +400,14 @@ export function TaskDetail() {
                 onChange={(e) => setNewCheckItem(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && newCheckItem.trim()) {
-                    void addChecklistItem(task.id, newCheckItem.trim());
+                    if (isCreating) {
+                      setChecklistItems((prev) => [
+                        ...prev,
+                        { id: crypto.randomUUID(), text: newCheckItem.trim(), checked: false },
+                      ]);
+                    } else {
+                      void addChecklistItem(task!.id, newCheckItem.trim());
+                    }
                     setNewCheckItem("");
                   }
                 }}
@@ -305,8 +417,8 @@ export function TaskDetail() {
             </div>
           </div>
 
-          {/* Linked notes */}
-          {(linkedNotes.length > 0 || linkNoteOpen) && (
+          {/* Linked notes — view mode only */}
+          {!isCreating && (linkedNotes.length > 0 || linkNoteOpen) && (
             <div className="px-5 pb-4 border-t border-border/50 pt-4">
               <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 mb-2">
                 Linked notes
@@ -347,46 +459,81 @@ export function TaskDetail() {
           )}
         </div>
 
-        {/* ── Footer actions ───────────────────────── */}
+        {/* ── Footer ───────────────────────────────── */}
         <div className="flex items-center gap-2 px-5 py-3 border-t border-border shrink-0 bg-muted/20">
-          <button
-            onClick={() => setLinkNoteOpen((v) => !v)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-accent border border-transparent hover:border-border/60 transition-fast"
-          >
-            <FileText size={12} /> Link note
-          </button>
-          <button
-            onClick={() => setScheduleOpen((v) => !v)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-accent border border-transparent hover:border-border/60 transition-fast"
-          >
-            <Calendar size={12} /> Schedule
-          </button>
-          {scheduleOpen && (
-            <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
-              <div className="absolute inset-0 bg-black/40" onClick={() => setScheduleOpen(false)} />
-              <div className="relative z-10 bg-popover border border-border rounded-2xl shadow-xl p-5 w-72 animate-fade-in">
-                <p className="text-sm font-semibold mb-3">Schedule to calendar</p>
-                <label className="block text-xs text-muted-foreground mb-1">Date</label>
-                <input type="date" value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)}
-                  className="w-full text-sm bg-muted/50 rounded-lg px-3 py-2 outline-none border border-border focus:border-primary/50 mb-3" />
-                <label className="block text-xs text-muted-foreground mb-1">Time</label>
-                <input type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)}
-                  className="w-full text-sm bg-muted/50 rounded-lg px-3 py-2 outline-none border border-border focus:border-primary/50 mb-4" />
-                <div className="flex gap-2">
-                  <button onClick={() => setScheduleOpen(false)}
-                    className="flex-1 px-3 py-2 rounded-lg text-xs border border-border text-muted-foreground hover:bg-accent transition-fast">
-                    Cancel
-                  </button>
-                  <button onClick={() => void handleScheduleToCalendar()}
-                    className="flex-1 px-3 py-2 rounded-lg text-xs bg-primary text-primary-foreground hover:bg-primary/90 transition-fast font-medium">
-                    Add to calendar
-                  </button>
-                </div>
+          {isCreating ? (
+            // Create mode footer
+            <>
+              <span className="text-[11px] text-muted-foreground/30 hidden sm:flex items-center gap-1.5">
+                <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono">Enter</kbd>
+                to save
+                <span className="mx-0.5">·</span>
+                <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono">Esc</kbd>
+                to cancel
+              </span>
+              <div className="flex items-center gap-2 ml-auto">
+                <button
+                  onClick={closeQuickAdd}
+                  className="px-3 py-1.5 rounded-lg text-[12px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-fast"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => void handleCreate()}
+                  disabled={!title.trim()}
+                  className={cn(
+                    "px-4 py-1.5 rounded-lg text-[12px] font-semibold transition-fast",
+                    "bg-primary text-primary-foreground hover:bg-primary/90",
+                    "disabled:opacity-40 disabled:cursor-not-allowed"
+                  )}
+                >
+                  Add Task
+                </button>
               </div>
-            </div>
+            </>
+          ) : (
+            // View mode footer
+            <>
+              <button
+                onClick={() => setLinkNoteOpen((v) => !v)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-accent border border-transparent hover:border-border/60 transition-fast"
+              >
+                <FileText size={12} /> Link note
+              </button>
+              <button
+                onClick={() => setScheduleOpen((v) => !v)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-accent border border-transparent hover:border-border/60 transition-fast"
+              >
+                <Calendar size={12} /> Schedule
+              </button>
+              {scheduleOpen && (
+                <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
+                  <div className="absolute inset-0 bg-black/40" onClick={() => setScheduleOpen(false)} />
+                  <div className="relative z-10 bg-popover border border-border rounded-2xl shadow-xl p-5 w-72 animate-fade-in">
+                    <p className="text-sm font-semibold mb-3">Schedule to calendar</p>
+                    <label className="block text-xs text-muted-foreground mb-1">Date</label>
+                    <input type="date" value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)}
+                      className="w-full text-sm bg-muted/50 rounded-lg px-3 py-2 outline-none border border-border focus:border-primary/50 mb-3" />
+                    <label className="block text-xs text-muted-foreground mb-1">Time</label>
+                    <input type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)}
+                      className="w-full text-sm bg-muted/50 rounded-lg px-3 py-2 outline-none border border-border focus:border-primary/50 mb-4" />
+                    <div className="flex gap-2">
+                      <button onClick={() => setScheduleOpen(false)}
+                        className="flex-1 px-3 py-2 rounded-lg text-xs border border-border text-muted-foreground hover:bg-accent transition-fast">
+                        Cancel
+                      </button>
+                      <button onClick={() => void handleScheduleToCalendar()}
+                        className="flex-1 px-3 py-2 rounded-lg text-xs bg-primary text-primary-foreground hover:bg-primary/90 transition-fast font-medium">
+                        Add to calendar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div className="flex-1" />
+              <span className="text-[10px] text-muted-foreground/40">ID: {task?.id.slice(0, 8)}</span>
+            </>
           )}
-          <div className="flex-1" />
-          <span className="text-[10px] text-muted-foreground/40">ID: {task.id.slice(0, 8)}</span>
         </div>
       </Modal>
 
@@ -395,8 +542,12 @@ export function TaskDetail() {
         {STATUS_OPTIONS.map((s) => (
           <PopoverItem
             key={s.value}
-            active={task.status === s.value}
-            onClick={() => { save({ status: s.value }); setStatusOpen(false); }}
+            active={(isCreating ? status : task?.status) === s.value}
+            onClick={() => {
+              if (isCreating) setStatus(s.value);
+              else save({ status: s.value });
+              setStatusOpen(false);
+            }}
           >
             {s.label}
           </PopoverItem>
@@ -408,9 +559,13 @@ export function TaskDetail() {
         {(["urgent", "high", "medium", "low", "none"] as const).map((p) => (
           <PopoverItem
             key={p}
-            active={task.priority === p}
+            active={(isCreating ? priority : task?.priority) === p}
             icon={Flag}
-            onClick={() => { save({ priority: p }); setPriorityOpen(false); }}
+            onClick={() => {
+              if (isCreating) setPriority(p);
+              else save({ priority: p });
+              setPriorityOpen(false);
+            }}
           >
             {PRIORITY_LABELS[p]}
           </PopoverItem>
@@ -419,15 +574,26 @@ export function TaskDetail() {
 
       {/* Project popover */}
       <Popover anchor={projectAnchor} open={projectOpen} onClose={() => setProjectOpen(false)} className="w-52">
-        <PopoverItem active={!task.projectId} onClick={() => { save({ projectId: undefined }); setProjectOpen(false); }}>
+        <PopoverItem
+          active={isCreating ? !projectId : !task?.projectId}
+          onClick={() => {
+            if (isCreating) setProjectId("");
+            else save({ projectId: undefined });
+            setProjectOpen(false);
+          }}
+        >
           No project
         </PopoverItem>
         <PopoverDivider />
         {activeProjects.map((p) => (
           <PopoverItem
             key={p.id}
-            active={task.projectId === p.id}
-            onClick={() => { save({ projectId: p.id }); setProjectOpen(false); }}
+            active={(isCreating ? projectId : task?.projectId) === p.id}
+            onClick={() => {
+              if (isCreating) setProjectId(p.id);
+              else save({ projectId: p.id });
+              setProjectOpen(false);
+            }}
           >
             <span className="flex items-center gap-2">
               <ProjectDot color={p.color} size={7} />{p.name}
