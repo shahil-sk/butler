@@ -16,7 +16,7 @@ import { useProjectStore } from "@/modules/projects/store";
 import { bus } from "@/kernel/event-bus";
 import type { Task } from "@/shared/types";
 
-// ── Priority config ──────────────────────────────────────────
+// ── Config ─────────────────────────────────────────────────
 
 const PRIORITY_DOT: Record<string, string> = {
   urgent: "bg-red-500",
@@ -35,10 +35,10 @@ const PRIORITY_TEXT: Record<string, string> = {
 };
 
 const STATUS_CONFIG: Record<string, { label: string; dot: string; text: string; bg: string }> = {
-  todo:        { label: "To do",       dot: "bg-muted-foreground",  text: "text-muted-foreground",                    bg: "bg-muted" },
-  in_progress: { label: "In Progress", dot: "bg-blue-500",          text: "text-blue-600 dark:text-blue-400",         bg: "bg-blue-500/8 dark:bg-blue-500/12" },
-  done:        { label: "Done",        dot: "bg-emerald-500",       text: "text-emerald-600 dark:text-emerald-400",   bg: "bg-emerald-500/8 dark:bg-emerald-500/12" },
-  cancelled:   { label: "Cancelled",   dot: "bg-red-400",           text: "text-red-500 dark:text-red-400",           bg: "bg-red-400/8 dark:bg-red-400/12" },
+  todo:        { label: "To do",       dot: "bg-muted-foreground", text: "text-muted-foreground",                  bg: "bg-muted" },
+  in_progress: { label: "In Progress", dot: "bg-blue-500",         text: "text-blue-600 dark:text-blue-400",       bg: "bg-blue-500/8 dark:bg-blue-500/12" },
+  done:        { label: "Done",        dot: "bg-emerald-500",      text: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-500/8 dark:bg-emerald-500/12" },
+  cancelled:   { label: "Cancelled",   dot: "bg-red-400",          text: "text-red-500 dark:text-red-400",         bg: "bg-red-400/8 dark:bg-red-400/12" },
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -117,17 +117,29 @@ export function TaskCard({ task, view }: TaskCardProps) {
       <div
         onClick={() => openTask(task.id)}
         className={cn(
-          "group flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-border/60 bg-card",
-          "hover:border-border hover:bg-accent/30 hover:shadow-sm transition-all duration-150 cursor-pointer",
+          // Row shape: no border-box, use bottom separator pattern instead
+          "group relative flex items-center gap-2.5 px-3 py-[11px] cursor-pointer select-none",
+          "rounded-lg transition-all duration-150",
+          "hover:bg-accent/40",
           isDone && "opacity-55"
         )}
       >
+        {/* Left priority stripe — 2px, inset from top/bottom */}
+        {task.priority && task.priority !== "none" && (
+          <span
+            className={cn(
+              "absolute left-0 top-[18%] bottom-[18%] w-[2.5px] rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-150",
+              PRIORITY_DOT[task.priority]
+            )}
+          />
+        )}
+
         {/* Complete toggle */}
         <button
           onClick={(e) => { e.stopPropagation(); isDone ? restoreTask(task.id) : completeTask(task.id); }}
           className={cn(
             "shrink-0 transition-fast rounded-full",
-            isDone ? "text-emerald-500 hover:text-muted-foreground/40" : "text-muted-foreground/25 hover:text-primary"
+            isDone ? "text-emerald-500 hover:text-muted-foreground/40" : "text-muted-foreground/30 hover:text-primary"
           )}
         >
           {isDone
@@ -135,21 +147,21 @@ export function TaskCard({ task, view }: TaskCardProps) {
             : <Circle size={15} strokeWidth={1.5} />}
         </button>
 
-        {/* Priority dot */}
+        {/* Priority dot — always visible, tiny */}
         {task.priority && task.priority !== "none" && (
-          <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", PRIORITY_DOT[task.priority])} />
+          <span className={cn("w-1.5 h-1.5 rounded-full shrink-0 opacity-70", PRIORITY_DOT[task.priority])} />
         )}
 
-        {/* Title — takes remaining space */}
+        {/* Title */}
         <span className={cn(
-          "flex-1 text-[13px] font-[440] leading-snug truncate min-w-0",
+          "flex-1 text-[13px] font-[450] leading-snug truncate min-w-0",
           (isDone || isCancelled) && "line-through text-muted-foreground/40"
         )}>
           {task.title}
         </span>
 
-        {/* Inline meta — hidden until hover, always visible on mobile */}
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Meta cluster — right-aligned */}
+        <div className="flex items-center gap-2.5 shrink-0">
 
           {/* Subtask counter */}
           {subtasks.length > 0 && (
@@ -160,6 +172,13 @@ export function TaskCard({ task, view }: TaskCardProps) {
                 : "bg-muted text-muted-foreground/55"
             )}>
               {doneSubtasks}/{subtasks.length}
+            </span>
+          )}
+
+          {/* Tags (first one only) */}
+          {task.tags.length > 0 && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground/60 font-medium opacity-0 group-hover:opacity-100 transition-fast">
+              {task.tags[0]}
             </span>
           )}
 
@@ -178,13 +197,13 @@ export function TaskCard({ task, view }: TaskCardProps) {
             </button>
           )}
 
-          {/* Status badge — always visible */}
+          {/* Status badge */}
           <StatusBadge status={task.status} />
 
           {/* Due date */}
           {task.dueDate && (
             <span className={cn(
-              "flex items-center gap-1 text-[11px] tabular-nums",
+              "flex items-center gap-1 text-[11px] tabular-nums min-w-[64px] justify-end",
               isOverdue
                 ? "text-red-500 font-semibold"
                 : isDone
@@ -196,7 +215,7 @@ export function TaskCard({ task, view }: TaskCardProps) {
             </span>
           )}
 
-          {/* Estimate */}
+          {/* Estimate — hover only */}
           {task.estimateMinutes && (
             <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground/35 opacity-0 group-hover:opacity-100 transition-fast">
               <Clock size={10} strokeWidth={1.75} />
@@ -222,7 +241,6 @@ export function TaskCard({ task, view }: TaskCardProps) {
         isDone && "opacity-60"
       )}
     >
-      {/* Subtask progress bar at top */}
       {subtasks.length > 0 && (
         <div className="h-[3px] w-full bg-border/40">
           <div
@@ -236,13 +254,11 @@ export function TaskCard({ task, view }: TaskCardProps) {
       )}
 
       <div className="p-4 flex flex-col gap-3 flex-1">
-        {/* Top row: status badge + menu */}
         <div className="flex items-start justify-between gap-2">
           <StatusBadge status={task.status} />
           <CardMenu task={task} />
         </div>
 
-        {/* Title + description */}
         <div className="flex items-start gap-2.5">
           <button
             onClick={(e) => { e.stopPropagation(); isDone ? restoreTask(task.id) : completeTask(task.id); }}
@@ -270,26 +286,19 @@ export function TaskCard({ task, view }: TaskCardProps) {
           </div>
         </div>
 
-        {/* Tags */}
         {task.tags.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {task.tags.slice(0, 3).map((tag) => (
-              <span
-                key={tag}
-                className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium"
-              >
+              <span key={tag} className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
                 {tag}
               </span>
             ))}
             {task.tags.length > 3 && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground/50">
-                +{task.tags.length - 3}
-              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground/50">+{task.tags.length - 3}</span>
             )}
           </div>
         )}
 
-        {/* Footer */}
         <div className="mt-auto flex items-center justify-between gap-2 pt-1">
           <div className="flex items-center gap-2">
             {task.priority && task.priority !== "none" && (
@@ -317,9 +326,7 @@ export function TaskCard({ task, view }: TaskCardProps) {
             {subtasks.length > 0 && (
               <span className={cn(
                 "text-[10px] tabular-nums px-1.5 py-0.5 rounded-full font-medium",
-                doneSubtasks === subtasks.length
-                  ? "bg-emerald-500/10 text-emerald-500"
-                  : "bg-muted text-muted-foreground/55"
+                doneSubtasks === subtasks.length ? "bg-emerald-500/10 text-emerald-500" : "bg-muted text-muted-foreground/55"
               )}>
                 {doneSubtasks}/{subtasks.length}
               </span>
@@ -327,9 +334,7 @@ export function TaskCard({ task, view }: TaskCardProps) {
             {task.estimateMinutes && (
               <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground/40">
                 <Clock size={9} strokeWidth={1.75} />
-                {task.estimateMinutes >= 60
-                  ? `${Math.round((task.estimateMinutes / 60) * 10) / 10}h`
-                  : `${task.estimateMinutes}m`}
+                {task.estimateMinutes >= 60 ? `${Math.round((task.estimateMinutes / 60) * 10) / 10}h` : `${task.estimateMinutes}m`}
               </span>
             )}
             {task.dueDate && (
