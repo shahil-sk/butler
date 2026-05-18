@@ -43,11 +43,15 @@ function StatsBar({ date }: { date: string }) {
   const focusLabel = fh > 0 ? `${fh}h${fm > 0 ? ` ${fm}m` : ""}` : `${fm}m`;
 
   return (
-    <div className="flex items-center gap-3 px-4 py-1.5 border-b border-border/50 bg-surface-1/60 shrink-0">
-      <StatPill icon={<Layers size={10} />}  label={`${s.totalBlocks} blocks`}  />
-      <StatPill icon={<Clock size={10} />}   label={`${focusLabel} focus`}       accent />
+    <div className="flex items-center gap-2 px-4 py-2 border-b border-border/40 bg-surface-1/40 shrink-0 backdrop-blur-sm">
+      <StatPill icon={<Layers size={9} />}  label={`${s.totalBlocks} blocks`}  />
+      <div className="w-px h-3 bg-border/40" />
+      <StatPill icon={<Clock size={9} />}   label={`${focusLabel} focus`} accent />
       {s.breakMinutes > 0 && (
-        <StatPill icon={<Coffee size={10} />} label={`${s.breakMinutes}m breaks`} />
+        <>
+          <div className="w-px h-3 bg-border/40" />
+          <StatPill icon={<Coffee size={9} />} label={`${s.breakMinutes}m breaks`} />
+        </>
       )}
     </div>
   );
@@ -56,10 +60,10 @@ function StatsBar({ date }: { date: string }) {
 function StatPill({ icon, label, accent = false }: { icon: React.ReactNode; label: string; accent?: boolean }) {
   return (
     <div className={cn(
-      "flex items-center gap-1 text-[10px] font-medium tabular-nums",
-      accent ? "text-primary" : "text-muted-foreground/70"
+      "flex items-center gap-1.5 text-[10px] font-medium tabular-nums tracking-wide",
+      accent ? "text-primary" : "text-muted-foreground/60"
     )}>
-      {icon}
+      <span className={cn("opacity-70", accent && "opacity-100")}>{icon}</span>
       {label}
     </div>
   );
@@ -83,7 +87,6 @@ export function PlannerModule() {
     if (view === "day") {
       void loadBlocks(activeDate);
     } else if (view === "3day") {
-      // Load active + next 2 days
       const d0 = parseISO(activeDate);
       for (let i = 0; i < 3; i++) void loadBlocks(toISODate(addDays(d0, i)));
     } else {
@@ -101,7 +104,6 @@ export function PlannerModule() {
   const prev = (view === "week") ? goPrevWeek : goPrevDay;
   const next = (view === "week") ? goNextWeek : goNextDay;
 
-  // Label
   let rangeLabel = dateLabel;
   if (view === "week") {
     rangeLabel = `${format(weekStart, "MMM d")} – ${format(addDays(weekStart, 6), "MMM d, yyyy")}`;
@@ -113,37 +115,41 @@ export function PlannerModule() {
   const displayDates = view === "week" ? weekDates : view === "3day" ? threeDates : [activeDate];
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden bg-background">
       <PageHeader title="Planner">
-        <button
-          onClick={prev}
-          className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-fast"
-        >
-          <ChevronLeft size={14} />
-        </button>
+        {/* Nav cluster */}
+        <div className="flex items-center gap-0.5 rounded-lg border border-border/50 bg-surface-1/60 p-0.5">
+          <button
+            onClick={prev}
+            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/70 transition-all duration-150"
+          >
+            <ChevronLeft size={13} />
+          </button>
 
-        <button
-          onClick={goToday}
-          className={cn(
-            "px-2.5 py-1 rounded-md text-xs font-medium transition-fast",
-            isToday
-              ? "bg-primary/10 text-primary"
-              : "text-muted-foreground hover:bg-accent hover:text-foreground"
-          )}
-        >
-          Today
-        </button>
+          <button
+            onClick={goToday}
+            className={cn(
+              "px-2.5 py-1 rounded-md text-[11px] font-semibold tracking-wide transition-all duration-150",
+              isToday
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-accent/70 hover:text-foreground"
+            )}
+          >
+            Today
+          </button>
 
-        <span className="text-xs font-medium text-foreground min-w-[190px] text-center tabular-nums">
+          <button
+            onClick={next}
+            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/70 transition-all duration-150"
+          >
+            <ChevronRight size={13} />
+          </button>
+        </div>
+
+        {/* Range label */}
+        <span className="text-[12px] font-medium text-foreground/80 min-w-[200px] text-center tabular-nums tracking-tight select-none">
           {rangeLabel}
         </span>
-
-        <button
-          onClick={next}
-          className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-fast"
-        >
-          <ChevronRight size={14} />
-        </button>
 
         <ViewSwitcher options={VIEW_OPTIONS} value={view} onChange={setView} />
       </PageHeader>
@@ -156,14 +162,16 @@ export function PlannerModule() {
 
         <div className="flex flex-col flex-1 overflow-hidden">
 
-          {/* Multi-day column header (week / 3day) */}
+          {/* Multi-day column headers */}
           {view !== "day" && (
-            <div className="flex border-b border-border shrink-0">
+            <div className="flex border-b border-border/60 shrink-0 bg-surface-1/30">
+              {/* Offset for hour labels */}
               <div className="w-10 shrink-0" />
               {displayDates.map((date, i) => {
                 const d     = parseISO(date);
                 const isDay = date === toISODate(new Date());
                 const weekDayIdx = view === "week" ? i : (d.getDay() + 6) % 7;
+                const blockCount = getBlocksForDate(date).length;
                 return (
                   <button
                     key={date}
@@ -172,20 +180,34 @@ export function PlannerModule() {
                       setView("day");
                     }}
                     className={cn(
-                      "flex-1 flex flex-col items-center py-2 text-xs transition-fast hover:bg-accent",
-                      isDay && "text-primary font-semibold"
+                      "flex-1 flex flex-col items-center py-2.5 text-xs transition-all duration-150 hover:bg-accent/50 group",
+                      isDay && "text-primary"
                     )}
                   >
-                    <span className="text-muted-foreground/60 text-[10px]">{WEEK_DAYS[weekDayIdx]}</span>
                     <span className={cn(
-                      "w-7 h-7 flex items-center justify-center rounded-full mt-0.5 text-sm font-medium",
-                      isDay && "bg-primary text-primary-foreground"
+                      "text-[9px] font-semibold tracking-widest uppercase mb-1",
+                      isDay ? "text-primary/70" : "text-muted-foreground/40"
+                    )}>
+                      {WEEK_DAYS[weekDayIdx]}
+                    </span>
+                    <span className={cn(
+                      "w-7 h-7 flex items-center justify-center rounded-full text-[13px] font-semibold transition-all duration-150",
+                      isDay
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-foreground/80 group-hover:bg-accent"
                     )}>
                       {format(d, "d")}
                     </span>
-                    <span className="text-[10px] text-muted-foreground/50 mt-0.5">
-                      {getBlocksForDate(date).length > 0 ? `${getBlocksForDate(date).length} blocks` : ""}
-                    </span>
+                    {blockCount > 0 ? (
+                      <span className={cn(
+                        "mt-1.5 text-[9px] font-medium tracking-wide",
+                        isDay ? "text-primary/60" : "text-muted-foreground/40"
+                      )}>
+                        {blockCount}b
+                      </span>
+                    ) : (
+                      <span className="mt-1.5 text-[9px] opacity-0">·</span>
+                    )}
                   </button>
                 );
               })}
@@ -195,14 +217,19 @@ export function PlannerModule() {
           {/* Scrollable grid */}
           <div className="flex flex-1 overflow-auto">
             {/* Hour labels */}
-            <div className="w-10 shrink-0 relative">
+            <div className="w-10 shrink-0 relative select-none">
               {Array.from({ length: 16 }, (_, i) => i + 6).map((h) => (
                 <div
                   key={h}
-                  className="absolute left-0 right-0 text-right pr-1"
+                  className="absolute left-0 right-0 flex justify-end pr-2"
                   style={{ top: (h - 6) * 64 - 8 }}
                 >
-                  <span className="text-[10px] text-muted-foreground/40 tabular-nums">
+                  <span className={cn(
+                    "text-[9px] font-medium tabular-nums tracking-wide",
+                    h === 12
+                      ? "text-muted-foreground/60"
+                      : "text-muted-foreground/30"
+                  )}>
                     {h === 12 ? "12p" : h > 12 ? `${h - 12}p` : `${h}a`}
                   </span>
                 </div>
@@ -215,7 +242,7 @@ export function PlannerModule() {
             ) : (
               <div className="flex flex-1">
                 {displayDates.map((date) => (
-                  <div key={date} className="flex-1 border-l border-border first:border-l-0">
+                  <div key={date} className="flex-1 border-l border-border/40 first:border-l-0">
                     <DayColumn date={date} compact={view === "week"} />
                   </div>
                 ))}
