@@ -11,6 +11,10 @@ import { useNoteStore } from "@/modules/notes/store";
 import { bus } from "@/kernel/event-bus";
 import type { ProjectStatus } from "@/shared/types";
 
+import { TaskDetail } from "@/modules/tasks/components/TaskDetail";
+
+
+
 const PRESET_COLORS = [
   "#3b82f6","#8b5cf6","#ec4899","#f97316",
   "#eab308","#22c55e","#14b8a6","#6b7280",
@@ -24,7 +28,9 @@ export function ProjectDetail() {
   } = useProjectStore();
 
   // Always call hooks at top level
-  const { tasks: allTasks, loadTasks, openTask, openQuickAdd } = useTaskStore();
+  const { tasks: allTasks, loadTasks, openQuickAdd, openTaskId } = useTaskStore();
+  const openTaskInPanel = (id: string) => useTaskStore.setState({ openTaskId: id });
+
   const allNotes = useNoteStore((s) => s.notes);
   const { openNote } = useNoteStore();
 
@@ -319,11 +325,7 @@ export function ProjectDetail() {
                       {tasks
                         .filter((t) => t.status !== "done" && t.status !== "cancelled")
                         .map((task) => (
-                          <TaskLine
-                            key={task.id}
-                            task={task}
-                            onOpen={() => openTask(task.id)}
-                          />
+                          <TaskLine key={task.id} task={task} onOpen={() => openTaskInPanel(task.id)} />
                         ))}
                     </>
                   )}
@@ -335,11 +337,7 @@ export function ProjectDetail() {
                       {tasks
                         .filter((t) => t.status === "done")
                         .map((task) => (
-                          <TaskLine
-                            key={task.id}
-                            task={task}
-                            onOpen={() => openTask(task.id)}
-                          />
+                          <TaskLine key={task.id} task={task} onOpen={() => openTaskInPanel(task.id)} />
                         ))}
                     </>
                   )}
@@ -455,6 +453,7 @@ export function ProjectDetail() {
             </div>
           )}
         </div>
+        {openTaskId && <TaskDetail />}
       </div>
     </div>
   );
@@ -462,27 +461,56 @@ export function ProjectDetail() {
 
 // ── Sub-components ────────────────────────────────────────────
 
-function TaskLine({ task, onOpen }: { task: import("@/shared/types").Task; onOpen: () => void }) {
-  const isDone = task.status === "done";
-  const isOverdue = !isDone && task.dueDate && task.dueDate < new Date().toISOString().slice(0, 10);
+// Replace the entire TaskLine component:
+
+function TaskLine({
+  task,
+  onOpen,
+}: {
+  task: import("@/shared/types").Task;
+  onOpen: () => void;
+}) {
+  const { updateTask } = useTaskStore();
+  const isDone    = task.status === "done";
+  const today     = new Date().toISOString().slice(0, 10);
+  const isOverdue = !isDone && task.dueDate && task.dueDate < today;
+
+  const toggleDone = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    void updateTask(task.id, { status: isDone ? "todo" : "done" });
+  };
 
   return (
     <div
-      onClick={onOpen}
-      className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg hover:bg-accent cursor-pointer transition-fast group"
+    role="button"
+    tabIndex={0}
+    onClick={onOpen}
+    onKeyDown={(e) => { if (e.key === "Enter") onOpen(); }}
+    className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg hover:bg-accent cursor-pointer transition-fast group"
     >
-      {isDone
-        ? <CheckCircle2 size={14} className="text-green-500 shrink-0" />
-        : <Circle size={14} className="text-muted-foreground/50 shrink-0" />
-      }
-      <span className={cn("flex-1 text-sm truncate", isDone && "line-through text-muted-foreground/50")}>
-        {task.title}
+    {/* ← clickable zone, stops propagation */}
+    <button
+    onClick={toggleDone}
+    className="shrink-0 text-muted-foreground hover:text-green-500 transition-fast"
+    aria-label={isDone ? "Mark incomplete" : "Mark complete"}
+    >
+    {isDone
+      ? <CheckCircle2 size={14} className="text-green-500" />
+      : <Circle size={14} className="text-muted-foreground/50" />
+    }
+    </button>
+
+    <span className={cn("flex-1 text-sm truncate", isDone && "line-through text-muted-foreground/50")}>
+    {task.title}
+    </span>
+    {task.dueDate && (
+      <span className={cn(
+        "text-xs tabular-nums shrink-0",
+        isOverdue ? "text-red-500" : "text-muted-foreground/50"
+      )}>
+      {formatDate(task.dueDate)}
       </span>
-      {task.dueDate && (
-        <span className={cn("text-xs tabular-nums shrink-0", isOverdue ? "text-red-500" : "text-muted-foreground/50")}>
-          {formatDate(task.dueDate)}
-        </span>
-      )}
+    )}
     </div>
   );
 }
