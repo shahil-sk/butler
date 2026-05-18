@@ -8,8 +8,9 @@ import {
   PanelLeftClose, Settings, Plus,
   LayoutDashboard, ChevronRight, Sun, Moon, Monitor,
 } from "lucide-react";
+
 // Tauri app icon — resolved by Vite at build time
-import appIcon from "/src-tauri/icons/32x32.png";
+const appIcon = new URL("../../../src-tauri/icons/64x64.png", import.meta.url).href;
 
 // ── Nav sections ─────────────────────────────────────────────
 const NAV_SECTIONS = [
