@@ -449,7 +449,6 @@ function FocusTab() {
   const setTaskId   = useFocusStore((s) => s.setTaskId);
   const setProjectId = useFocusStore((s) => s.setProjectId);
   const setGoal     = useFocusStore((s) => s.setGoal);
-  // setSessionNotes takes only (notes: string) — writes to activeSession
   const setNotes    = useFocusStore((s) => s.setSessionNotes);
   const clearLast   = useFocusStore((s) => s.clearLastCompleted);
 
@@ -602,7 +601,6 @@ function FocusTab() {
             )}
             <div className="w-full">
               <label className="text-xs text-muted-foreground mb-1 block">Session notes</label>
-              {/* setNotes(notes) — store writes to activeSession directly */}
               <RichEditor
                 content={active?.notes ?? ""}
                 onChange={(v) => setNotes(v)}
@@ -709,7 +707,6 @@ function EntryForm({ initial = {}, onSave, onCancel }: {
   });
   const [endAt, setEndAt] = useState(() => {
     if (initial.endAt) return initial.endAt.slice(0, 16);
-    // Default end = start + 1h so duration is never accidentally zero
     const d = new Date(initial.startAt ?? Date.now());
     d.setHours(d.getHours() + 1);
     return d.toISOString().slice(0, 16);
@@ -793,7 +790,6 @@ function EntryRow({ entry, onEdit, onDelete, onResume }: {
   const projects = useProjectStore((s) => s.projects);
   const task     = entry.taskId    ? tasks.find((t)    => t.id === entry.taskId)    : null;
   const project  = entry.projectId ? projects.find((p) => p.id === entry.projectId) : null;
-  // Live duration for running entries
   const isRunning = !entry.endAt;
   const liveDur   = useLiveDuration(entry.startAt, !isRunning);
 
@@ -850,7 +846,7 @@ function TrackerTab() {
   const activeEntryId = useTimeStore((s) => s.activeEntryId);
   const startTimer    = useTimeStore((s) => s.startTimer);
   const stopTimer     = useTimeStore((s) => s.stopTimer);
-  const addEntry      = useTimeStore((s) => s.createEntry);  // alias
+  const addEntry      = useTimeStore((s) => s.createEntry);
   const updateEntry   = useTimeStore((s) => s.updateEntry);
   const deleteEntry   = useTimeStore((s) => s.deleteEntry);
   const load          = useTimeStore((s) => s.load);
@@ -987,4 +983,138 @@ function TrackerTab() {
                   onResume={(entry) => void startTimer({
                     description: entry.description,
                     taskId:      entry.taskId,
- 
+                    projectId:   entry.projectId,
+                  })}
+                />
+              ))}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REPORTS TAB
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ReportsTab() {
+  const entries  = useTimeStore((s) => s.entries);
+  const projects = useProjectStore((s) => s.projects);
+  const tasks    = useTaskStore((s) => s.tasks);
+
+  const completed = entries.filter((e) => e.endAt && e.durationMinutes);
+
+  // Last 7 days bar chart data
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+    const mins = completed.filter((e) => e.startAt.startsWith(d)).reduce((a, e) => a + (e.durationMinutes ?? 0), 0);
+    return { date: d, label: dateLabel(d).split(",")[0], mins };
+  }).reverse();
+
+  const maxMins = Math.max(...days.map((d) => d.mins), 60);
+
+  // By project
+  const byProject = projects
+    .map((p) => {
+      const mins = completed.filter((e) => e.projectId === p.id).reduce((a, e) => a + (e.durationMinutes ?? 0), 0);
+      return { ...p, mins };
+    })
+    .filter((p) => p.mins > 0)
+    .sort((a, b) => b.mins - a.mins);
+
+  const totalTracked = completed.reduce((a, e) => a + (e.durationMinutes ?? 0), 0);
+  const billable     = completed.filter((e) => e.isBillable).reduce((a, e) => a + (e.durationMinutes ?? 0), 0);
+
+  return (
+    <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6">
+      {/* KPI row */}
+      <div className="grid grid-cols-3 gap-4">
+        {[
+          { label: "Total tracked", value: fmtDuration(totalTracked) },
+          { label: "Billable",      value: fmtDuration(billable) },
+          { label: "Entries",       value: String(completed.length) },
+        ].map(({ label, value }) => (
+          <div key={label} className="flex flex-col gap-1 p-4 rounded-xl border"
+            style={{ background: "hsl(var(--card))", borderColor: "hsl(var(--border))" }}>
+            <span className="text-xs text-muted-foreground">{label}</span>
+            <span className="text-xl font-semibold tabular-nums">{value}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* 7-day bar chart */}
+      <div className="rounded-xl border p-4" style={{ background: "hsl(var(--card))", borderColor: "hsl(var(--border))" }}>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">Last 7 days</p>
+        <div className="flex items-end gap-2 h-24">
+          {days.map(({ date, label, mins }) => (
+            <div key={date} className="flex-1 flex flex-col items-center gap-1">
+              <span className="text-[9px] text-muted-foreground tabular-nums">{mins > 0 ? fmtDuration(mins) : ""}</span>
+              <div className="w-full rounded-sm transition-all"
+                style={{
+                  height: `${Math.max((mins / maxMins) * 80, mins > 0 ? 4 : 0)}px`,
+                  background: "hsl(var(--primary))",
+                  opacity: mins > 0 ? 1 : 0.15,
+                  minHeight: mins > 0 ? 4 : 0,
+                }} />
+              <span className="text-[9px] text-muted-foreground">{label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* By project */}
+      {byProject.length > 0 && (
+        <div className="rounded-xl border p-4" style={{ background: "hsl(var(--card))", borderColor: "hsl(var(--border))" }}>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">By project</p>
+          <div className="flex flex-col gap-2">
+            {byProject.map((p) => (
+              <div key={p.id} className="flex items-center gap-3">
+                <ProjectDot color={p.color} size={8} />
+                <span className="text-sm flex-1 truncate">{p.name}</span>
+                <span className="text-xs font-semibold tabular-nums text-muted-foreground">{fmtDuration(p.mins)}</span>
+                <div className="w-20 h-1.5 rounded-full overflow-hidden" style={{ background: "hsl(var(--muted))" }}>
+                  <div className="h-full rounded-full" style={{
+                    width: `${(p.mins / (byProject[0]?.mins ?? 1)) * 100}%`,
+                    background: p.color ?? "hsl(var(--primary))",
+                  }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {completed.length === 0 && (
+        <EmptyState icon={<BarChart2 size={26} />} title="No data yet" description="Track time to see your reports here." />
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ROOT MODULE
+// ─────────────────────────────────────────────────────────────────────────────
+
+export default function FocusModule() {
+  const [tab, setTab] = useState<Tab>("focus");
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Active timer banner (cross-tab) */}
+      <ActiveTimerBanner onJump={() => setTab("tracker")} />
+
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b shrink-0"
+        style={{ borderColor: "hsl(var(--border))" }}>
+        <SegmentControl active={tab} onChange={setTab} />
+      </div>
+
+      {/* Tab content */}
+      {tab === "focus"   && <FocusTab />}
+      {tab === "tracker" && <TrackerTab />}
+      {tab === "reports" && <ReportsTab />}
+    </div>
+  );
+}
