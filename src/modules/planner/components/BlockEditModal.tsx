@@ -1,21 +1,28 @@
 import { useState } from "react";
 import { X, Trash2, Unlink } from "lucide-react";
 import { cn } from "@/shared/utils";
-import { usePlannerStore, BLOCK_COLORS, type TimeBlock } from "../store";
+import { usePlannerStore, BLOCK_COLORS } from "../store";
 import { useTaskStore } from "@/modules/tasks/store";
 import { bus } from "@/kernel/event-bus";
 
-export function BlockEditModal({ block, onClose }: { block: TimeBlock; onClose: () => void }) {
+// Accepts blockId (string) so callers never have to pass the full object —
+// avoids crash when editingBlockId is set before blocks array re-renders.
+export function BlockEditModal({ blockId, onClose }: { blockId: string; onClose: () => void }) {
+  const block        = usePlannerStore((s) => s.blocks.find((b) => b.id === blockId));
   const { updateBlock, deleteBlock } = usePlannerStore();
-  const tasks = useTaskStore((s) => s.tasks);
+  const tasks        = useTaskStore((s) => s.tasks);
 
-  const [title,     setTitle]     = useState(block.title);
-  const [startTime, setStartTime] = useState(block.startTime);
-  const [endTime,   setEndTime]   = useState(block.endTime);
-  const [color,     setColor]     = useState(block.color ?? BLOCK_COLORS[0]);
-  const [isBreak,   setIsBreak]   = useState(block.isBreak);
-  const [notes,     setNotes]     = useState(block.notes ?? "");
-  const [taskId,    setTaskId]    = useState(block.taskId ?? "");
+  // All useState must be called unconditionally — guard below this block.
+  const [title,     setTitle]     = useState(block?.title     ?? "");
+  const [startTime, setStartTime] = useState(block?.startTime ?? "09:00");
+  const [endTime,   setEndTime]   = useState(block?.endTime   ?? "10:00");
+  const [color,     setColor]     = useState(block?.color     ?? BLOCK_COLORS[0]);
+  const [isBreak,   setIsBreak]   = useState(block?.isBreak   ?? false);
+  const [notes,     setNotes]     = useState(block?.notes     ?? "");
+  const [taskId,    setTaskId]    = useState(block?.taskId    ?? "");
+
+  // After all hooks: safe to early-return if block not found
+  if (!block) return null;
 
   const linkedTask = tasks.find((t) => t.id === taskId);
 
@@ -33,7 +40,6 @@ export function BlockEditModal({ block, onClose }: { block: TimeBlock; onClose: 
       taskId:    nextTaskId,
     });
 
-    // Emit integration events for task link changes
     if (nextTaskId && nextTaskId !== prevTaskId) {
       bus.emit("planner:block-linked-task", {
         blockId: block.id,
