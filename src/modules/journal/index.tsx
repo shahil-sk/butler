@@ -255,6 +255,8 @@ function DailyNoteButton({ date }: { date: ISODate }) {
 }
 
 // ── EntryEditor ───────────────────────────────────────────────
+// Uses RichEditor with `borderless` — the host container already
+// provides the border/rounded chrome, so we avoid double borders.
 
 function EntryEditor({
   entry,
@@ -335,12 +337,19 @@ function EntryEditor({
 
       {/* Editor */}
       <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-5">
+        {/*
+          borderless={true}  — The px-6 py-5 container is the chrome; no extra border needed.
+          resetKey={entry.id} — Resets editor state when switching between journal entries.
+          debounceMs={600}    — Slightly tighter debounce for journal (feels more responsive).
+        */}
         <RichEditor
           content={entry.content}
           onChange={(json) => onSave({ content: json })}
           placeholder="What's on your mind…"
           resetKey={entry.id}
           minHeight="min-h-[280px]"
+          debounceMs={600}
+          borderless
           className="flex-1"
         />
 
