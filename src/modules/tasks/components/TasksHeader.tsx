@@ -1,13 +1,13 @@
-import { List, LayoutGrid, Calendar, Table2, Plus, Trash2, CheckSquare, ArrowRight, X } from "lucide-react";
+import { List, LayoutGrid, Calendar, Table2, Plus, Trash2, CheckSquare, X } from "lucide-react";
 import { cn } from "@/shared/utils";
 import { PageHeader, ViewSwitcher, PrimaryButton, GhostButton, ToolbarSeparator } from "@/shared/ui";
 import { useTaskStore, type TaskView, type TaskGroupBy, type TaskSortBy } from "../store";
 
 const VIEW_OPTIONS = [
-  { value: "list"     as TaskView, icon: List,       label: "List" },
-  { value: "board"    as TaskView, icon: LayoutGrid,  label: "Board" },
-  { value: "calendar" as TaskView, icon: Calendar,    label: "Calendar" },
-  { value: "table"    as TaskView, icon: Table2,      label: "Table" },
+  { value: "list"     as TaskView, icon: List,      label: "List" },
+  { value: "board"    as TaskView, icon: LayoutGrid, label: "Board" },
+  { value: "calendar" as TaskView, icon: Calendar,   label: "Calendar" },
+  { value: "table"    as TaskView, icon: Table2,     label: "Table" },
 ];
 
 export function TasksHeader() {
@@ -21,7 +21,7 @@ export function TasksHeader() {
     getFilteredTasks,
   } = useTaskStore();
 
-  const selected = [...selectedTaskIds];
+  const selected     = [...selectedTaskIds];
   const hasSelection = selected.length > 0;
 
   return (
@@ -35,7 +35,11 @@ export function TasksHeader() {
         <select
           value={groupBy}
           onChange={(e) => setGroupBy(e.target.value as TaskGroupBy)}
-          className="text-xs bg-transparent border border-border rounded-md px-2 py-1 outline-none text-muted-foreground hover:text-foreground hover:border-border/80 transition-fast cursor-pointer"
+          className={cn(
+            "text-xs bg-transparent border border-border/70 rounded-lg px-2 py-1.5 outline-none",
+            "text-muted-foreground hover:text-foreground hover:border-border transition-fast cursor-pointer",
+            "focus-visible:ring-1 focus-visible:ring-ring focus-visible:border-ring"
+          )}
         >
           <option value="none">No grouping</option>
           <option value="status">By status</option>
@@ -48,7 +52,11 @@ export function TasksHeader() {
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as TaskSortBy)}
-          className="text-xs bg-transparent border border-border rounded-md px-2 py-1 outline-none text-muted-foreground hover:text-foreground hover:border-border/80 transition-fast cursor-pointer"
+          className={cn(
+            "text-xs bg-transparent border border-border/70 rounded-lg px-2 py-1.5 outline-none",
+            "text-muted-foreground hover:text-foreground hover:border-border transition-fast cursor-pointer",
+            "focus-visible:ring-1 focus-visible:ring-ring focus-visible:border-ring"
+          )}
         >
           <option value="manual">Manual</option>
           <option value="dueDate">Due date</option>
@@ -60,18 +68,19 @@ export function TasksHeader() {
         <ToolbarSeparator />
 
         <PrimaryButton onClick={() => openQuickAdd()}>
-          <Plus size={13} />
+          <Plus size={13} strokeWidth={2.5} />
           New task
         </PrimaryButton>
       </PageHeader>
 
       {/* Bulk action bar */}
       {hasSelection && (
-        <div className="flex items-center gap-2 px-4 py-2 bg-primary/5 border-b border-border animate-fade-in">
-          <span className="text-xs text-muted-foreground font-medium">
+        <div className="flex items-center gap-2 px-4 py-2 bg-primary/[0.06] border-b border-border animate-fade-in">
+          <span className="text-xs text-muted-foreground font-medium tabular-nums">
             {selected.length} selected
           </span>
-          <div className="flex items-center gap-1 ml-2">
+          <div className="h-3.5 w-px bg-border mx-1" />
+          <div className="flex items-center gap-1">
             <GhostButton onClick={() => void batchUpdate(selected, { status: "done" })}>
               <CheckSquare size={12} />
               Complete
@@ -84,7 +93,8 @@ export function TasksHeader() {
           <div className="flex-1" />
           <button
             onClick={clearSelection}
-            className="text-muted-foreground hover:text-foreground transition-fast p-1 rounded hover:bg-accent"
+            className="p-1 rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-muted/70 transition-fast"
+            title="Clear selection"
           >
             <X size={13} />
           </button>
