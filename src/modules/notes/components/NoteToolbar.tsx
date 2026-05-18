@@ -1,6 +1,7 @@
 // ============================================================
-// NOTES — NoteToolbar  (redesign v2)
-// Inline title editor + meta row (tags, links) + action menu
+// NOTES — NoteToolbar  (journal redesign)
+// Big title + subtle divider + meta row.
+// Full dark/light support via hsl(var(--*)) tokens.
 // ============================================================
 
 import { useState, useRef, useEffect } from "react";
@@ -19,7 +20,50 @@ import type { Note } from "@/shared/types";
 
 interface NoteToolbarProps { note: Note; }
 
-// ── Linked chip pill ──────────────────────────────────────────
+// ── Tiny toolbar icon button ───────────────────────────────────
+function TBtn({
+  children, title, danger = false, active = false, onClick,
+}: {
+  children: React.ReactNode;
+  title?: string;
+  danger?: boolean;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className="w-7 h-7 flex items-center justify-center rounded-md transition-fast shrink-0"
+      style={{
+        color: danger
+          ? "hsl(var(--destructive))"
+          : active
+            ? "hsl(var(--primary))"
+            : "hsl(var(--muted-foreground))",
+        background: active ? "hsl(var(--primary) / 0.10)" : "transparent",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = danger
+          ? "hsl(var(--destructive) / 0.10)"
+          : "hsl(var(--accent))";
+        e.currentTarget.style.color = danger
+          ? "hsl(var(--destructive))"
+          : "hsl(var(--foreground))";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = active ? "hsl(var(--primary) / 0.10)" : "transparent";
+        e.currentTarget.style.color = danger
+          ? "hsl(var(--destructive))"
+          : active ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))";
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ── Linked-entity chip ─────────────────────────────────────────
 function LinkedChip({ label, icon, onOpen, onRemove }: {
   label: string;
   icon: React.ReactNode;
@@ -28,30 +72,29 @@ function LinkedChip({ label, icon, onOpen, onRemove }: {
 }) {
   return (
     <span
-      className="group/chip inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[11px] font-medium transition-colors max-w-[160px]"
+      className="group/chip inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[11px] font-medium max-w-[160px] transition-fast"
       style={{
-        background: "hsl(var(--muted) / 0.7)",
-        border: "1px solid hsl(var(--border) / 0.7)",
+        background: "hsl(var(--muted) / 0.6)",
+        border: "1px solid hsl(var(--border))",
         color: "hsl(var(--muted-foreground))",
       }}
     >
       {icon}
       <button
         onClick={onOpen}
-        className="truncate transition-colors"
+        className="truncate transition-fast"
         title={label}
-        style={{ color: "inherit" }}
         onMouseEnter={(e) => (e.currentTarget.style.color = "hsl(var(--primary))")}
-        onMouseLeave={(e) => (e.currentTarget.style.color = "inherit")}
+        onMouseLeave={(e) => (e.currentTarget.style.color = "hsl(var(--muted-foreground))")}
       >
         {label}
       </button>
       <button
         onClick={(e) => { e.stopPropagation(); onRemove(); }}
-        className="opacity-0 group-hover/chip:opacity-100 w-4 h-4 flex items-center justify-center rounded-full transition-all shrink-0"
+        className="opacity-0 group-hover/chip:opacity-100 w-4 h-4 flex items-center justify-center rounded-full transition-fast shrink-0"
         style={{ color: "hsl(var(--muted-foreground))" }}
         aria-label="Unlink"
-        onMouseEnter={(e) => (e.currentTarget.style.background = "hsl(var(--muted))")}
+        onMouseEnter={(e) => (e.currentTarget.style.background = "hsl(var(--accent))")}
         onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
       >
         <X size={9} />
@@ -60,22 +103,22 @@ function LinkedChip({ label, icon, onOpen, onRemove }: {
   );
 }
 
-// ── Tag chip pill ─────────────────────────────────────────────
+// ── Tag chip ───────────────────────────────────────────────────
 function TagChip({ tag, onRemove }: { tag: string; onRemove: () => void }) {
   return (
     <span
-      className="group/tag inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[11px] font-medium"
+      className="group/tag inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[11px] font-medium transition-fast"
       style={{
         background: "hsl(var(--primary) / 0.08)",
-        border: "1px solid hsl(var(--primary) / 0.18)",
-        color: "hsl(var(--primary) / 0.8)",
+        border: "1px solid hsl(var(--primary) / 0.20)",
+        color: "hsl(var(--primary))",
       }}
     >
       <Hash size={9} />
       {tag}
       <button
         onClick={onRemove}
-        className="opacity-0 group-hover/tag:opacity-100 w-4 h-4 flex items-center justify-center rounded-full transition-all shrink-0"
+        className="opacity-0 group-hover/tag:opacity-100 w-4 h-4 flex items-center justify-center rounded-full transition-fast shrink-0"
         aria-label="Remove tag"
         onMouseEnter={(e) => (e.currentTarget.style.background = "hsl(var(--primary) / 0.12)")}
         onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
@@ -86,42 +129,128 @@ function TagChip({ tag, onRemove }: { tag: string; onRemove: () => void }) {
   );
 }
 
-// ── Toolbar action button ─────────────────────────────────────
-function ToolbarBtn({
-  children, title, danger = false, onClick,
+// ── Link popup ────────────────────────────────────────────────
+function LinkPopup({
+  note, tasks, projects, onLinkTask, onLinkProject, onClose,
 }: {
-  children: React.ReactNode;
-  title?: string;
-  danger?: boolean;
-  onClick: () => void;
+  note: Note;
+  tasks: ReturnType<typeof useTaskStore.getState>["tasks"];
+  projects: ReturnType<typeof useProjectStore.getState>["projects"];
+  onLinkTask: (id: string) => void;
+  onLinkProject: (id: string) => void;
+  onClose: () => void;
 }) {
+  const [tab, setTab] = useState<"tasks" | "projects">("tasks");
+  const [q,   setQ]   = useState("");
+
+  const filteredTasks    = tasks.filter((t)    => t.title.toLowerCase().includes(q.toLowerCase())).slice(0, 8);
+  const filteredProjects = projects.filter((p) => p.name.toLowerCase().includes(q.toLowerCase())).slice(0, 8);
+
   return (
-    <button
-      onClick={onClick}
-      title={title}
-      className="w-7 h-7 flex items-center justify-center rounded-md transition-colors shrink-0"
-      style={{ color: danger ? "hsl(var(--destructive))" : "hsl(var(--muted-foreground))" }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = danger
-          ? "hsl(var(--destructive) / 0.08)"
-          : "hsl(var(--accent))";
-        e.currentTarget.style.color = danger
-          ? "hsl(var(--destructive))"
-          : "hsl(var(--foreground))";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = "transparent";
-        e.currentTarget.style.color = danger
-          ? "hsl(var(--destructive))"
-          : "hsl(var(--muted-foreground))";
-      }}
-    >
-      {children}
-    </button>
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} />
+      <div
+        className="absolute right-0 top-full mt-1.5 z-50 w-60 rounded-xl overflow-hidden"
+        style={{
+          background: "hsl(var(--popover))",
+          border: "1px solid hsl(var(--border))",
+          boxShadow: "var(--shadow-lg)",
+        }}
+      >
+        {/* Tabs */}
+        <div
+          className="flex"
+          style={{ borderBottom: "1px solid hsl(var(--border))" }}
+        >
+          {(["tasks", "projects"] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => { setTab(t); setQ(""); }}
+              className="flex-1 py-2 text-[11px] font-semibold capitalize transition-fast"
+              style={{
+                color: tab === t ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))",
+                borderBottom: tab === t
+                  ? "2px solid hsl(var(--primary))"
+                  : "2px solid transparent",
+              }}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+
+        {/* Search */}
+        <div className="px-3 pt-2.5 pb-1.5">
+          <input
+            autoFocus
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={`Search ${tab}…`}
+            className="w-full text-[12px] rounded-md px-2.5 py-1.5 outline-none"
+            style={{
+              background: "hsl(var(--muted) / 0.5)",
+              color: "hsl(var(--foreground))",
+            }}
+          />
+        </div>
+
+        {/* Results */}
+        <div className="max-h-44 overflow-y-auto py-1">
+          {tab === "tasks" && (
+            filteredTasks.length === 0
+              ? <p className="px-4 py-3 text-[11px]" style={{ color: "hsl(var(--muted-foreground) / 0.5)" }}>No tasks</p>
+              : filteredTasks.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => onLinkTask(t.id)}
+                    className={cn(
+                      "w-full flex items-center gap-2 px-3 py-2 text-[12px] text-left transition-fast",
+                      note.linkedTaskIds.includes(t.id) && "opacity-40 pointer-events-none"
+                    )}
+                    style={{ color: "hsl(var(--foreground))" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "hsl(var(--accent))")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  >
+                    {t.status === "done"
+                      ? <CheckCircle2 size={11} style={{ color: "hsl(var(--success))", flexShrink: 0 }} />
+                      : <Circle       size={11} style={{ color: "hsl(var(--muted-foreground) / 0.4)", flexShrink: 0 }} />}
+                    <span className="flex-1 truncate">{t.title}</span>
+                    {note.linkedTaskIds.includes(t.id) && (
+                      <span className="text-[10px]" style={{ color: "hsl(var(--muted-foreground))" }}>linked</span>
+                    )}
+                  </button>
+                ))
+          )}
+          {tab === "projects" && (
+            filteredProjects.length === 0
+              ? <p className="px-4 py-3 text-[11px]" style={{ color: "hsl(var(--muted-foreground) / 0.5)" }}>No projects</p>
+              : filteredProjects.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => onLinkProject(p.id)}
+                    className={cn(
+                      "w-full flex items-center gap-2 px-3 py-2 text-[12px] text-left transition-fast",
+                      note.linkedProjectIds?.includes(p.id) && "opacity-40 pointer-events-none"
+                    )}
+                    style={{ color: "hsl(var(--foreground))" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "hsl(var(--accent))")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  >
+                    <ProjectDot color={p.color} size={7} />
+                    <span className="flex-1 truncate">{p.name}</span>
+                    {note.linkedProjectIds?.includes(p.id) && (
+                      <span className="text-[10px]" style={{ color: "hsl(var(--muted-foreground))" }}>linked</span>
+                    )}
+                  </button>
+                ))
+          )}
+        </div>
+      </div>
+    </>
   );
 }
 
-// ── Main toolbar ──────────────────────────────────────────────
+// ── Main toolbar ───────────────────────────────────────────────
 export function NoteToolbar({ note }: NoteToolbarProps) {
   const { updateNote, deleteNote, closeNote } = useNoteStore();
   const tasks    = useTaskStore((s) => s.tasks);
@@ -132,18 +261,13 @@ export function NoteToolbar({ note }: NoteToolbarProps) {
   const linkedProjects = projects.filter((p) => note.linkedProjectIds?.includes(p.id));
   const linkedEvents   = events.filter((e)   => note.linkedEventIds?.includes(e.id));
 
-  const hasLinks = linkedTasks.length > 0 || linkedProjects.length > 0 || linkedEvents.length > 0;
-  const hasTags  = note.tags.length > 0;
+  const [title,     setTitle]     = useState(note.title);
+  const [tagInput,  setTagInput]  = useState("");
+  const [linkOpen,  setLinkOpen]  = useState(false);
+  const [menuOpen,  setMenuOpen]  = useState(false);
 
-  const [title,      setTitle]      = useState(note.title);
-  const [tagInput,   setTagInput]   = useState("");
-  const [linkOpen,   setLinkOpen]   = useState(false);
-  const [linkSearch, setLinkSearch] = useState("");
-  const [linkTab,    setLinkTab]    = useState<"tasks" | "projects">("tasks");
-  const [menuOpen,   setMenuOpen]   = useState(false);
-  const titleRef  = useRef<HTMLInputElement>(null);
-  const menuRef   = useRef<HTMLDivElement>(null);
-  const linkBtnRef = useRef<HTMLButtonElement>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
+  const menuRef  = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setTitle(note.title); }, [note.id, note.title]);
 
@@ -161,17 +285,17 @@ export function NoteToolbar({ note }: NoteToolbarProps) {
     if (t !== note.title) void updateNote(note.id, { title: t });
   };
 
-  const addTag = (tag: string) => {
-    const t = tag.trim().toLowerCase().replace(/^#+/, "");
+  const addTag = (raw: string) => {
+    const t = raw.trim().toLowerCase().replace(/^#+/, "");
     if (!t || note.tags.includes(t)) return;
     void updateNote(note.id, { tags: [...note.tags, t] });
     setTagInput("");
   };
 
-  const removeTag     = (tag: string)       => void updateNote(note.id, { tags: note.tags.filter((x) => x !== tag) });
-  const unlinkTask    = (id: string)         => void updateNote(note.id, { linkedTaskIds:    note.linkedTaskIds.filter((x) => x !== id) });
-  const unlinkProject = (id: string)         => void updateNote(note.id, { linkedProjectIds: (note.linkedProjectIds ?? []).filter((x) => x !== id) });
-  const unlinkEvent   = (id: string)         => void updateNote(note.id, { linkedEventIds:   (note.linkedEventIds ?? []).filter((x) => x !== id) });
+  const removeTag     = (tag: string) => void updateNote(note.id, { tags: note.tags.filter((x) => x !== tag) });
+  const unlinkTask    = (id: string)  => void updateNote(note.id, { linkedTaskIds:    note.linkedTaskIds.filter((x) => x !== id) });
+  const unlinkProject = (id: string)  => void updateNote(note.id, { linkedProjectIds: (note.linkedProjectIds ?? []).filter((x) => x !== id) });
+  const unlinkEvent   = (id: string)  => void updateNote(note.id, { linkedEventIds:   (note.linkedEventIds ?? []).filter((x) => x !== id) });
 
   const linkTask = (taskId: string) => {
     if (note.linkedTaskIds.includes(taskId)) return;
@@ -185,159 +309,76 @@ export function NoteToolbar({ note }: NoteToolbarProps) {
     setLinkOpen(false);
   };
 
-  const filteredTasks    = tasks.filter((t)    => t.title.toLowerCase().includes(linkSearch.toLowerCase())).slice(0, 8);
-  const filteredProjects = projects.filter((p) => p.name.toLowerCase().includes(linkSearch.toLowerCase())).slice(0, 8);
-
   return (
     <div
-      className="flex flex-col shrink-0 border-b"
-      style={{ borderColor: "hsl(var(--border))" }}
+      className="flex flex-col shrink-0"
+      style={{ borderBottom: "1px solid hsl(var(--border))" }}
     >
-      {/* ── Title + actions row ──────────────────────────── */}
-      <div className="flex items-center gap-2 px-6 pt-4 pb-1">
+      {/* ── Title row ──────────────────────────────────────── */}
+      <div className="flex items-start gap-2 px-8 pt-7 pb-1">
+        {/* Big journal-style title */}
         <input
           ref={titleRef}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onBlur={saveTitle}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); titleRef.current?.blur(); } }}
-          className="flex-1 bg-transparent text-[17px] font-semibold outline-none min-w-0"
+          onKeyDown={(e) => {
+            if (e.key === "Enter") { e.preventDefault(); titleRef.current?.blur(); }
+          }}
+          className="flex-1 bg-transparent outline-none min-w-0 font-semibold"
           style={{
+            fontSize: "clamp(1.25rem, 2vw, 1.5rem)",
+            lineHeight: 1.25,
             color: "hsl(var(--foreground))",
+            caretColor: "hsl(var(--primary))",
           }}
           placeholder="Untitled"
         />
 
-        <div className="flex items-center gap-0.5 shrink-0">
-          {/* Pin */}
-          <ToolbarBtn
-            title={note.isPinned ? "Unpin" : "Pin"}
+        {/* Action cluster */}
+        <div className="flex items-center gap-0.5 mt-0.5 shrink-0">
+          <TBtn
+            title={note.isPinned ? "Unpin" : "Pin note"}
+            active={note.isPinned}
             onClick={() => void updateNote(note.id, { isPinned: !note.isPinned })}
           >
             <Pin size={13} style={{ fill: note.isPinned ? "currentColor" : "none" }} />
-          </ToolbarBtn>
+          </TBtn>
 
-          {/* Link */}
+          {/* Link picker */}
           <div className="relative">
-            <ToolbarBtn
-              title="Link to task or project"
-              onClick={() => { setLinkOpen((v) => !v); setLinkSearch(""); setLinkTab("tasks"); }}
-            >
+            <TBtn title="Link task or project" onClick={() => setLinkOpen((v) => !v)}>
               <Link2 size={13} />
-            </ToolbarBtn>
-
+            </TBtn>
             {linkOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setLinkOpen(false)} />
-                <div
-                  className="absolute right-0 top-full mt-1.5 z-50 w-64 overflow-hidden rounded-xl shadow-xl"
-                  style={{
-                    background: "hsl(var(--popover))",
-                    border: "1px solid hsl(var(--border))",
-                  }}
-                >
-                  {/* Tabs */}
-                  <div className="flex border-b" style={{ borderColor: "hsl(var(--border))" }}>
-                    {(["tasks", "projects"] as const).map((tab) => (
-                      <button
-                        key={tab}
-                        onClick={() => { setLinkTab(tab); setLinkSearch(""); }}
-                        className="flex-1 py-2 text-[11px] font-semibold capitalize transition-colors"
-                        style={{
-                          color: linkTab === tab ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))",
-                          borderBottom: linkTab === tab ? "2px solid hsl(var(--primary))" : "2px solid transparent",
-                        }}
-                      >
-                        {tab}
-                      </button>
-                    ))}
-                  </div>
-                  {/* Search */}
-                  <div className="px-3 pt-2.5 pb-1.5">
-                    <input
-                      autoFocus
-                      value={linkSearch}
-                      onChange={(e) => setLinkSearch(e.target.value)}
-                      placeholder={`Search ${linkTab}…`}
-                      className="w-full text-[12px] rounded-md px-2.5 py-1.5 outline-none"
-                      style={{
-                        background: "hsl(var(--muted) / 0.6)",
-                        color: "hsl(var(--foreground))",
-                      }}
-                    />
-                  </div>
-                  {/* Results */}
-                  <div className="max-h-48 overflow-y-auto py-1">
-                    {linkTab === "tasks" && (
-                      filteredTasks.length === 0
-                        ? <p className="px-4 py-3 text-[11px]" style={{ color: "hsl(var(--muted-foreground) / 0.5)" }}>No tasks found</p>
-                        : filteredTasks.map((t) => (
-                            <button
-                              key={t.id}
-                              onClick={() => linkTask(t.id)}
-                              className={cn(
-                                "w-full flex items-center gap-2 px-3 py-2 text-[12px] text-left transition-colors",
-                                note.linkedTaskIds.includes(t.id) && "opacity-40 pointer-events-none"
-                              )}
-                              style={{ color: "hsl(var(--foreground))" }}
-                              onMouseEnter={(e) => (e.currentTarget.style.background = "hsl(var(--accent))")}
-                              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                            >
-                              {t.status === "done"
-                                ? <CheckCircle2 size={11} style={{ color: "hsl(142 65% 44%)", flexShrink: 0 }} />
-                                : <Circle       size={11} style={{ color: "hsl(var(--muted-foreground) / 0.4)", flexShrink: 0 }} />}
-                              <span className="flex-1 truncate">{t.title}</span>
-                              {note.linkedTaskIds.includes(t.id) && (
-                                <span style={{ color: "hsl(var(--muted-foreground))", fontSize: 10 }}>linked</span>
-                              )}
-                            </button>
-                          ))
-                    )}
-                    {linkTab === "projects" && (
-                      filteredProjects.length === 0
-                        ? <p className="px-4 py-3 text-[11px]" style={{ color: "hsl(var(--muted-foreground) / 0.5)" }}>No projects found</p>
-                        : filteredProjects.map((p) => (
-                            <button
-                              key={p.id}
-                              onClick={() => linkProject(p.id)}
-                              className={cn(
-                                "w-full flex items-center gap-2 px-3 py-2 text-[12px] text-left transition-colors",
-                                note.linkedProjectIds?.includes(p.id) && "opacity-40 pointer-events-none"
-                              )}
-                              style={{ color: "hsl(var(--foreground))" }}
-                              onMouseEnter={(e) => (e.currentTarget.style.background = "hsl(var(--accent))")}
-                              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                            >
-                              <ProjectDot color={p.color} size={7} />
-                              <span className="flex-1 truncate">{p.name}</span>
-                              {note.linkedProjectIds?.includes(p.id) && (
-                                <span style={{ color: "hsl(var(--muted-foreground))", fontSize: 10 }}>linked</span>
-                              )}
-                            </button>
-                          ))
-                    )}
-                  </div>
-                </div>
-              </>
+              <LinkPopup
+                note={note}
+                tasks={tasks}
+                projects={projects}
+                onLinkTask={linkTask}
+                onLinkProject={linkProject}
+                onClose={() => setLinkOpen(false)}
+              />
             )}
           </div>
 
           {/* More menu */}
           <div className="relative" ref={menuRef}>
-            <ToolbarBtn title="More options" onClick={() => setMenuOpen((v) => !v)}>
+            <TBtn title="More" onClick={() => setMenuOpen((v) => !v)}>
               <MoreHorizontal size={13} />
-            </ToolbarBtn>
+            </TBtn>
             {menuOpen && (
               <div
-                className="absolute right-0 top-full mt-1.5 z-50 w-44 rounded-xl py-1.5 shadow-xl"
+                className="absolute right-0 top-full mt-1.5 z-50 w-40 rounded-xl py-1.5"
                 style={{
                   background: "hsl(var(--popover))",
                   border: "1px solid hsl(var(--border))",
+                  boxShadow: "var(--shadow-lg)",
                 }}
               >
                 <button
                   onClick={() => { void deleteNote(note.id); closeNote(); setMenuOpen(false); }}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors"
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-fast"
                   style={{ color: "hsl(var(--destructive))" }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = "hsl(var(--destructive) / 0.08)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
@@ -350,73 +391,80 @@ export function NoteToolbar({ note }: NoteToolbarProps) {
         </div>
       </div>
 
-      {/* ── Meta row (tags + links) ───────────────────────── */}
-      {(hasLinks || hasTags || true) && (
-        <div className="flex items-center gap-1.5 flex-wrap px-6 pb-3 pt-1 min-h-0">
+      {/* ── Meta row: chips + tag input ─────────────────────── */}
+      <div className="flex items-center gap-1.5 flex-wrap px-8 pb-3 pt-1.5 min-h-[2.25rem]">
 
-          {/* Linked tasks */}
-          {linkedTasks.map((t) => (
-            <LinkedChip
-              key={t.id}
-              label={t.title}
-              icon={t.status === "done"
-                ? <CheckCircle2 size={10} style={{ color: "hsl(142 65% 44%)" }} />
-                : <Circle       size={10} />}
-              onOpen={() => useTaskStore.getState().openTask(t.id)}
-              onRemove={() => unlinkTask(t.id)}
-            />
-          ))}
+        {/* Linked tasks */}
+        {linkedTasks.map((t) => (
+          <LinkedChip
+            key={t.id}
+            label={t.title}
+            icon={t.status === "done"
+              ? <CheckCircle2 size={10} style={{ color: "hsl(var(--success))" }} />
+              : <Circle       size={10} style={{ color: "hsl(var(--muted-foreground))" }} />}
+            onOpen={() => useTaskStore.getState().openTask(t.id)}
+            onRemove={() => unlinkTask(t.id)}
+          />
+        ))}
 
-          {/* Linked projects */}
-          {linkedProjects.map((p) => (
-            <LinkedChip
-              key={p.id}
-              label={p.name}
-              icon={<ProjectDot color={p.color} size={8} />}
-              onOpen={() => {
-                useProjectStore.getState().openProject(p.id);
-                bus.emit("navigate:to", { path: "/projects" });
-              }}
-              onRemove={() => unlinkProject(p.id)}
-            />
-          ))}
+        {/* Linked projects */}
+        {linkedProjects.map((p) => (
+          <LinkedChip
+            key={p.id}
+            label={p.name}
+            icon={<ProjectDot color={p.color} size={8} />}
+            onOpen={() => {
+              useProjectStore.getState().openProject(p.id);
+              bus.emit("navigate:to", { path: "/projects" });
+            }}
+            onRemove={() => unlinkProject(p.id)}
+          />
+        ))}
 
-          {/* Linked events */}
-          {linkedEvents.map((e) => (
-            <LinkedChip
-              key={e.id}
-              label={e.title}
-              icon={<Calendar size={10} />}
-              onOpen={() => bus.emit("navigate:to", { path: "/calendar" })}
-              onRemove={() => unlinkEvent(e.id)}
-            />
-          ))}
+        {/* Linked events */}
+        {linkedEvents.map((e) => (
+          <LinkedChip
+            key={e.id}
+            label={e.title}
+            icon={<Calendar size={10} />}
+            onOpen={() => bus.emit("navigate:to", { path: "/calendar" })}
+            onRemove={() => unlinkEvent(e.id)}
+          />
+        ))}
 
-          {/* Tags */}
-          {note.tags.map((tag) => (
-            <TagChip key={tag} tag={tag} onRemove={() => removeTag(tag)} />
-          ))}
+        {/* Tags */}
+        {note.tags.map((tag) => (
+          <TagChip key={tag} tag={tag} onRemove={() => removeTag(tag)} />
+        ))}
 
-          {/* Add tag inline */}
-          <form
-            onSubmit={(e) => { e.preventDefault(); addTag(tagInput); }}
-            className="inline-flex items-center gap-1"
-          >
-            <Tag size={9} style={{ color: "hsl(var(--muted-foreground) / 0.3)" }} />
-            <input
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onBlur={() => { if (tagInput.trim()) addTag(tagInput); }}
-              placeholder="Add tag…"
-              className="text-[11px] bg-transparent outline-none transition-all duration-150"
-              style={{
-                width: tagInput ? "5rem" : "3.5rem",
-                color: "hsl(var(--muted-foreground) / 0.5)",
-              }}
-            />
-          </form>
-        </div>
-      )}
+        {/* Inline tag input */}
+        <form
+          onSubmit={(e) => { e.preventDefault(); addTag(tagInput); }}
+          className="inline-flex items-center gap-1"
+        >
+          <Tag size={9} style={{ color: "hsl(var(--muted-foreground) / 0.3)", flexShrink: 0 }} />
+          <input
+            value={tagInput}
+            onChange={(e) => setTagInput(e.target.value)}
+            onBlur={() => { if (tagInput.trim()) addTag(tagInput); }}
+            placeholder="Add tag…"
+            className="bg-transparent outline-none text-[11px] transition-fast"
+            style={{
+              width: tagInput ? "4.5rem" : "3rem",
+              color: "hsl(var(--muted-foreground) / 0.5)",
+            }}
+          />
+        </form>
+      </div>
+
+      {/* ── Thin ruled divider (journal feel) ──────────────── */}
+      <div
+        className="mx-8 mb-0"
+        style={{
+          height: 1,
+          background: "linear-gradient(to right, hsl(var(--border)), hsl(var(--border) / 0.2))",
+        }}
+      />
     </div>
   );
 }
