@@ -38,5 +38,38 @@ export function setupTaskEventListeners(): () => void {
     })
   );
 
+  // ── Planner → Task: block linked back to a task ─────────
+  // When user links a planner block to a task, sync scheduledDate onto the task.
+  unsubs.push(
+    bus.on("planner:block-linked-task", ({ taskId, date }) => {
+      const store = useTaskStore.getState();
+      const task  = store.tasks.find((t) => t.id === taskId);
+      if (!task) return;
+      // Only update scheduledDate if not already set to this date
+      if (task.scheduledDate !== date) {
+        store.updateTask(taskId, { scheduledDate: date });
+      }
+    })
+  );
+
+  // When a planner block is unlinked, clear scheduledDate if it came from planner
+  unsubs.push(
+    bus.on("planner:block-unlinked-task", ({ previousTaskId }) => {
+      const store = useTaskStore.getState();
+      const task  = store.tasks.find((t) => t.id === previousTaskId);
+      if (!task || !task.scheduledDate) return;
+      store.updateTask(previousTaskId, { scheduledDate: undefined });
+    })
+  );
+
+  // Project deleted → unlink tasks from that project
+  unsubs.push(
+    bus.on("project:deleted", ({ projectId }) => {
+      const store = useTaskStore.getState();
+      const affected = store.tasks.filter((t) => t.projectId === projectId);
+      affected.forEach((t) => store.updateTask(t.id, { projectId: undefined }));
+    })
+  );
+
   return () => unsubs.forEach((u) => u());
 }
