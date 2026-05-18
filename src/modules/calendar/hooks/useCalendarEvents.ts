@@ -3,14 +3,14 @@
 
 import { useMemo } from 'react'
 import { useCalendarStore } from '../store'
-import type { CalendarEvent } from '../db'
+import type { CalendarEvent } from '@/shared/types'
 
 /** Events visible in the current view range, filtered by visible calendars */
 export function useVisibleEvents(): CalendarEvent[] {
   const events    = useCalendarStore(s => s.events)
   const calendars = useCalendarStore(s => s.calendars)
   const view      = useCalendarStore(s => s.view)
-  const focusDate = useCalendarStore(s => s.focusDate)
+  const activeDate = useCalendarStore(s => s.activeDate)
 
   const visibleCalIds = useMemo(
     () => new Set(calendars.filter(c => c.isVisible).map(c => c.id)),
@@ -18,8 +18,8 @@ export function useVisibleEvents(): CalendarEvent[] {
   )
 
   return useMemo(() => {
-    return Object.values(events).filter(e => visibleCalIds.has(e.calendarId))
-  }, [events, visibleCalIds, view, focusDate])
+    return events.filter(e => visibleCalIds.has(e.calendarId))
+  }, [events, visibleCalIds, view, activeDate])
 }
 
 /** Events for a specific date (YYYY-MM-DD) */
@@ -31,7 +31,7 @@ export function useEventsForDate(dateStr: string): CalendarEvent[] {
     [calendars]
   )
   return useMemo(() => {
-    return Object.values(events).filter(e => {
+    return events.filter(e => {
       if (!visibleCalIds.has(e.calendarId)) return false
       const start = e.startAt.slice(0, 10)
       const end   = e.endAt.slice(0, 10)
@@ -57,7 +57,7 @@ export function useEventsForWeek(weekStart: Date): Record<string, CalendarEvent[
       const key = d.toISOString().slice(0, 10)
       result[key] = []
     }
-    Object.values(events).forEach(e => {
+    events.forEach(e => {
       if (!visibleCalIds.has(e.calendarId)) return
       const start = e.startAt.slice(0, 10)
       const end   = e.endAt.slice(0, 10)

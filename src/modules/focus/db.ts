@@ -10,7 +10,7 @@ import { db } from "@/kernel/db";
 import type { FocusSession } from "@/shared/types";
 import { generateId, now } from "@/shared/utils";
 
-// ── Migrations ────────────────────────────────────────────────────────────────
+// ── Migrations ─────────────────────────────────────────────────
 
 export const FOCUS_MIGRATIONS: Migration[] = [
   {
@@ -54,7 +54,7 @@ export const FOCUS_MIGRATIONS: Migration[] = [
   },
 ];
 
-// ── SQL ───────────────────────────────────────────────────────────────────────
+// ── SQL ───────────────────────────────────────────────────────
 
 const INSERT_SQL = `
   INSERT INTO focus_sessions
@@ -89,7 +89,7 @@ const SELECT_RANGE_SQL = `
   ORDER BY created_at DESC
 `;
 
-// ── Param builders — explicit column order, WHERE id last ────────────────────
+// ── Param builders — explicit column order, WHERE id last ──────────────────
 
 function insertParams(s: FocusSession): unknown[] {
   return [
@@ -147,20 +147,20 @@ function rowToSession(row: Record<string, unknown>): FocusSession {
   };
 }
 
-// ── Public DB API ─────────────────────────────────────────────────────────────
+// ── Public DB API ──────────────────────────────────────────────
 
 export async function dbLoadSessions(): Promise<FocusSession[]> {
   const rows = await db.select<Record<string, unknown>[]>(SELECT_RECENT_SQL);
-  return (rows as unknown as Record<string, unknown>[]).map(rowToSession);
+  return rows.map(rowToSession);
 }
 
 export async function dbLoadTodaySessions(): Promise<FocusSession[]> {
-  const rows = await db.select<Record<string, unknown>[]>(SELECT_TODAY_SQL);
+  const rows = await db.select<Record<string, unknown>>(SELECT_TODAY_SQL);
   return rows.map(rowToSession);
 }
 
 export async function dbLoadSessionsInRange(from: string, to: string): Promise<FocusSession[]> {
-  const rows = await db.select<Record<string, unknown>[]>(SELECT_RANGE_SQL, [from, to]);
+  const rows = await db.select<Record<string, unknown>>(SELECT_RANGE_SQL, [from, to]);
   return rows.map(rowToSession);
 }
 
@@ -172,7 +172,7 @@ export async function dbUpdateSession(s: FocusSession): Promise<void> {
   await db.execute(UPDATE_SQL, updateParams(s));
 }
 
-// ── Factory ───────────────────────────────────────────────────────────────────
+// ── Factory ───────────────────────────────────────────────────────
 
 export function newSession(overrides: Partial<FocusSession> = {}): FocusSession {
   return {
