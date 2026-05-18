@@ -5,7 +5,7 @@ import { bus } from "@/kernel/event-bus";
 import {
   CheckSquare, FolderKanban, CalendarDays, FileText,
   BookOpen, Timer, Focus, Database, Search, FileSearch,
-  PanelLeftClose, PanelLeft, Settings, Plus, Command,
+  PanelLeftClose, Settings, Plus,
   LayoutDashboard, ChevronRight, Sun, Moon, Monitor,
 } from "lucide-react";
 
@@ -84,11 +84,30 @@ export function Sidebar() {
             </span>
           </div>
         )}
+
+        {/* When collapsed, logo itself is the expand trigger */}
         {collapsed && (
           <div className="flex justify-center w-full">
-            <Logomark />
+            <button
+              onClick={toggleSidebar}
+              aria-label="Expand sidebar"
+              title="Expand sidebar"
+              className="rounded-[7px] transition-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              style={{ lineHeight: 0 }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.opacity = "0.75";
+                (e.currentTarget as HTMLButtonElement).style.transform = "scale(1.08)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.opacity = "1";
+                (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)";
+              }}
+            >
+              <Logomark />
+            </button>
           </div>
         )}
+
         {!collapsed && (
           <button
             onClick={toggleSidebar}
@@ -129,24 +148,6 @@ export function Sidebar() {
           shortcut="⌘K"
           onClick={openCommandPalette}
         />
-        {collapsed && (
-          <button
-            onClick={toggleSidebar}
-            aria-label="Expand sidebar"
-            className="w-full flex justify-center p-2 rounded-md transition-fast"
-            style={{ color: "hsl(var(--sidebar-fg))" }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = "hsl(var(--sidebar-accent))";
-              (e.currentTarget as HTMLButtonElement).style.color = "hsl(var(--sidebar-fg-active))";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-              (e.currentTarget as HTMLButtonElement).style.color = "hsl(var(--sidebar-fg))";
-            }}
-          >
-            <PanelLeft size={15} />
-          </button>
-        )}
       </div>
 
       {/* ── Nav ──────────────────────────────────────────────────── */}
@@ -298,6 +299,7 @@ function Logomark() {
       style={{
         background:
           "linear-gradient(135deg, hsl(var(--sidebar-primary)), hsl(221 85% 45%))",
+        transition: "transform 200ms cubic-bezier(0.16,1,0.3,1), opacity 200ms",
       }}
     >
       <svg width="13" height="13" viewBox="0 0 12 12" fill="none" aria-hidden>
