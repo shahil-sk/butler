@@ -10,6 +10,7 @@ import { bus } from "@/kernel/event-bus";
 import { tasksManifest } from "./manifest";
 import { useTaskStore } from "./store";
 import { setupTaskEventListeners } from "./events";
+import { useProjectStore } from "@/modules/projects/store";
 import { TaskCard } from "./components/TaskCard";
 import { QuickAdd } from "./components/QuickAdd";
 import { FilterBar, PrimaryButton, EmptyState, type FilterTab } from "@/shared/ui";
@@ -241,6 +242,8 @@ export function TasksModule() {
     getTodayTasks,
   } = useTaskStore();
 
+  const loadProjects = useProjectStore((s) => s.loadProjects);
+
   const location = useLocation();
   const [localView, setLocalView] = useState<"grid" | "list">("grid");
   // "grouped" is the new default; "flat" keeps the old flat behaviour
@@ -248,6 +251,7 @@ export function TasksModule() {
 
   useEffect(() => {
     void loadTasks();
+    void loadProjects();           // ← ensures project names/dots are ready
     const cleanup = setupTaskEventListeners();
     return cleanup;
   }, []);
