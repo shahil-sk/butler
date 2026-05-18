@@ -20,6 +20,24 @@ export interface TimeBlock {
   updatedAt: string;
 }
 
+/** A single block entry inside a saved template */
+export interface TemplateBlock {
+  title: string;
+  startTime: string;
+  endTime: string;
+  color?: string;
+  isBreak: boolean;
+  notes?: string;
+}
+
+/** A named, reusable day-plan template */
+export interface PlanTemplate {
+  id: ID;
+  name: string;
+  blocks: TemplateBlock[];
+  createdAt: string;
+}
+
 export const BLOCK_COLORS = [
   "#3b82f6", // blue
   "#8b5cf6", // violet
@@ -89,12 +107,31 @@ export function snapMinutes(time: string): string {
   return `${String(Math.min(hh, 22)).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
 }
 
+// ── Helpers ───────────────────────────────────────────────────
+
+function toMin(t: string) {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+}
+
+/**
+ * Given a block's start/end and the total tracked minutes for the
+ * linked task, return what fraction (0-1) of the block duration has
+ * been "spent" — capped at 1.
+ */
+export function blockSpentFraction(block: TimeBlock, trackedMinutes: number): number {
+  const duration = toMin(block.endTime) - toMin(block.startTime);
+  if (duration <= 0) return 0;
+  return Math.min(1, trackedMinutes / duration);
+}
+
 // ── State ─────────────────────────────────────────────────────
 
 export type PlannerView = "day" | "3day" | "week";
 
 interface PlannerState {
   blocks:           TimeBlock[];
+  templates:        PlanTemplate[];
   activeDate:       ISODate;
   view:             PlannerView;
   loading:          boolean;
@@ -112,12 +149,18 @@ interface PlannerActions {
   resizeBlock:        (id: ID, newEnd: string) => Promise<void>;
   scheduleTask:       (taskId: ID, date: ISODate, startTime: string, durationMinutes: number) => Promise<TimeBlock>;
   carryForward:       (taskId: ID, fromDate: ISODate, toDate: ISODate) => Promise<void>;
+  // Template actions
+  loadTemplates:      () => Promise<void>;
+  savePlanTemplate:   (name: string, date: ISODate) => Promise<PlanTemplate>;
+  deleteTemplate:     (id: ID) => Promise<void>;
+  applyTemplate:      (templateId: ID, targetDate: ISODate) => Promise<void>;
+  // Navigation
   setActiveDate:      (date: ISODate) => void;
   setView:            (v: PlannerView) => void;
   setDragTaskId:      (id: ID | null) => void;
   setEditingBlockId:  (id: ID | null) => void;
   getBlocksForDate:   (date: ISODate) => TimeBlock[];
-  getDayStats:        (date: ISODate) => { totalBlocks: number; focusMinutes: number; breakMinutes: number };
+  getDayStats:        (date: ISODate) => { totalBlocks: number; focusMinutes: number; breakMinutes: number; taskCount: number };
   goToday:            () => void;
   goNextDay:          () => void;
   goPrevDay:          () => void;
@@ -125,8 +168,25 @@ interface PlannerActions {
   goPrevWeek:         () => void;
 }
 
+// ── Migration guard for planner_templates table ───────────────
+async function ensureTemplatesTable() {
+  try {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS planner_templates (
+        id         TEXT PRIMARY KEY,
+        name       TEXT NOT NULL,
+        blocks_json TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL
+      )
+    `, []);
+  } catch {
+    // table already exists — ignore
+  }
+}
+
 export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get) => ({
   blocks:           [],
+  templates:        [],
   activeDate:       today(),
   view:             "day",
   loading:          false,
@@ -187,7 +247,6 @@ export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get
     await db.execute(INSERT_BLOCK_SQL, insertBlockParams(block));
     set((s) => ({ blocks: [...s.blocks, block] }));
 
-    // ── Sync scheduledDate onto the linked task ─────────────
     if (block.taskId) {
       bus.emit("planner:block-linked-task", { taskId: block.taskId, date: block.date });
     }
@@ -203,19 +262,15 @@ export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get
     await db.execute(UPDATE_BLOCK_SQL, updateBlockParams(updated));
     set((s) => ({ blocks: s.blocks.map((b) => b.id === id ? updated : b) }));
 
-    // ── Emit task-link / unlink bus events on taskId change ──
     const prevTaskId = existing.taskId;
     const nextTaskId = updated.taskId;
 
     if (prevTaskId && prevTaskId !== nextTaskId) {
-      // Old task unlinked
       bus.emit("planner:block-unlinked-task", { previousTaskId: prevTaskId });
     }
     if (nextTaskId && nextTaskId !== prevTaskId) {
-      // New task linked (or date changed for same task)
       bus.emit("planner:block-linked-task", { taskId: nextTaskId, date: updated.date });
     } else if (nextTaskId && updated.date !== existing.date) {
-      // Same task, block moved to different date → update scheduledDate
       bus.emit("planner:block-linked-task", { taskId: nextTaskId, date: updated.date });
     }
   },
@@ -225,7 +280,6 @@ export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get
     await db.execute("DELETE FROM planner_blocks WHERE id=?", [id]);
     set((s) => ({ blocks: s.blocks.filter((b) => b.id !== id) }));
 
-    // Unlink task scheduledDate when block is deleted
     if (existing?.taskId) {
       bus.emit("planner:block-unlinked-task", { previousTaskId: existing.taskId });
     }
@@ -280,6 +334,75 @@ export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get
     });
   },
 
+  // ── Template actions ────────────────────────────────────────
+
+  loadTemplates: async () => {
+    await ensureTemplatesTable();
+    try {
+      const rows = await db.select<Record<string, unknown>>(
+        "SELECT * FROM planner_templates ORDER BY created_at DESC",
+        []
+      );
+      const templates: PlanTemplate[] = rows.map((r) => ({
+        id:        r.id as string,
+        name:      r.name as string,
+        blocks:    JSON.parse(r.blocks_json as string) as TemplateBlock[],
+        createdAt: r.created_at as string,
+      }));
+      set({ templates });
+    } catch (err) {
+      console.error("[Planner] loadTemplates error:", err);
+    }
+  },
+
+  savePlanTemplate: async (name, date) => {
+    await ensureTemplatesTable();
+    const sourceBlocks = get().blocks.filter((b) => b.date === date);
+    const templateBlocks: TemplateBlock[] = sourceBlocks.map((b) => ({
+      title:     b.title,
+      startTime: b.startTime,
+      endTime:   b.endTime,
+      color:     b.color,
+      isBreak:   b.isBreak,
+      notes:     b.notes,
+    }));
+    const template: PlanTemplate = {
+      id:        generateId(),
+      name,
+      blocks:    templateBlocks,
+      createdAt: now(),
+    };
+    await db.execute(
+      `INSERT INTO planner_templates (id, name, blocks_json, created_at) VALUES (?,?,?,?)`,
+      [template.id, template.name, JSON.stringify(templateBlocks), template.createdAt]
+    );
+    set((s) => ({ templates: [template, ...s.templates] }));
+    bus.emit("notify", { message: `Template "${name}" saved`, type: "success" } as never);
+    return template;
+  },
+
+  deleteTemplate: async (id) => {
+    await db.execute("DELETE FROM planner_templates WHERE id=?", [id]);
+    set((s) => ({ templates: s.templates.filter((t) => t.id !== id) }));
+  },
+
+  applyTemplate: async (templateId, targetDate) => {
+    const template = get().templates.find((t) => t.id === templateId);
+    if (!template) return;
+    for (const tb of template.blocks) {
+      await get().createBlock({
+        date:      targetDate,
+        title:     tb.title,
+        startTime: tb.startTime,
+        endTime:   tb.endTime,
+        color:     tb.color,
+        isBreak:   tb.isBreak,
+        notes:     tb.notes,
+      });
+    }
+    bus.emit("notify", { message: `Applied template "${template.name}"`, type: "success" } as never);
+  },
+
   setActiveDate:     (date) => set({ activeDate: date }),
   setView:           (v)    => set({ view: v }),
   setDragTaskId:     (id)   => set({ dragTaskId: id }),
@@ -289,13 +412,14 @@ export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get
 
   getDayStats: (date) => {
     const blocks = get().blocks.filter((b) => b.date === date);
-    const toMin  = (t: string) => { const [h,m] = t.split(":").map(Number); return h*60+m; };
     let focus = 0, brk = 0;
     for (const b of blocks) {
       const dur = toMin(b.endTime) - toMin(b.startTime);
       if (b.isBreak) brk += dur; else focus += dur;
     }
-    return { totalBlocks: blocks.length, focusMinutes: focus, breakMinutes: brk };
+    // taskCount = distinct scheduled tasks for the date
+    const taskIds = new Set(blocks.filter((b) => b.taskId).map((b) => b.taskId!));
+    return { totalBlocks: blocks.length, focusMinutes: focus, breakMinutes: brk, taskCount: taskIds.size };
   },
 
   goToday:    () => set({ activeDate: today() }),
