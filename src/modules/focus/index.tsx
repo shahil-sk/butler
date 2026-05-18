@@ -1,14 +1,14 @@
 // ============================================================
-// FOCUS + TIME TRACKING — COMBINED MODULE  (redesign v2)
-// Tab switching: local useState — no router, no navigate lag.
-// No store / backend / manifest / router changes.
+// FOCUS + TIME TRACKING — COMBINED MODULE  (redesign v3)
+// Fixes: session notes access, full history, tracked-time bar in planner
 // ============================================================
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import {
   Timer, Square, Plus, Trash2, Edit2, Check,
   BarChart2, Clock, DollarSign, Tag, Play, Pause,
-  Zap, Target, ChevronDown, ChevronUp, Moon,
+  Zap, Target, ChevronDown, ChevronUp, Moon, ChevronRight,
+  FileText, Smile, AlertCircle,
 } from "lucide-react";
 
 import { registry } from "@/kernel/router";
@@ -40,11 +40,15 @@ function formatSecs(s: number) {
   return `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
 }
 function fmtDuration(m: number) {
+  if (m <= 0) return "0m";
   const h = Math.floor(m / 60), r = m % 60;
   return h === 0 ? `${r}m` : r === 0 ? `${h}h` : `${h}h ${r}m`;
 }
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+function fmtDateShort(iso: string) {
+  return new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 function isOverdue(t: Task) { return !!t.dueDate && t.dueDate < new Date().toISOString().slice(0, 10); }
 function totalMins(es: TimeEntry[]) { return es.reduce((a, e) => a + (e.durationMinutes ?? 0), 0); }
@@ -52,6 +56,15 @@ function groupByDate(es: TimeEntry[]): [string, TimeEntry[]][] {
   const m = new Map<string, TimeEntry[]>();
   for (const e of es) { const d = e.startAt.slice(0, 10); if (!m.has(d)) m.set(d, []); m.get(d)!.push(e); }
   return Array.from(m.entries());
+}
+function groupSessionsByDate(sessions: FocusSession[]): [string, FocusSession[]][] {
+  const m = new Map<string, FocusSession[]>();
+  for (const s of sessions) {
+    const d = s.startedAt?.slice(0, 10) ?? s.createdAt.slice(0, 10);
+    if (!m.has(d)) m.set(d, []);
+    m.get(d)!.push(s);
+  }
+  return Array.from(m.entries()).sort((a, b) => b[0].localeCompare(a[0]));
 }
 function dateLabel(d: string) {
   const t = new Date().toISOString().slice(0, 10);
@@ -61,16 +74,20 @@ function dateLabel(d: string) {
 function sessionLabel(type: FocusSession["type"]) {
   return type === "focus" ? "Focus" : type === "long_break" ? "Long Break" : "Short Break";
 }
+// Strip html tags for snippet
+function stripHtml(html: string) {
+  return html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
+}
 
 const MOOD = { 1: "😩", 2: "😕", 3: "😐", 4: "🙂", 5: "😄" } as Record<number, string>;
 const MOOD_DESC = { 1: "Terrible", 2: "Rough", 3: "Okay", 4: "Good", 5: "Great" } as Record<number, string>;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SEGMENT CONTROL  (pill switcher — instant, no router)
+// SEGMENT CONTROL
 // ─────────────────────────────────────────────────────────────────────────────
 
 type Tab = "focus" | "tracker" | "reports";
-const TABS: { id: Tab; label: string; Icon: React.FC<{ size?: number }> }[] = [
+const TABS: { id: Tab; label: string; Icon: React.FC<{ size?: number; className?: string }> }[] = [
   { id: "focus",   label: "Focus",   Icon: Target },
   { id: "tracker", label: "Tracker", Icon: Clock },
   { id: "reports", label: "Reports", Icon: BarChart2 },
@@ -78,21 +95,13 @@ const TABS: { id: Tab; label: string; Icon: React.FC<{ size?: number }> }[] = [
 
 function SegmentControl({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
   return (
-    <div
-      className="flex items-center rounded-lg p-0.5 gap-0.5"
-      style={{ background: "hsl(var(--muted))" }}
-    >
+    <div className="flex items-center rounded-lg p-0.5 gap-0.5" style={{ background: "hsl(var(--muted))" }}>
       {TABS.map(({ id, label, Icon }) => (
-        <button
-          key={id}
-          onClick={() => onChange(id)}
+        <button key={id} onClick={() => onChange(id)}
           className={cn(
             "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-150 select-none",
-            active === id
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          )}
-        >
+            active === id ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+          )}>
           <Icon size={13} />
           {label}
         </button>
@@ -102,49 +111,58 @@ function SegmentControl({ active, onChange }: { active: Tab; onChange: (t: Tab) 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LIVE DURATION HOOK
+// LIVE DURATION HOOK  (ticks every second for running timers)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function useLiveDuration(startAt?: string) {
+function useLiveDuration(startAt?: string, stopped = false): string {
   const [elapsed, setElapsed] = useState("0m");
   useEffect(() => {
-    if (!startAt) return;
-    const tick = () => setElapsed(fmtDuration(Math.floor((Date.now() - new Date(startAt).getTime()) / 60000)));
+    if (!startAt || stopped) return;
+    const tick = () => {
+      const mins = Math.floor((Date.now() - new Date(startAt).getTime()) / 60000);
+      const secs = Math.floor((Date.now() - new Date(startAt).getTime()) / 1000) % 60;
+      setElapsed(mins > 0 ? fmtDuration(mins) : `${secs}s`);
+    };
     tick();
-    const id = setInterval(tick, 10000);
+    const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [startAt]);
+  }, [startAt, stopped]);
   return elapsed;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ACTIVE TIMER BANNER  (appears below module header when timer running)
+// ACTIVE TIMER BANNER
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ActiveTimerBanner({ onJump }: { onJump: () => void }) {
   const activeEntry = useTimeStore((s) => s.entries.find((e) => e.id === s.activeEntryId));
   const stopTimer   = useTimeStore((s) => s.stopTimer);
   const tasks       = useTaskStore((s) => s.tasks);
-  const elapsed     = useLiveDuration(activeEntry?.startAt);
+  const projects    = useProjectStore((s) => s.projects);
+  const elapsed     = useLiveDuration(activeEntry?.startAt, !activeEntry);
+
   if (!activeEntry) return null;
-  const task = activeEntry.taskId ? tasks.find((t) => t.id === activeEntry.taskId) : null;
+
+  const task    = activeEntry.taskId    ? tasks.find((t)    => t.id === activeEntry.taskId)    : null;
+  const project = activeEntry.projectId ? projects.find((p) => p.id === activeEntry.projectId) : null;
+
   return (
     <div
-      className="flex items-center gap-2 px-4 py-2 text-xs border-b shrink-0"
+      className="flex items-center gap-2.5 px-4 py-2 text-xs border-b shrink-0"
       style={{ background: "hsl(142 65% 44% / 0.07)", borderColor: "hsl(142 65% 44% / 0.18)" }}
     >
       <span className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse" style={{ background: "hsl(142 65% 44%)" }} />
-      <span className="font-semibold tabular-nums" style={{ color: "hsl(142 65% 34%)" }}>{elapsed}</span>
+      <span className="font-bold tabular-nums w-10 shrink-0" style={{ color: "hsl(142 65% 34%)" }}>{elapsed}</span>
+      {project && <ProjectDot color={project.color} size={8} title={project.name} />}
       <button onClick={onJump} className="flex-1 text-left truncate text-muted-foreground hover:text-foreground transition-colors">
         {activeEntry.description || task?.title || "Running timer…"}
+        {task && <span className="text-muted-foreground/50 ml-1 hidden sm:inline">· {task.title}</span>}
       </button>
-      <button
-        onClick={() => stopTimer()}
-        className="flex items-center gap-1 px-2 py-1 rounded font-medium transition-colors"
+      <button onClick={() => void stopTimer()}
+        className="flex items-center gap-1 px-2.5 py-1 rounded-md font-semibold transition-colors shrink-0"
         style={{ background: "hsl(var(--destructive) / 0.08)", color: "hsl(var(--destructive))" }}
         onMouseEnter={e => (e.currentTarget.style.background = "hsl(var(--destructive) / 0.16)")}
-        onMouseLeave={e => (e.currentTarget.style.background = "hsl(var(--destructive) / 0.08)")}
-      >
+        onMouseLeave={e => (e.currentTarget.style.background = "hsl(var(--destructive) / 0.08)")}>
         <Square size={10} /> Stop
       </button>
     </div>
@@ -152,7 +170,200 @@ function ActiveTimerBanner({ onJump }: { onJump: () => void }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FOCUS TAB
+// FOCUS HISTORY SIDEBAR  (expandable session notes + full history)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function SessionDetail({ session }: { session: FocusSession }) {
+  const setMood = useFocusStore((s) => s.setSessionMood);
+  return (
+    <div className="mt-1.5 flex flex-col gap-2 pb-2">
+      {/* Start time + duration */}
+      <div className="flex items-center justify-between text-[10px] text-muted-foreground/70">
+        <span>{session.startedAt ? fmtDateShort(session.startedAt) : "—"}</span>
+        <span className="tabular-nums">{session.actualMinutes != null ? fmtDuration(session.actualMinutes) : "—"}</span>
+      </div>
+
+      {/* Interrupts */}
+      {(session.interruptCount ?? 0) > 0 && (
+        <div className="flex items-center gap-1 text-[10px] text-amber-500">
+          <AlertCircle size={9} />
+          {session.interruptCount} interruption{(session.interruptCount ?? 0) > 1 ? "s" : ""}
+        </div>
+      )}
+
+      {/* Notes */}
+      {session.notes && stripHtml(session.notes) && (
+        <div className="rounded-md p-2 text-[11px]" style={{ background: "hsl(var(--muted) / 0.5)" }}>
+          <div className="flex items-center gap-1 mb-1 text-muted-foreground">
+            <FileText size={9} /> Notes
+          </div>
+          <div
+            className="text-foreground/80 leading-snug line-clamp-6 prose prose-xs max-w-none"
+            dangerouslySetInnerHTML={{ __html: session.notes }}
+          />
+        </div>
+      )}
+
+      {/* Mood rating (editable inline) */}
+      {session.type === "focus" && session.completedAt && (
+        <div>
+          <p className="text-[10px] text-muted-foreground mb-1">Rate session:</p>
+          <div className="flex gap-1">
+            {[1,2,3,4,5].map((m) => (
+              <button key={m}
+                onClick={() => void setMood(session.id, m as 1|2|3|4|5)}
+                title={MOOD_DESC[m]}
+                className={cn(
+                  "text-base w-7 h-7 rounded-md transition-all hover:scale-110 flex items-center justify-center",
+                  session.mood === m ? "ring-2 ring-primary" : "hover:bg-muted"
+                )}
+                style={session.mood === m ? { background: "hsl(var(--primary) / 0.12)" } : {}}>
+                {MOOD[m]}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FocusHistorySidebar({ sessions }: { sessions: FocusSession[] }) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showAll,    setShowAll]    = useState(false);
+
+  const grouped = groupSessionsByDate(sessions);
+  const visibleGroups = showAll ? grouped : grouped.slice(0, 7);
+  const hasMore = grouped.length > 7;
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden border-r" style={{ width: 230, borderColor: "hsl(var(--border))" }}>
+      <div className="px-3 py-3 border-b shrink-0" style={{ borderColor: "hsl(var(--border))" }}>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Session History</p>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        {grouped.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-10 text-center px-3">
+            <Target size={22} className="text-muted-foreground/30" />
+            <p className="text-xs text-muted-foreground">No sessions yet</p>
+          </div>
+        ) : (
+          <>
+            {visibleGroups.map(([date, list]) => (
+              <div key={date} className="px-3 pt-3 pb-1">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                  {dateLabel(date)}
+                </p>
+                {list.map((s) => {
+                  const isOpen   = expandedId === s.id;
+                  const hasNotes = s.notes && stripHtml(s.notes);
+                  const snippet  = s.goal ? `"${s.goal.slice(0, 40)}${s.goal.length > 40 ? "…" : ""}"` : null;
+
+                  return (
+                    <div key={s.id} className="mb-1">
+                      <button
+                        onClick={() => setExpandedId(isOpen ? null : s.id)}
+                        className={cn(
+                          "w-full flex items-start gap-2 py-1.5 px-1.5 rounded-lg text-left transition-colors",
+                          isOpen ? "bg-muted" : "hover:bg-muted/50"
+                        )}
+                      >
+                        <div className={cn("w-1.5 h-1.5 rounded-full mt-1 shrink-0",
+                          s.type === "focus" ? "bg-primary" : s.type === "long_break" ? "bg-emerald-500" : "bg-amber-400"
+                        )} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-[11px] font-medium">{sessionLabel(s.type)}</span>
+                            <div className="flex items-center gap-1 shrink-0">
+                              {s.mood && <span className="text-[10px]">{MOOD[s.mood]}</span>}
+                              {hasNotes && <FileText size={8} className="text-muted-foreground/50" />}
+                              <span className="text-[10px] text-muted-foreground tabular-nums">
+                                {s.actualMinutes ? `${s.actualMinutes}m` : "–"}
+                              </span>
+                              <ChevronRight size={9} className={cn(
+                                "text-muted-foreground/40 transition-transform",
+                                isOpen && "rotate-90"
+                              )} />
+                            </div>
+                          </div>
+                          {snippet && !isOpen && (
+                            <p className="text-[10px] text-muted-foreground/70 truncate italic mt-0.5">{snippet}</p>
+                          )}
+                        </div>
+                      </button>
+                      {/* Expanded detail */}
+                      {isOpen && (
+                        <div className="px-3 pb-1">
+                          <SessionDetail session={s} />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+
+            {hasMore && (
+              <div className="px-3 pb-3">
+                <button
+                  onClick={() => setShowAll((v) => !v)}
+                  className="w-full text-[11px] text-muted-foreground hover:text-foreground py-1.5 rounded-lg hover:bg-muted transition-colors text-center"
+                >
+                  {showAll ? "Show less" : `Show ${grouped.length - 7} older days`}
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MOOD CARD  (post-break / session rating)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function MoodCard({ sessionId, mood }: { sessionId: string; mood?: number }) {
+  const setMood   = useFocusStore((s) => s.setSessionMood);
+  const clearLast = useFocusStore((s) => s.clearLastCompleted);
+  const [sel, setSel] = useState<number | null>(mood ?? null);
+
+  function pick(m: number) {
+    setSel(m);
+    void setMood(sessionId, m as 1|2|3|4|5);
+    setTimeout(clearLast, 800);
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-3 w-full max-w-xs p-4 rounded-xl border"
+      style={{ background: "hsl(var(--card))", borderColor: "hsl(var(--border))" }}>
+      <p className="text-sm font-medium">How was that session?</p>
+      <div className="flex gap-1.5">
+        {[1,2,3,4,5].map((m) => (
+          <button key={m} onClick={() => pick(m)} title={MOOD_DESC[m]}
+            className={cn("text-xl w-9 h-9 rounded-lg transition-all hover:scale-110 flex items-center justify-center",
+              sel === m ? "ring-2 ring-primary" : "hover:bg-muted"
+            )}
+            style={sel === m ? { background: "hsl(var(--primary) / 0.12)" } : {}}>
+            {MOOD[m]}
+          </button>
+        ))}
+      </div>
+      <div className="flex items-center gap-3">
+        {sel && <p className="text-[11px] text-muted-foreground">{MOOD_DESC[sel]} · saved</p>}
+        <button onClick={clearLast}
+          className="text-[11px] text-muted-foreground/60 hover:text-foreground transition-colors">
+          Dismiss
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RING TIMER
 // ─────────────────────────────────────────────────────────────────────────────
 
 function RingTimer({ secondsLeft, totalSeconds, state }: {
@@ -162,9 +373,9 @@ function RingTimer({ secondsLeft, totalSeconds, state }: {
   const progress = totalSeconds > 0 ? (totalSeconds - secondsLeft) / totalSeconds : 0;
   const offset   = circ * (1 - progress);
   const ringColor =
-    state === "break"    ? "hsl(142 65% 44%)"   :
-    state === "paused"   ? "hsl(38 92% 52%)"    :
-    state === "focusing" ? "hsl(var(--primary))" :
+    state === "break"    ? "hsl(142 65% 44%)"    :
+    state === "paused"   ? "hsl(38 92% 52%)"     :
+    state === "focusing" ? "hsl(var(--primary))"  :
     "hsl(var(--border))";
   const stateText =
     state === "idle"     ? "ready"    :
@@ -214,82 +425,9 @@ function PillButtons({ label, value, options, onChange, disabled }: {
   );
 }
 
-function FocusHistorySidebar({ sessions }: { sessions: FocusSession[] }) {
-  const grouped = (() => {
-    const m = new Map<string, FocusSession[]>();
-    for (const s of sessions) {
-      const d = s.startedAt?.slice(0, 10) ?? s.createdAt.slice(0, 10);
-      if (!m.has(d)) m.set(d, []);
-      m.get(d)!.push(s);
-    }
-    return Array.from(m.entries()).slice(0, 7);
-  })();
-
-  return (
-    <div className="flex flex-col h-full overflow-hidden border-r" style={{ width: 220, borderColor: "hsl(var(--border))" }}>
-      <div className="px-3 py-3 border-b shrink-0" style={{ borderColor: "hsl(var(--border))" }}>
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">History</p>
-      </div>
-      <div className="flex-1 overflow-y-auto">
-        {grouped.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-10 text-center px-3">
-            <Target size={22} className="text-muted-foreground/30" />
-            <p className="text-xs text-muted-foreground">No sessions yet</p>
-          </div>
-        ) : grouped.map(([date, list]) => (
-          <div key={date} className="px-3 pt-3 pb-1">
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-              {dateLabel(date)}
-            </p>
-            {list.map((s) => (
-              <div key={s.id} className="flex items-start gap-2 py-1.5 border-b last:border-0" style={{ borderColor: "hsl(var(--border) / 0.4)" }}>
-                <div className={cn("w-1.5 h-1.5 rounded-full mt-1 shrink-0",
-                  s.type === "focus" ? "bg-primary" : s.type === "long_break" ? "bg-emerald-500" : "bg-amber-400"
-                )} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-medium">{sessionLabel(s.type)}</span>
-                    <span className="text-[10px] text-muted-foreground tabular-nums">{s.actualMinutes ? `${s.actualMinutes}m` : "–"}</span>
-                  </div>
-                  {s.goal && <p className="text-[10px] text-muted-foreground truncate italic">"{s.goal}"</p>}
-                  {s.mood && <span className="text-[10px]">{MOOD[s.mood]}</span>}
-                </div>
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function MoodCard({ sessionId, mood }: { sessionId: string; mood?: number }) {
-  const setMood   = useFocusStore((s) => s.setSessionMood);
-  const clearLast = useFocusStore((s) => s.clearLastCompleted);
-  const [sel, setSel] = useState<number | null>(mood ?? null);
-  function pick(m: number) {
-    setSel(m);
-    void setMood(sessionId, m as 1|2|3|4|5);
-    setTimeout(clearLast, 600);
-  }
-  return (
-    <div className="flex flex-col items-center gap-3 w-full max-w-xs p-4 rounded-xl border" style={{ background: "hsl(var(--card))", borderColor: "hsl(var(--border))" }}>
-      <p className="text-sm font-medium">How was that session?</p>
-      <div className="flex gap-1.5">
-        {[1,2,3,4,5].map((m) => (
-          <button key={m} onClick={() => pick(m)} title={MOOD_DESC[m]}
-            className={cn("text-xl w-9 h-9 rounded-lg transition-all hover:scale-110 flex items-center justify-center",
-              sel === m ? "ring-2 ring-primary" : "hover:bg-muted"
-            )}
-            style={sel === m ? { background: "hsl(var(--primary) / 0.12)" } : {}}>
-            {MOOD[m]}
-          </button>
-        ))}
-      </div>
-      {sel && <p className="text-[11px] text-muted-foreground">{MOOD_DESC[sel]} · saved</p>}
-    </div>
-  );
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// FOCUS TAB
+// ─────────────────────────────────────────────────────────────────────────────
 
 function FocusTab() {
   useFocusEventListeners();
@@ -311,7 +449,9 @@ function FocusTab() {
   const setTaskId   = useFocusStore((s) => s.setTaskId);
   const setProjectId = useFocusStore((s) => s.setProjectId);
   const setGoal     = useFocusStore((s) => s.setGoal);
+  // setSessionNotes takes only (notes: string) — writes to activeSession
   const setNotes    = useFocusStore((s) => s.setSessionNotes);
+  const clearLast   = useFocusStore((s) => s.clearLastCompleted);
 
   const tasks        = useTaskStore((s) => s.tasks);
   const loadTasks    = useTaskStore((s) => s.loadTasks);
@@ -387,10 +527,10 @@ function FocusTab() {
         {/* Stats chips row */}
         <div className="flex items-center gap-4 flex-wrap justify-center">
           {[
-            { label: "Today",     value: `${stats.todayMinutes}m`,                        chip: stats.todaySessions > 0 ? `${stats.todaySessions} sessions` : undefined },
-            { label: "Week",      value: `${stats.weekMinutes}m`,                          chip: undefined },
-            { label: "Streak",    value: `${stats.currentStreak}d`,                        chip: undefined, accent: stats.currentStreak >= 3 },
-            { label: "All time",  value: `${Math.round(stats.totalMinutes / 60)}h`,       chip: undefined },
+            { label: "Today",    value: `${stats.todayMinutes}m`,                  chip: stats.todaySessions > 0 ? `${stats.todaySessions} sessions` : undefined },
+            { label: "Week",     value: `${stats.weekMinutes}m`,                   chip: undefined },
+            { label: "Streak",   value: `${stats.currentStreak}d`,                chip: undefined, accent: stats.currentStreak >= 3 },
+            { label: "All time", value: `${Math.round(stats.totalMinutes / 60)}h`, chip: undefined },
           ].map(({ label, value, chip, accent }) => (
             <div key={label} className="flex items-baseline gap-1.5">
               <span className={cn("text-base font-semibold tabular-nums", accent && "text-primary")}>{value}</span>
@@ -434,8 +574,6 @@ function FocusTab() {
                 {projects.filter((p) => p.status === "active").map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
-
-            {/* Collapsible config */}
             <button onClick={() => setShowConfig((v) => !v)}
               className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors self-start">
               {showConfig ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
@@ -443,12 +581,11 @@ function FocusTab() {
             </button>
             {showConfig && (
               <div className="flex flex-col gap-3 w-full p-3 rounded-xl border" style={{ background: "hsl(var(--muted) / 0.3)", borderColor: "hsl(var(--border))" }}>
-                <PillButtons label="Focus"        value={focusMins}      options={[15,20,25,30,45,60]} onChange={setFocusMins}      disabled={false} />
-                <PillButtons label="Short break"  value={shortBreakMins} options={[3,5,10]}            onChange={setShortBreakMins} disabled={false} />
-                <PillButtons label="Long break"   value={longBreakMins}  options={[10,15,20,30]}       onChange={setLongBreakMins}  disabled={false} />
+                <PillButtons label="Focus"       value={focusMins}      options={[15,20,25,30,45,60]} onChange={setFocusMins}      disabled={false} />
+                <PillButtons label="Short break" value={shortBreakMins} options={[3,5,10]}            onChange={setShortBreakMins} disabled={false} />
+                <PillButtons label="Long break"  value={longBreakMins}  options={[10,15,20,30]}       onChange={setLongBreakMins}  disabled={false} />
               </div>
             )}
-
             <button onClick={handleStart}
               className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 transition-opacity">
               Start Focus
@@ -465,9 +602,10 @@ function FocusTab() {
             )}
             <div className="w-full">
               <label className="text-xs text-muted-foreground mb-1 block">Session notes</label>
+              {/* setNotes(notes) — store writes to activeSession directly */}
               <RichEditor
                 content={active?.notes ?? ""}
-                onChange={(v) => active && void setNotes(active.id, v)}
+                onChange={(v) => setNotes(v)}
                 placeholder="Capture thoughts mid-session…"
                 className="min-h-[60px] text-sm"
               />
@@ -488,16 +626,24 @@ function FocusTab() {
 
         {/* ── PAUSED ── */}
         {isPaused && (
-          <div className="flex gap-2 w-full max-w-sm">
-            <button onClick={resume}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
-              <Play size={13} /> Resume
-            </button>
-            <button onClick={() => void cancel()}
-              className="flex-1 py-2.5 rounded-xl border text-sm font-medium hover:bg-destructive/10 transition-colors"
-              style={{ borderColor: "hsl(var(--destructive) / 0.4)", color: "hsl(var(--destructive))" }}>
-              Stop
-            </button>
+          <div className="flex flex-col items-center gap-3 w-full max-w-sm">
+            {active?.notes && stripHtml(active.notes) && (
+              <div className="w-full rounded-lg p-3 text-xs" style={{ background: "hsl(var(--muted) / 0.5)" }}>
+                <p className="text-muted-foreground mb-1 text-[10px] uppercase tracking-wider">Notes so far</p>
+                <div dangerouslySetInnerHTML={{ __html: active.notes }} className="prose prose-xs max-w-none line-clamp-4" />
+              </div>
+            )}
+            <div className="flex gap-2 w-full">
+              <button onClick={resume}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
+                <Play size={13} /> Resume
+              </button>
+              <button onClick={() => void cancel()}
+                className="flex-1 py-2.5 rounded-xl border text-sm font-medium hover:bg-destructive/10 transition-colors"
+                style={{ borderColor: "hsl(var(--destructive) / 0.4)", color: "hsl(var(--destructive))" }}>
+                Stop
+              </button>
+            </div>
           </div>
         )}
 
@@ -527,7 +673,7 @@ function FocusTab() {
                 className="flex-1 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
                 Start break
               </button>
-              <button onClick={() => useFocusStore.getState().clearLastCompleted()}
+              <button onClick={clearLast}
                 className="flex-1 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors">
                 Skip
               </button>
@@ -557,13 +703,30 @@ function EntryForm({ initial = {}, onSave, onCancel }: {
   const [taskId,    setTaskId]    = useState(initial.taskId ?? "");
   const [projectId, setProjectId] = useState(initial.projectId ?? "");
   const [billable,  setBillable]  = useState(initial.isBillable ?? false);
-  const [startAt,   setStartAt]   = useState(initial.startAt ? initial.startAt.slice(0,16) : new Date().toISOString().slice(0,16));
-  const [endAt,     setEndAt]     = useState(initial.endAt ? initial.endAt.slice(0,16) : "");
+  const [startAt,   setStartAt]   = useState(() => {
+    if (initial.startAt) return initial.startAt.slice(0, 16);
+    return new Date().toISOString().slice(0, 16);
+  });
+  const [endAt, setEndAt] = useState(() => {
+    if (initial.endAt) return initial.endAt.slice(0, 16);
+    // Default end = start + 1h so duration is never accidentally zero
+    const d = new Date(initial.startAt ?? Date.now());
+    d.setHours(d.getHours() + 1);
+    return d.toISOString().slice(0, 16);
+  });
+
+  const durationPreview = (() => {
+    try {
+      const diff = Math.round((new Date(endAt).getTime() - new Date(startAt).getTime()) / 60000);
+      return diff > 0 ? fmtDuration(diff) : null;
+    } catch { return null; }
+  })();
 
   const save = () => onSave({
     description: desc, taskId: taskId || undefined, projectId: projectId || undefined,
-    isBillable: billable, startAt: new Date(startAt).toISOString(),
-    endAt: endAt ? new Date(endAt).toISOString() : undefined,
+    isBillable: billable,
+    startAt: new Date(startAt).toISOString(),
+    endAt:   endAt ? new Date(endAt).toISOString() : undefined,
   });
 
   return (
@@ -596,7 +759,10 @@ function EntryForm({ initial = {}, onSave, onCancel }: {
               className="w-full bg-background border border-border rounded-lg px-2 py-1.5 text-sm focus:outline-none" />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">End</label>
+            <label className="text-xs text-muted-foreground mb-1 flex items-center justify-between">
+              End
+              {durationPreview && <span className="text-primary font-semibold tabular-nums">{durationPreview}</span>}
+            </label>
             <input type="datetime-local" value={endAt} onChange={(e) => setEndAt(e.target.value)}
               className="w-full bg-background border border-border rounded-lg px-2 py-1.5 text-sm focus:outline-none" />
           </div>
@@ -627,10 +793,16 @@ function EntryRow({ entry, onEdit, onDelete, onResume }: {
   const projects = useProjectStore((s) => s.projects);
   const task     = entry.taskId    ? tasks.find((t)    => t.id === entry.taskId)    : null;
   const project  = entry.projectId ? projects.find((p) => p.id === entry.projectId) : null;
+  // Live duration for running entries
+  const isRunning = !entry.endAt;
+  const liveDur   = useLiveDuration(entry.startAt, !isRunning);
 
   return (
     <div className="group flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors border-b last:border-0"
       style={{ borderColor: "hsl(var(--border) / 0.5)" }}>
+      {isRunning && (
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+      )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           <span className="text-sm truncate leading-tight">
@@ -643,31 +815,29 @@ function EntryRow({ entry, onEdit, onDelete, onResume }: {
           )}
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
-          {project && <span className="flex items-center gap-1 text-[11px] text-muted-foreground"><ProjectDot color={project.color} size="xs" />{project.name}</span>}
+          {project && <span className="flex items-center gap-1 text-[11px] text-muted-foreground"><ProjectDot color={project.color} size={8} />{project.name}</span>}
           {task    && <span className="text-[11px] text-muted-foreground/70 truncate">· {task.title}</span>}
+          <span className="text-[11px] text-muted-foreground/50 ml-auto hidden sm:block">
+            {fmtTime(entry.startAt)}{entry.endAt ? `–${fmtTime(entry.endAt)}` : " (running)"}
+          </span>
         </div>
       </div>
-      <div className="flex items-center gap-3 shrink-0">
-        <span className="text-xs text-muted-foreground tabular-nums hidden sm:block">
-          {fmtTime(entry.startAt)}{entry.endAt ? `–${fmtTime(entry.endAt)}` : ""}
-        </span>
-        <span className="text-sm font-semibold tabular-nums w-10 text-right">
-          {entry.durationMinutes ? fmtDuration(entry.durationMinutes) : "—"}
-        </span>
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={() => onResume(entry)} title="Resume"
-            className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
-            <Play size={12} />
-          </button>
-          <button onClick={() => onEdit(entry.id)} title="Edit"
-            className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
-            <Edit2 size={12} />
-          </button>
-          <button onClick={() => onDelete(entry.id)} title="Delete"
-            className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive">
-            <Trash2 size={12} />
-          </button>
-        </div>
+      <span className={cn("text-sm font-semibold tabular-nums w-12 text-right shrink-0", isRunning && "text-emerald-600")}>
+        {isRunning ? liveDur : (entry.durationMinutes ? fmtDuration(entry.durationMinutes) : "—")}
+      </span>
+      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button onClick={() => onResume(entry)} title="Resume"
+          className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
+          <Play size={12} />
+        </button>
+        <button onClick={() => onEdit(entry.id)} title="Edit"
+          className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
+          <Edit2 size={12} />
+        </button>
+        <button onClick={() => onDelete(entry.id)} title="Delete"
+          className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive">
+          <Trash2 size={12} />
+        </button>
       </div>
     </div>
   );
@@ -680,7 +850,7 @@ function TrackerTab() {
   const activeEntryId = useTimeStore((s) => s.activeEntryId);
   const startTimer    = useTimeStore((s) => s.startTimer);
   const stopTimer     = useTimeStore((s) => s.stopTimer);
-  const addEntry      = useTimeStore((s) => s.addEntry);
+  const addEntry      = useTimeStore((s) => s.createEntry);  // alias
   const updateEntry   = useTimeStore((s) => s.updateEntry);
   const deleteEntry   = useTimeStore((s) => s.deleteEntry);
   const load          = useTimeStore((s) => s.load);
@@ -697,12 +867,17 @@ function TrackerTab() {
   useEffect(() => { void load(); void loadTasks(); void loadProjects(); }, [load, loadTasks, loadProjects]);
 
   const completed   = entries.filter((e) => e.endAt);
+  const running     = entries.find((e) => e.id === activeEntryId && !e.endAt);
   const shown       = todayOnly ? completed.filter((e) => e.startAt.startsWith(today())) : completed;
   const grouped     = groupByDate([...shown].sort((a, b) => b.startAt.localeCompare(a.startAt)));
-  const activeEntry = entries.find((e) => e.id === activeEntryId);
+  const activeEntry = running;
 
   function handleQuickStart() {
-    void startTimer({ description: quickDesc || undefined, taskId: quickTask || undefined });
+    const task = quickTask ? tasks.find((t) => t.id === quickTask) : null;
+    void startTimer({
+      description: quickDesc || task?.title || undefined,
+      taskId:      quickTask || undefined,
+    });
     setQuickDesc(""); setQuickTask("");
   }
 
@@ -712,7 +887,7 @@ function TrackerTab() {
       <div className="flex items-center gap-2 px-4 py-2.5 border-b shrink-0" style={{ borderColor: "hsl(var(--border))" }}>
         <input
           value={quickDesc} onChange={(e) => setQuickDesc(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && !activeEntry && handleQuickStart()}
+          onKeyDown={(e) => { if (e.key === "Enter" && !activeEntry) handleQuickStart(); }}
           placeholder="What are you working on?"
           disabled={!!activeEntry}
           className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:opacity-50"
@@ -731,7 +906,7 @@ function TrackerTab() {
             <Play size={13} /> Start
           </button>
         ) : (
-          <button onClick={() => stopTimer()}
+          <button onClick={() => void stopTimer()}
             className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold shrink-0 transition-colors"
             style={{ background: "hsl(var(--destructive) / 0.08)", color: "hsl(var(--destructive))" }}
             onMouseEnter={e => (e.currentTarget.style.background = "hsl(var(--destructive) / 0.16)")}
@@ -747,11 +922,21 @@ function TrackerTab() {
         </button>
       </div>
 
-      {/* Manual entry form (inline, doesn't push list away) */}
+      {/* Manual entry form */}
       {showForm && !editingId && (
         <EntryForm
-          onSave={(data) => { void addEntry(data); setShowForm(false); }}
+          onSave={(data) => { void addEntry({ startAt: data.startAt!, ...data }); setShowForm(false); }}
           onCancel={() => setShowForm(false)}
+        />
+      )}
+
+      {/* Running entry row (always visible when active) */}
+      {activeEntry && (
+        <EntryRow
+          entry={activeEntry}
+          onEdit={(id) => { setEditingId(id); setShowForm(false); }}
+          onDelete={(id) => void deleteEntry(id)}
+          onResume={() => {/* already running */}}
         />
       )}
 
@@ -769,7 +954,7 @@ function TrackerTab() {
             All
           </button>
         </div>
-        {todayOnly && shown.length > 0 && (
+        {shown.length > 0 && (
           <span className="ml-auto text-xs font-semibold tabular-nums text-muted-foreground">
             {fmtDuration(totalMins(shown))}
           </span>
@@ -785,7 +970,7 @@ function TrackerTab() {
             onCancel={() => setEditingId(null)}
           />
         )}
-        {grouped.length === 0 ? (
+        {grouped.length === 0 && !activeEntry ? (
           <EmptyState icon={<Clock size={26} />} title="No entries yet" description="Start a timer or add an entry manually." />
         ) : (
           grouped.map(([date, dayEntries]) => (
@@ -801,187 +986,5 @@ function TrackerTab() {
                   onDelete={(id) => void deleteEntry(id)}
                   onResume={(entry) => void startTimer({
                     description: entry.description,
-                    taskId: entry.taskId,
-                    projectId: entry.projectId,
-                    isBillable: entry.isBillable,
-                  })}
-                />
-              ))}
-            </div>
-          ))
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// REPORTS TAB
-// ─────────────────────────────────────────────────────────────────────────────
-
-type RangePreset = "today" | "week" | "month" | "custom";
-const PRESET_LABELS: Record<RangePreset, string> = {
-  today: "Today", week: "Last 7 days", month: "This month", custom: "Custom",
-};
-
-function ReportsTab() {
-  const entries   = useTimeStore((s) => s.entries.filter((e) => e.endAt));
-  const sessions  = useFocusStore((s) => s.sessions.filter((s) => s.type === "focus" && s.completedAt));
-  const projects  = useProjectStore((s) => s.projects);
-
-  const [preset,   setPreset]   = useState<RangePreset>("week");
-  const [fromDate, setFromDate] = useState(() => { const d = new Date(); d.setDate(d.getDate()-7); return d.toISOString().slice(0,10); });
-  const [toDate,   setToDate]   = useState(() => new Date().toISOString().slice(0,10));
-
-  function applyPreset(p: RangePreset) {
-    setPreset(p);
-    const n = new Date();
-    if (p === "today")  { const d = n.toISOString().slice(0,10); setFromDate(d); setToDate(d); }
-    if (p === "week")   { const f = new Date(n); f.setDate(n.getDate()-7); setFromDate(f.toISOString().slice(0,10)); setToDate(n.toISOString().slice(0,10)); }
-    if (p === "month")  { setFromDate(new Date(n.getFullYear(), n.getMonth(), 1).toISOString().slice(0,10)); setToDate(n.toISOString().slice(0,10)); }
-  }
-
-  const inRange   = entries.filter((e) => e.startAt.slice(0,10) >= fromDate && e.startAt.slice(0,10) <= toDate);
-  const totalMin  = totalMins(inRange);
-  const billMin   = totalMins(inRange.filter((e) => e.isBillable));
-  const focusMin  = sessions
-    .filter((s) => s.startedAt && s.startedAt.slice(0,10) >= fromDate && s.startedAt.slice(0,10) <= toDate)
-    .reduce((a, s) => a + (s.actualMinutes ?? 0), 0);
-
-  const byProject = new Map<string, number>();
-  inRange.forEach((e) => {
-    const k = e.projectId ?? "__none__";
-    byProject.set(k, (byProject.get(k) ?? 0) + (e.durationMinutes ?? 0));
-  });
-  const projectRows = Array.from(byProject.entries())
-    .sort((a, b) => b[1] - a[1])
-    .map(([id, mins]) => ({ project: id !== "__none__" ? projects.find((p) => p.id === id) : null, mins }));
-
-  const kpis = [
-    { label: "Tracked",  value: fmtDuration(totalMin),       icon: Clock,      color: "text-primary",              bg: "hsl(var(--primary) / 0.08)" },
-    { label: "Focus",    value: fmtDuration(focusMin),        icon: Target,     color: "text-amber-500",            bg: "hsl(38 92% 52% / 0.10)" },
-    { label: "Billable", value: fmtDuration(billMin),         icon: DollarSign, color: "text-emerald-500",          bg: "hsl(142 65% 44% / 0.08)" },
-    { label: "Entries",  value: String(inRange.length),       icon: Tag,        color: "text-muted-foreground",     bg: "hsl(var(--muted))" },
-  ];
-
-  return (
-    <div className="flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-6">
-      {/* Range selector */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center rounded-lg p-0.5 gap-0.5" style={{ background: "hsl(var(--muted))" }}>
-          {(["today","week","month","custom"] as RangePreset[]).map((p) => (
-            <button key={p} onClick={() => applyPreset(p)}
-              className={cn("px-3 py-1.5 rounded-md text-xs font-medium transition-all",
-                preset === p ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>
-              {PRESET_LABELS[p]}
-            </button>
-          ))}
-        </div>
-        {preset === "custom" && (
-          <div className="flex items-center gap-1.5">
-            <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}
-              className="bg-background border border-border rounded-lg px-2 py-1.5 text-xs" />
-            <span className="text-muted-foreground text-xs">to</span>
-            <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)}
-              className="bg-background border border-border rounded-lg px-2 py-1.5 text-xs" />
-          </div>
-        )}
-      </div>
-
-      {/* KPI grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {kpis.map(({ label, value, icon: Icon, color, bg }) => (
-          <div key={label} className="rounded-xl border border-border p-4 flex flex-col gap-2" style={{ background: "hsl(var(--card))" }}>
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: bg }}>
-              <Icon size={13} className={color} />
-            </div>
-            <div>
-              <div className="text-xl font-semibold tabular-nums leading-tight">{value}</div>
-              <div className="text-[11px] text-muted-foreground mt-0.5">{label}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* By project */}
-      <div>
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">By Project</h3>
-        {projectRows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No tracked time in this range.</p>
-        ) : (
-          <div className="flex flex-col gap-2.5">
-            {projectRows.map(({ project, mins }) => {
-              const pct = totalMin > 0 ? (mins / totalMin) * 100 : 0;
-              return (
-                <div key={project?.id ?? "none"} className="flex items-center gap-3">
-                  {project
-                    ? <ProjectDot color={project.color} size="sm" />
-                    : <div className="w-2.5 h-2.5 rounded-full bg-muted-foreground/20 shrink-0" />
-                  }
-                  <span className="text-sm flex-1 truncate">{project?.name ?? "No project"}</span>
-                  <span className="text-xs tabular-nums text-muted-foreground font-medium w-14 text-right">{fmtDuration(mins)}</span>
-                  <div className="w-20 h-1.5 rounded-full overflow-hidden shrink-0" style={{ background: "hsl(var(--muted))" }}>
-                    <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${Math.min(100, pct)}%` }} />
-                  </div>
-                  <span className="text-[10px] text-muted-foreground w-8 text-right">{Math.round(pct)}%</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MODULE ROOT
-// ─────────────────────────────────────────────────────────────────────────────
-
-export default function TimeModule() {
-  const [activeTab,   setActiveTab]   = useState<Tab>("focus");
-  const activeEntryId = useTimeStore((s) => s.activeEntryId);
-
-  return (
-    <div className="flex flex-col h-full overflow-hidden">
-      {/* ── Header ── */}
-      <div className="flex items-center gap-3 px-4 py-2.5 border-b shrink-0"
-        style={{ borderColor: "hsl(var(--border))" }}>
-        <div className="flex items-center gap-2 mr-auto">
-          <div className="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
-            style={{ background: "hsl(var(--primary) / 0.12)" }}>
-            <Zap size={13} style={{ color: "hsl(var(--primary))" }} />
-          </div>
-          <span className="text-sm font-semibold">Focus &amp; Time</span>
-        </div>
-
-        {/* Segment control — instant, no router */}
-        <SegmentControl active={activeTab} onChange={setActiveTab} />
-
-        {/* Live timer pill */}
-        {activeEntryId && (
-          <button
-            onClick={() => setActiveTab("tracker")}
-            className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors"
-            style={{ background: "hsl(142 65% 44% / 0.1)", color: "hsl(142 65% 34%)" }}
-            onMouseEnter={e => (e.currentTarget.style.background = "hsl(142 65% 44% / 0.18)")}
-            onMouseLeave={e => (e.currentTarget.style.background = "hsl(142 65% 44% / 0.1)")}
-          >
-            <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "hsl(142 65% 44%)" }} />
-            Timer on
-          </button>
-        )}
-      </div>
-
-      {/* Active timer banner */}
-      <ActiveTimerBanner onJump={() => setActiveTab("tracker")} />
-
-      {/* Tab content */}
-      <div className="flex flex-1 overflow-hidden">
-        {activeTab === "focus"   && <FocusTab />}
-        {activeTab === "tracker" && <TrackerTab />}
-        {activeTab === "reports" && <ReportsTab />}
-      </div>
-    </div>
-  );
-}
+                    taskId:      entry.taskId,
+ 
