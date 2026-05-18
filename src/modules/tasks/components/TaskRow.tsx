@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   Circle, CheckCircle2, ChevronRight, ChevronDown,
   Calendar, MoreHorizontal, Copy, Trash2, ArrowRight, Clock, FolderKanban,
 } from "lucide-react";
 import { cn, formatDate } from "@/shared/utils";
-import { ProjectDot, PriorityDot } from "@/shared/ui";
+import { Popover, PopoverItem, PopoverDivider, ProjectDot, PriorityDot } from "@/shared/ui";
 import { useTaskStore } from "../store";
 import { useProjectStore } from "@/modules/projects/store";
 import { bus } from "@/kernel/event-bus";
@@ -18,6 +18,8 @@ interface TaskRowProps {
 export function TaskRow({ task, depth = 0 }: TaskRowProps) {
   const [expanded, setExpanded] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuAnchor = useRef<HTMLButtonElement>(null);
+
   const { completeTask, restoreTask, deleteTask, duplicateTask, openTask, getSubtasks, archiveTask } =
     useTaskStore();
   const project = useProjectStore((s) =>
@@ -48,7 +50,6 @@ export function TaskRow({ task, depth = 0 }: TaskRowProps) {
         className={cn(
           "group relative flex items-center gap-2 px-2 py-[7px] rounded-lg cursor-pointer select-none",
           "hover:bg-accent/50 transition-fast",
-          // left accent stripe via ::before pseudo
           "before:absolute before:left-0 before:top-[20%] before:bottom-[20%] before:w-[2.5px] before:rounded-full before:opacity-0 group-hover:before:opacity-100 before:transition-opacity before:duration-150",
           priorityAccent[task.priority ?? "none"],
           isDone && "opacity-55",
@@ -56,7 +57,7 @@ export function TaskRow({ task, depth = 0 }: TaskRowProps) {
         )}
         onClick={() => openTask(task.id)}
       >
-        {/* Subtask progress bar */}
+        {/* Subtask progress */}
         {hasSubtasks && subtaskPct > 0 && subtaskPct < 100 && (
           <div className="absolute bottom-0 left-8 right-2 h-[2px] rounded-full bg-border/60 overflow-hidden">
             <div
@@ -66,7 +67,7 @@ export function TaskRow({ task, depth = 0 }: TaskRowProps) {
           </div>
         )}
 
-        {/* Expand toggle */}
+        {/* Expand */}
         <button
           onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
           className={cn(
@@ -78,7 +79,7 @@ export function TaskRow({ task, depth = 0 }: TaskRowProps) {
           {expanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
         </button>
 
-        {/* Complete toggle */}
+        {/* Complete */}
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -90,41 +91,32 @@ export function TaskRow({ task, depth = 0 }: TaskRowProps) {
               ? "text-green-500 hover:text-muted-foreground/50"
               : "text-muted-foreground/25 hover:text-primary"
           )}
-          title={isDone ? "Restore task" : "Complete task"}
         >
           {isDone
             ? <CheckCircle2 size={15} strokeWidth={2} />
             : <Circle size={15} strokeWidth={1.5} />}
         </button>
 
-        {/* Priority dot */}
         <PriorityDot priority={task.priority} />
 
-        {/* Title */}
-        <span
-          className={cn(
-            "flex-1 text-[13px] leading-snug truncate font-[440]",
-            (isDone || isCancelled) && "line-through text-muted-foreground/40"
-          )}
-        >
+        <span className={cn(
+          "flex-1 text-[13px] leading-snug truncate font-[440]",
+          (isDone || isCancelled) && "line-through text-muted-foreground/40"
+        )}>
           {task.title}
         </span>
 
-        {/* Subtask count */}
         {hasSubtasks && (
-          <span
-            className={cn(
-              "text-[10px] tabular-nums shrink-0 px-1.5 py-0.5 rounded-full font-medium",
-              doneSubtasks === subtasks.length
-                ? "bg-green-500/10 text-green-500"
-                : "bg-muted text-muted-foreground/60"
-            )}
-          >
+          <span className={cn(
+            "text-[10px] tabular-nums shrink-0 px-1.5 py-0.5 rounded-full font-medium",
+            doneSubtasks === subtasks.length
+              ? "bg-green-500/10 text-green-500"
+              : "bg-muted text-muted-foreground/60"
+          )}>
             {doneSubtasks}/{subtasks.length}
           </span>
         )}
 
-        {/* Project pill — hover-reveal */}
         {project && (
           <button
             onClick={(e) => {
@@ -132,7 +124,6 @@ export function TaskRow({ task, depth = 0 }: TaskRowProps) {
               bus.emit("navigate:to", { path: "/projects" });
               setTimeout(() => bus.emit("project:open", { projectId: project.id }), 50);
             }}
-            title={`Project: ${project.name}`}
             className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-fast text-muted-foreground/50 hover:text-foreground"
           >
             <ProjectDot color={project.color} size={6} />
@@ -140,24 +131,20 @@ export function TaskRow({ task, depth = 0 }: TaskRowProps) {
           </button>
         )}
 
-        {/* Due date */}
         {task.dueDate && (
-          <span
-            className={cn(
-              "flex items-center gap-1 text-[10px] shrink-0 tabular-nums",
-              isOverdue
-                ? "text-red-500 font-semibold"
-                : isDone
-                  ? "text-muted-foreground/25"
-                  : "text-muted-foreground/45"
-            )}
-          >
+          <span className={cn(
+            "flex items-center gap-1 text-[10px] shrink-0 tabular-nums",
+            isOverdue
+              ? "text-red-500 font-semibold"
+              : isDone
+                ? "text-muted-foreground/25"
+                : "text-muted-foreground/45"
+          )}>
             <Calendar size={10} strokeWidth={1.75} />
             {formatDate(task.dueDate)}
           </span>
         )}
 
-        {/* Estimate — hover-reveal */}
         {task.estimateMinutes && (
           <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground/35 shrink-0 opacity-0 group-hover:opacity-100 transition-fast">
             <Clock size={10} strokeWidth={1.75} />
@@ -167,73 +154,45 @@ export function TaskRow({ task, depth = 0 }: TaskRowProps) {
           </span>
         )}
 
-        {/* Context menu */}
+        {/* Context menu button */}
         <div className="relative shrink-0 opacity-0 group-hover:opacity-100 transition-fast">
           <button
+            ref={menuAnchor}
             onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
             className="p-1 rounded text-muted-foreground/50 hover:text-foreground hover:bg-muted/80 transition-fast"
           >
             <MoreHorizontal size={13} />
           </button>
-          {menuOpen && (
-            <TaskContextMenu task={task} onClose={() => setMenuOpen(false)} />
-          )}
         </div>
       </div>
+
+      {/* Context menu — portal popover, never clips */}
+      <Popover
+        anchor={menuAnchor}
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        align="right"
+        className="w-44"
+      >
+        <PopoverItem icon={Copy} onClick={() => { void duplicateTask(task.id); setMenuOpen(false); }}>
+          Duplicate
+        </PopoverItem>
+        <PopoverItem icon={FolderKanban} onClick={() => setMenuOpen(false)}>
+          Move to project
+        </PopoverItem>
+        <PopoverItem icon={ArrowRight} onClick={() => { void archiveTask(task.id); setMenuOpen(false); }}>
+          Archive
+        </PopoverItem>
+        <PopoverDivider />
+        <PopoverItem icon={Trash2} danger onClick={() => { void deleteTask(task.id); setMenuOpen(false); }}>
+          Delete
+        </PopoverItem>
+      </Popover>
 
       {/* Subtasks */}
       {expanded && subtasks.map((sub) => (
         <TaskRow key={sub.id} task={sub} depth={depth + 1} />
       ))}
     </div>
-  );
-}
-
-function TaskContextMenu({ task, onClose }: { task: Task; onClose: () => void }) {
-  const { deleteTask, duplicateTask, archiveTask } = useTaskStore();
-
-  type MenuItem = {
-    label: string;
-    icon: React.ElementType;
-    action: () => void;
-    danger?: boolean;
-  } | null;
-
-  const items: MenuItem[] = [
-    { label: "Duplicate",       icon: Copy,         action: () => { void duplicateTask(task.id); } },
-    { label: "Move to project", icon: FolderKanban, action: () => {} },
-    { label: "Archive",         icon: ArrowRight,   action: () => { void archiveTask(task.id); } },
-    null,
-    { label: "Delete",          icon: Trash2,       action: () => { void deleteTask(task.id); }, danger: true },
-  ];
-
-  return (
-    <>
-      <div
-        className="fixed inset-0 z-10"
-        onClick={(e) => { e.stopPropagation(); onClose(); }}
-      />
-      <div className="absolute right-0 top-7 z-20 w-44 rounded-xl border border-border bg-popover shadow-popover py-1.5 animate-fade-in">
-        {items.map((item, i) =>
-          item === null ? (
-            <div key={i} className="my-1 mx-2 border-t border-border/50" />
-          ) : (
-            <button
-              key={item.label}
-              onClick={(e) => { e.stopPropagation(); item.action(); onClose(); }}
-              className={cn(
-                "w-full flex items-center gap-2.5 px-3 py-[7px] text-xs text-left transition-fast rounded-md mx-0",
-                item.danger
-                  ? "text-red-500 hover:bg-red-500/10"
-                  : "text-foreground/80 hover:bg-accent hover:text-foreground"
-              )}
-            >
-              <item.icon size={12} className="shrink-0" />
-              {item.label}
-            </button>
-          )
-        )}
-      </div>
-    </>
   );
 }

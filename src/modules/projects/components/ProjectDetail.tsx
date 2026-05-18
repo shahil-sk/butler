@@ -1,15 +1,15 @@
 // ============================================================
 // PROJECTS MODULE — ProjectDetail
-// Right-side detail panel. Clean, spacious, readable.
+// Centered modal popup (replaces right-side slide panel).
 // ============================================================
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
-  X, Plus, Flag, Calendar, Trash2, ExternalLink,
+  X, Plus, Trash2,
   CheckCircle2, Circle, FileText, ChevronDown,
 } from "lucide-react";
-import { cn, formatDate, now } from "@/shared/utils";
-import { SectionLabel } from "@/shared/ui";
+import { cn, formatDate } from "@/shared/utils";
+import { Modal, Popover, PopoverItem, PopoverDivider, ProjectDot } from "@/shared/ui";
 import { useProjectStore } from "../store";
 import { useTaskStore } from "@/modules/tasks/store";
 import { useNoteStore } from "@/modules/notes/store";
@@ -22,18 +22,25 @@ const PRESET_COLORS = [
   "#eab308", "#22c55e", "#14b8a6", "#6b7280",
 ];
 
-// ── Meta row helper ────────────────────────────────────────────
+const STATUS_OPTIONS: { value: ProjectStatus; label: string }[] = [
+  { value: "active",    label: "Active" },
+  { value: "on_hold",   label: "On hold" },
+  { value: "completed", label: "Completed" },
+  { value: "archived",  label: "Archived" },
+];
+
+// ── Meta row ──────────────────────────────────────────────────
 
 function MetaRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-4 px-4 py-2.5">
+    <div className="flex items-center gap-4 px-5 py-2.5">
       <span className="text-[12px] text-muted-foreground w-20 shrink-0 font-medium">{label}</span>
       <div className="flex-1 text-[13px]">{children}</div>
     </div>
   );
 }
 
-// ── Task line in project detail ───────────────────────────────
+// ── Task line ─────────────────────────────────────────────────
 
 function TaskLine({
   task,
@@ -44,13 +51,12 @@ function TaskLine({
 }) {
   const { updateTask } = useTaskStore();
   const isDone    = task.status === "done";
-  const today     = new Date().toISOString().slice(0, 10);
-  const isOverdue = !isDone && task.dueDate != null && task.dueDate < today;
+  const isOverdue = !isDone && task.dueDate != null &&
+    task.dueDate < new Date().toISOString().slice(0, 10);
 
   return (
     <div
-      role="button"
-      tabIndex={0}
+      role="button" tabIndex={0}
       onClick={onOpen}
       onKeyDown={(e) => { if (e.key === "Enter") onOpen(); }}
       className="group flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-accent cursor-pointer transition-fast"
@@ -65,21 +71,15 @@ function TaskLine({
       >
         {isDone
           ? <CheckCircle2 size={15} className="text-emerald-500" />
-          : <Circle size={15} className="text-muted-foreground/50 group-hover:text-muted-foreground transition-fast" />
-        }
+          : <Circle size={15} className="text-muted-foreground/50 group-hover:text-muted-foreground" />}
       </button>
-
-      <span className={cn(
-        "flex-1 text-[13px] truncate",
-        isDone && "line-through text-muted-foreground/50"
-      )}>
+      <span className={cn("flex-1 text-[13px] truncate", isDone && "line-through text-muted-foreground/50")}>
         {task.title}
       </span>
-
       {task.dueDate && (
         <span className={cn(
           "text-[11px] tabular-nums shrink-0",
-          isOverdue ? "text-red-500 font-medium" : "text-muted-foreground/60"
+          isOverdue ? "text-red-500 font-medium" : "text-muted-foreground/50"
         )}>
           {formatDate(task.dueDate)}
         </span>
@@ -88,7 +88,7 @@ function TaskLine({
   );
 }
 
-// ── Main component ──────────────────────────────────────────────
+// ── Main component ────────────────────────────────────────────
 
 export function ProjectDetail() {
   const {
@@ -97,10 +97,9 @@ export function ProjectDetail() {
     addMilestone, completeMilestone, deleteMilestone, updateMilestone,
   } = useProjectStore();
 
-  const { tasks: allTasks, loadTasks, openQuickAdd, openTaskId } = useTaskStore();
+  const { tasks: allTasks, loadTasks, openQuickAdd } = useTaskStore();
   const openTaskInPanel = (id: string) => useTaskStore.setState({ openTaskId: id });
   const allNotes = useNoteStore((s) => s.notes);
-  const { openNote } = useNoteStore();
 
   const project = openProjectId ? getProjectById(openProjectId) : null;
   const tasks   = allTasks.filter((t) => t.projectId === openProjectId && t.status !== "archived");
@@ -108,9 +107,12 @@ export function ProjectDetail() {
   const [tab,             setTab]             = useState<"overview" | "tasks" | "milestones">("overview");
   const [name,            setName]            = useState(project?.name ?? "");
   const [description,     setDescription]     = useState(project?.description ?? "");
-  const [newMilestone,    setNewMilestone]    = useState("");
-  const [milestoneDue,    setMilestoneDue]    = useState("");
-  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [newMilestone,    setNewMilestone]     = useState("");
+  const [milestoneDue,    setMilestoneDue]     = useState("");
+  const [colorPickerOpen, setColorPickerOpen]  = useState(false);
+  const [statusOpen,      setStatusOpen]       = useState(false);
+  const colorAnchor  = useRef<HTMLButtonElement>(null);
+  const statusAnchor = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (project) { setName(project.name); setDescription(project.description ?? ""); }
@@ -120,6 +122,7 @@ export function ProjectDetail() {
     if (allTasks.length === 0) void loadTasks();
   }, []);
 
+  const isOpen = openProjectId != null && project != null;
   if (!project) return null;
 
   const done     = tasks.filter((t) => t.status === "done").length;
@@ -131,49 +134,25 @@ export function ProjectDetail() {
     void updateProject(project.id, patch);
 
   return (
-    <div className="fixed inset-0 z-40 flex items-start justify-end">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/25 backdrop-blur-[2px]" onClick={closeProject} />
+    <>
+      <Modal open={isOpen} onClose={closeProject} maxWidth="max-w-[640px]" maxHeight="max-h-[90dvh]">
 
-      {/* Panel */}
-      <div className="relative z-10 flex flex-col h-full w-full max-w-[540px] bg-background border-l border-border shadow-2xl animate-slide-in-right overflow-hidden">
-
-        {/* ── Header ────────────────────────────────────── */}
+        {/* ── Header ──────────────────────────────────────── */}
         <div
-          className="flex items-center gap-3 px-4 py-3.5 shrink-0 border-b"
+          className="flex items-center gap-3 px-5 py-4 shrink-0 border-b"
           style={{
             borderBottomColor: project.color + "40",
-            background: project.color + "08",
+            background:        project.color + "08",
           }}
         >
-          {/* Color dot / picker */}
-          <div className="relative">
-            <button
-              onClick={() => setShowColorPicker((v) => !v)}
-              className="w-5 h-5 rounded-full border-2 shrink-0 transition-transform hover:scale-110 focus:scale-110"
-              style={{ backgroundColor: project.color, borderColor: project.color + "60" }}
-              title="Change colour"
-              aria-label="Change project colour"
-            />
-            {showColorPicker && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setShowColorPicker(false)} />
-                <div className="absolute top-8 left-0 z-20 p-2.5 rounded-xl border border-border bg-popover shadow-2xl flex flex-wrap gap-2 w-40 animate-fade-in">
-                  {PRESET_COLORS.map((c) => (
-                    <button
-                      key={c}
-                      onClick={() => { save({ color: c }); setShowColorPicker(false); }}
-                      className={cn(
-                        "w-7 h-7 rounded-full transition-fast border-2",
-                        project.color === c ? "border-foreground scale-110" : "border-transparent hover:scale-105"
-                      )}
-                      style={{ backgroundColor: c }}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
+          {/* Color picker button */}
+          <button
+            ref={colorAnchor}
+            onClick={() => setColorPickerOpen((v) => !v)}
+            className="w-5 h-5 rounded-full border-2 shrink-0 transition-transform hover:scale-110"
+            style={{ backgroundColor: project.color, borderColor: project.color + "70" }}
+            title="Change colour"
+          />
 
           {/* Editable name */}
           <input
@@ -185,26 +164,39 @@ export function ProjectDetail() {
             placeholder="Project name"
           />
 
-          {/* Header actions */}
+          {/* Status badge */}
+          <button
+            ref={statusAnchor}
+            onClick={() => setStatusOpen((v) => !v)}
+            className={cn(
+              "flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-fast",
+              project.status === "active"    && "bg-green-500/10 text-green-600 dark:text-green-400",
+              project.status === "on_hold"   && "bg-amber-500/10 text-amber-600",
+              project.status === "completed" && "bg-blue-500/10 text-blue-600",
+              project.status === "archived"  && "bg-muted text-muted-foreground",
+            )}
+          >
+            <ChevronDown size={10} className="opacity-60" />
+            {STATUS_OPTIONS.find((s) => s.value === project.status)?.label ?? project.status}
+          </button>
+
           <button
             onClick={() => { void deleteProject(project.id); closeProject(); }}
             className="p-2 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/8 transition-fast"
             title="Delete project"
-            aria-label="Delete project"
           >
             <Trash2 size={14} />
           </button>
           <button
             onClick={closeProject}
             className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-fast"
-            aria-label="Close"
           >
             <X size={15} />
           </button>
         </div>
 
-        {/* ── Tabs ────────────────────────────────────────── */}
-        <div className="flex border-b border-border shrink-0 px-2 gap-1">
+        {/* ── Tabs ───────────────────────────────────────── */}
+        <div className="flex border-b border-border shrink-0 px-3 gap-0.5">
           {(["overview", "tasks", "milestones"] as const).map((t) => (
             <button
               key={t}
@@ -218,23 +210,23 @@ export function ProjectDetail() {
             >
               {t}
               {t === "tasks" && total > 0 && (
-                <span className="ml-1.5 text-[11px] text-muted-foreground tabular-nums">{total}</span>
+                <span className="ml-1.5 text-[11px] text-muted-foreground/50 tabular-nums">{total}</span>
               )}
               {t === "milestones" && project.milestones.length > 0 && (
-                <span className="ml-1.5 text-[11px] text-muted-foreground tabular-nums">{project.milestones.length}</span>
+                <span className="ml-1.5 text-[11px] text-muted-foreground/50 tabular-nums">
+                  {project.milestones.length}
+                </span>
               )}
             </button>
           ))}
         </div>
 
-        {/* ── Body ────────────────────────────────────────────── */}
+        {/* ── Body ───────────────────────────────────────── */}
         <div className="flex-1 overflow-y-auto">
 
           {/* OVERVIEW */}
           {tab === "overview" && (
-            <div className="p-5 space-y-6">
-
-              {/* Description */}
+            <div className="p-5 space-y-5">
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -247,271 +239,196 @@ export function ProjectDetail() {
                 className="w-full text-[13px] text-muted-foreground bg-transparent outline-none resize-none leading-relaxed placeholder:text-muted-foreground/40"
               />
 
-              {/* Progress */}
               {total > 0 && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[12px] font-medium text-muted-foreground">Progress</span>
-                    <span className="text-[13px] font-bold tabular-nums" style={{ color: project.color }}>
-                      {progress}%
-                    </span>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">Progress</span>
+                    <span className="tabular-nums font-medium">{progress}%</span>
                   </div>
-                  <div className="h-2 rounded-full bg-muted overflow-hidden">
+                  <div className="h-1.5 rounded-full bg-border overflow-hidden">
                     <div
-                      className="h-full rounded-full transition-all duration-700"
+                      className="h-full rounded-full transition-all duration-500"
                       style={{ width: `${progress}%`, backgroundColor: project.color }}
                     />
                   </div>
-                  <p className="text-[12px] text-muted-foreground">
+                  <p className="text-[11px] text-muted-foreground/50">
                     {done} of {total} tasks done
-                    {project.milestones.length > 0 && (
-                      <> &middot; {doneMilestones}/{project.milestones.length} milestones</>
-                    )}
                   </p>
                 </div>
               )}
 
-              {/* Meta fields */}
-              <div className="rounded-xl border border-border overflow-hidden divide-y divide-border">
+              <div className="border-t border-border/50 pt-4 divide-y divide-border/40">
                 <MetaRow label="Status">
-                  <select
-                    value={project.status}
-                    onChange={(e) => save({ status: e.target.value as ProjectStatus })}
-                    className="bg-transparent outline-none text-[13px] cursor-pointer"
+                  <button
+                    ref={statusAnchor}
+                    onClick={() => setStatusOpen((v) => !v)}
+                    className="text-sm text-muted-foreground hover:text-foreground transition-fast flex items-center gap-1"
                   >
-                    <option value="active">Active</option>
-                    <option value="on_hold">On hold</option>
-                    <option value="completed">Completed</option>
-                    <option value="archived">Archived</option>
-                  </select>
+                    {STATUS_OPTIONS.find((s) => s.value === project.status)?.label}
+                    <ChevronDown size={11} className="opacity-40" />
+                  </button>
                 </MetaRow>
-                <MetaRow label="Start date">
-                  <input
-                    type="date"
-                    value={project.startDate ?? ""}
-                    onChange={(e) => save({ startDate: e.target.value || undefined })}
-                    className="bg-transparent outline-none text-[13px] cursor-pointer"
-                  />
-                </MetaRow>
-                <MetaRow label="Due date">
-                  <input
-                    type="date"
-                    value={project.dueDate ?? ""}
-                    onChange={(e) => save({ dueDate: e.target.value || undefined })}
-                    className="bg-transparent outline-none text-[13px] cursor-pointer"
-                  />
-                </MetaRow>
+                {project.dueDate && (
+                  <MetaRow label="Due">
+                    <span className="text-sm">{formatDate(project.dueDate)}</span>
+                  </MetaRow>
+                )}
               </div>
 
               {/* Linked notes */}
-              <div>
-                <SectionLabel>Notes</SectionLabel>
-                <div className="space-y-1 mt-2">
-                  {project.linkedNoteIds.map((noteId) => {
-                    const note = allNotes.find((n) => n.id === noteId);
-                    if (!note) return null;
-                    return (
+              {allNotes.filter((n) => n.linkedProjectIds?.includes(project.id)).length > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 mb-2">
+                    Notes
+                  </p>
+                  {allNotes
+                    .filter((n) => n.linkedProjectIds?.includes(project.id))
+                    .map((n) => (
                       <button
-                        key={noteId}
-                        onClick={() => { openNote(noteId); bus.emit("navigate:to", { path: "/notes" }); }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] hover:bg-accent transition-fast text-left"
+                        key={n.id}
+                        onClick={() => useNoteStore.getState().openNote(n.id)}
+                        className="flex items-center gap-2 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-fast w-full"
                       >
-                        <FileText size={13} className="text-muted-foreground/60 shrink-0" />
-                        <span className="truncate flex-1">{note.title}</span>
-                        <span className="text-[11px] text-muted-foreground/50 tabular-nums shrink-0">
-                          {formatDate(note.updatedAt)}
-                        </span>
+                        <FileText size={13} className="shrink-0" />
+                        <span className="flex-1 truncate text-left">{n.title || "Untitled"}</span>
                       </button>
-                    );
-                  })}
-                  <button
-                    onClick={() => {
-                      void useNoteStore.getState().createNote({
-                        title: `${project.name} — Note`,
-                        linkedProjectIds: [project.id],
-                      }).then((note) => { openNote(note.id); bus.emit("navigate:to", { path: "/notes" }); });
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg border border-dashed border-border transition-fast mt-1"
-                  >
-                    <Plus size={12} />
-                    {project.linkedNoteIds.length === 0 ? "Create a note for this project" : "New note"}
-                  </button>
+                    ))}
                 </div>
-              </div>
-
-              {/* Footer */}
-              <p className="text-[11px] text-muted-foreground/40">
-                Created {formatDate(project.createdAt)} · {project.id.slice(0, 8)}
-              </p>
+              )}
             </div>
           )}
 
           {/* TASKS */}
           {tab === "tasks" && (
-            <div className="flex flex-col h-full">
+            <div className="p-3">
               {tasks.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center gap-2 py-20 text-center px-6">
-                  <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center mb-1">
-                    <CheckCircle2 size={18} className="text-muted-foreground/50" />
-                  </div>
-                  <p className="text-[14px] font-semibold">No tasks yet</p>
-                  <p className="text-[12px] text-muted-foreground max-w-[28ch]">
-                    Add tasks to track work in this project.
-                  </p>
+                <div className="flex flex-col items-center py-10 text-center">
+                  <p className="text-sm text-muted-foreground/50 mb-3">No tasks yet</p>
                   <button
                     onClick={() => openQuickAdd({ projectId: project.id })}
-                    className="mt-4 flex items-center gap-1.5 px-4 py-2 rounded-lg border border-border text-[13px] hover:bg-accent transition-fast"
+                    className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-fast"
                   >
-                    <Plus size={13} />
-                    Add first task
+                    <Plus size={12} /> Add first task
                   </button>
                 </div>
               ) : (
-                <div className="p-3 space-y-4">
-                  {tasks.filter((t) => t.status !== "done" && t.status !== "cancelled").length > 0 && (
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60 px-3 mb-1">Active</p>
-                      {tasks
-                        .filter((t) => t.status !== "done" && t.status !== "cancelled")
-                        .map((task) => (
-                          <TaskLine key={task.id} task={task} onOpen={() => openTaskInPanel(task.id)} />
-                        ))}
-                    </div>
-                  )}
-                  {tasks.filter((t) => t.status === "done").length > 0 && (
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60 px-3 mb-1">Completed</p>
-                      {tasks
-                        .filter((t) => t.status === "done")
-                        .map((task) => (
-                          <TaskLine key={task.id} task={task} onOpen={() => openTaskInPanel(task.id)} />
-                        ))}
-                    </div>
-                  )}
+                <div className="space-y-0.5">
+                  {tasks.map((t) => (
+                    <TaskLine key={t.id} task={t} onOpen={() => openTaskInPanel(t.id)} />
+                  ))}
                 </div>
               )}
-
-              {/* Sticky add task footer */}
-              <div className="border-t border-border p-3 shrink-0 mt-auto">
-                <button
-                  onClick={() => openQuickAdd({ projectId: project.id })}
-                  className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-[13px] text-muted-foreground hover:text-foreground hover:bg-accent transition-fast"
-                >
-                  <Plus size={14} />
-                  Add task to {project.name}
-                </button>
-              </div>
+              <button
+                onClick={() => openQuickAdd({ projectId: project.id })}
+                className="flex items-center gap-2 w-full mt-2 px-3 py-2 rounded-lg text-xs text-muted-foreground/40 hover:text-primary hover:bg-primary/5 border border-transparent hover:border-primary/15 transition-fast"
+              >
+                <Plus size={12} /> Add task
+              </button>
             </div>
           )}
 
           {/* MILESTONES */}
           {tab === "milestones" && (
             <div className="p-5">
-              {project.milestones.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-12 text-center gap-2">
-                  <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center mb-1">
-                    <Flag size={18} className="text-muted-foreground/50" />
-                  </div>
-                  <p className="text-[13px] font-medium">No milestones</p>
-                  <p className="text-[12px] text-muted-foreground">Add key checkpoints below.</p>
-                </div>
-              )}
-
-              <div className="space-y-1 mb-5">
-                {project.milestones.map((m) => {
-                  const today = new Date().toISOString().slice(0, 10);
-                  const isOverdue = !m.completedAt && m.dueDate && m.dueDate < today;
-                  return (
-                    <div key={m.id} className="group flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-accent/50 transition-fast">
+              {project.milestones.length === 0 ? (
+                <p className="text-sm text-muted-foreground/50 text-center py-8">No milestones yet</p>
+              ) : (
+                <div className="space-y-2 mb-4">
+                  {project.milestones.map((m) => (
+                    <div
+                      key={m.id}
+                      className="group flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-accent transition-fast"
+                    >
                       <button
-                        onClick={() =>
-                          m.completedAt
-                            ? void updateMilestone(project.id, m.id, { completedAt: undefined })
-                            : void completeMilestone(project.id, m.id)
-                        }
-                        className="shrink-0 transition-fast"
-                        aria-label={m.completedAt ? "Mark incomplete" : "Mark complete"}
+                        onClick={() => void completeMilestone(project.id, m.id)}
+                        className={cn(
+                          "shrink-0 transition-fast",
+                          m.completedAt ? "text-emerald-500" : "text-muted-foreground/30 hover:text-primary"
+                        )}
                       >
                         {m.completedAt
-                          ? <CheckCircle2 size={16} className="text-emerald-500" />
-                          : <Circle size={16} className="text-muted-foreground/50" />
-                        }
+                          ? <CheckCircle2 size={15} />
+                          : <Circle size={15} />}
                       </button>
-
                       <span className={cn(
-                        "flex-1 text-[13px] leading-snug",
-                        m.completedAt && "line-through text-muted-foreground/50"
+                        "flex-1 text-[13px]",
+                        m.completedAt && "line-through text-muted-foreground/40"
                       )}>
                         {m.title}
                       </span>
-
                       {m.dueDate && (
-                        <span className={cn(
-                          "text-[11px] tabular-nums shrink-0",
-                          isOverdue ? "text-red-500 font-medium" : "text-muted-foreground/60"
-                        )}>
+                        <span className="text-[11px] text-muted-foreground/50 tabular-nums shrink-0">
                           {formatDate(m.dueDate)}
                         </span>
                       )}
-
                       <button
                         onClick={() => void deleteMilestone(project.id, m.id)}
-                        className="opacity-0 group-hover:opacity-100 p-1 rounded text-muted-foreground hover:text-red-500 transition-fast"
-                        aria-label="Delete milestone"
+                        className="opacity-0 group-hover:opacity-100 p-1 rounded text-muted-foreground/40 hover:text-red-500 transition-fast"
                       >
                         <X size={12} />
                       </button>
                     </div>
-                  );
-                })}
-              </div>
-
-              {/* Add milestone form */}
-              <div className="rounded-xl border border-border p-4 space-y-3">
-                <p className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wide">New milestone</p>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-center gap-2 mt-2">
                 <input
                   value={newMilestone}
                   onChange={(e) => setNewMilestone(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && newMilestone.trim()) {
-                      void addMilestone(project.id, newMilestone.trim(), milestoneDue || undefined);
-                      setNewMilestone(""); setMilestoneDue("");
+                      void addMilestone(project.id, { title: newMilestone.trim(), dueDate: milestoneDue || undefined });
+                      setNewMilestone("");
+                      setMilestoneDue("");
                     }
                   }}
-                  placeholder="Milestone title…"
-                  className="w-full text-[13px] bg-transparent outline-none placeholder:text-muted-foreground/40"
+                  placeholder="New milestone…"
+                  className="flex-1 text-sm bg-muted/40 rounded-lg px-3 py-2 outline-none border border-border focus:border-primary/50"
                 />
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <Calendar size={12} />
-                    <input
-                      type="date"
-                      value={milestoneDue}
-                      onChange={(e) => setMilestoneDue(e.target.value)}
-                      className="text-[12px] bg-transparent outline-none cursor-pointer"
-                    />
-                  </div>
-                  <div className="flex-1" />
-                  <button
-                    onClick={() => {
-                      if (!newMilestone.trim()) return;
-                      void addMilestone(project.id, newMilestone.trim(), milestoneDue || undefined);
-                      setNewMilestone(""); setMilestoneDue("");
-                    }}
-                    disabled={!newMilestone.trim()}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-[12px] font-medium disabled:opacity-40 transition-fast hover:opacity-90"
-                  >
-                    <Plus size={12} />
-                    Add
-                  </button>
-                </div>
+                <input
+                  type="date"
+                  value={milestoneDue}
+                  onChange={(e) => setMilestoneDue(e.target.value)}
+                  className="text-sm bg-muted/40 rounded-lg px-3 py-2 outline-none border border-border focus:border-primary/50"
+                />
               </div>
             </div>
           )}
         </div>
+      </Modal>
 
-        {openTaskId && <TaskDetail />}
-      </div>
-    </div>
+      {/* Color picker popover */}
+      <Popover anchor={colorAnchor} open={colorPickerOpen} onClose={() => setColorPickerOpen(false)} className="w-44">
+        <div className="p-2.5 flex flex-wrap gap-2">
+          {PRESET_COLORS.map((c) => (
+            <button
+              key={c}
+              onClick={() => { save({ color: c }); setColorPickerOpen(false); }}
+              className={cn(
+                "w-7 h-7 rounded-full border-2 transition-fast hover:scale-105",
+                project.color === c ? "border-foreground scale-110" : "border-transparent"
+              )}
+              style={{ backgroundColor: c }}
+            />
+          ))}
+        </div>
+      </Popover>
+
+      {/* Status popover */}
+      <Popover anchor={statusAnchor} open={statusOpen} onClose={() => setStatusOpen(false)} className="w-40">
+        {STATUS_OPTIONS.map((s) => (
+          <PopoverItem
+            key={s.value}
+            active={project.status === s.value}
+            onClick={() => { save({ status: s.value }); setStatusOpen(false); }}
+          >
+            {s.label}
+          </PopoverItem>
+        ))}
+      </Popover>
+
+      {/* Task detail stacks on top */}
+      <TaskDetail />
+    </>
   );
 }

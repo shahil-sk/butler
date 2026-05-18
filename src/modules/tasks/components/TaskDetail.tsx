@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   X, Flag, Calendar, Clock, Plus, Trash2,
   CheckSquare, Circle, ChevronDown, FolderKanban,
   FileText, ExternalLink,
 } from "lucide-react";
 import { cn, formatDate, formatTime, PRIORITY_COLORS, PRIORITY_LABELS, today, now } from "@/shared/utils";
-import { ProjectDot, SectionLabel } from "@/shared/ui";
+import { Modal, Popover, PopoverItem, PopoverDivider, ProjectDot, SectionLabel } from "@/shared/ui";
 import { useTaskStore } from "../store";
 import { useProjectStore } from "@/modules/projects/store";
 import { useNoteStore } from "@/modules/notes/store";
@@ -31,7 +31,7 @@ export function TaskDetail() {
   const allNotes       = useNoteStore((s) => s.notes);
   const allEvents      = useCalendarStore((s) => s.events);
 
-  const task = openTaskId ? getTaskById(openTaskId) : null;
+  const task    = openTaskId ? getTaskById(openTaskId) : null;
   const project = task?.projectId ? allProjects.find((p) => p.id === task.projectId) : undefined;
   const linkedNotes  = allNotes.filter((n)  => task?.linkedNoteIds.includes(n.id));
   const linkedEvents = allEvents.filter((e) => task?.linkedEventIds.includes(e.id));
@@ -45,9 +45,19 @@ export function TaskDetail() {
   const [linkNoteOpen,  setLinkNoteOpen]   = useState(false);
   const [noteSearch,    setNoteSearch]     = useState("");
 
+  // Popover anchors
+  const statusAnchor   = useRef<HTMLButtonElement>(null);
+  const priorityAnchor = useRef<HTMLButtonElement>(null);
+  const projectAnchor  = useRef<HTMLButtonElement>(null);
+  const [statusOpen,   setStatusOpen]   = useState(false);
+  const [priorityOpen, setPriorityOpen] = useState(false);
+  const [projectOpen,  setProjectOpen]  = useState(false);
+
   useEffect(() => {
     if (task) { setTitle(task.title); setDescription(task.description ?? ""); }
   }, [task?.id]);
+
+  const isOpen = openTaskId != null && task != null;
 
   if (!task) return null;
 
@@ -55,21 +65,20 @@ export function TaskDetail() {
   const completedChecklist = task.checklistItems.filter((i) => i.checked).length;
 
   const handleScheduleToCalendar = async () => {
-    const startAt = `${scheduleDate}T${scheduleTime}:00`;
-    const endMinutes = (task.estimateMinutes ?? 60);
-    const [h, m] = scheduleTime.split(":").map(Number);
-    const totalEnd = h * 60 + m + endMinutes;
-    const endAt = `${scheduleDate}T${String(Math.floor(totalEnd / 60)).padStart(2,"0")}:${String(totalEnd % 60).padStart(2,"0")}:00`;
+    const startAt    = `${scheduleDate}T${scheduleTime}:00`;
+    const endMinutes = task.estimateMinutes ?? 60;
+    const [h, m]     = scheduleTime.split(":").map(Number);
+    const totalEnd   = h * 60 + m + endMinutes;
+    const endAt      = `${scheduleDate}T${String(Math.floor(totalEnd / 60)).padStart(2, "0")}:${String(totalEnd % 60).padStart(2, "0")}:00`;
     await useCalendarStore.getState().createEvent({
-      title: task.title, startAt, endAt,
-      linkedTaskIds: [task.id],
+      title: task.title, startAt, endAt, linkedTaskIds: [task.id],
     });
     save({ scheduledDate: scheduleDate });
     setScheduleOpen(false);
     bus.emit("ui:notification", {
-      id: task.id + "-sched",
-      type: "success",
-      message: `"${task.title}" added to calendar`,
+      id:         task.id + "-sched",
+      type:       "success",
+      message:    `"${task.title}" added to calendar`,
       durationMs: 2500,
     });
   };
@@ -85,18 +94,34 @@ export function TaskDetail() {
     .filter((n) => n.title.toLowerCase().includes(noteSearch.toLowerCase()))
     .slice(0, 8);
 
+  const statusLabel   = STATUS_OPTIONS.find((s) => s.value === task.status)?.label ?? task.status;
+  const priorityLabel = PRIORITY_LABELS[task.priority] ?? task.priority;
+
   return (
-    <div className="fixed inset-0 z-40 flex items-start justify-end">
-      <div className="absolute inset-0 bg-black/20" onClick={closeTask} />
-
-      <div className="relative z-10 flex flex-col h-full w-full max-w-[460px] bg-background border-l border-border shadow-2xl animate-slide-in-right overflow-hidden">
-
-        {/* Header */}
+    <>
+      <Modal open={isOpen} onClose={closeTask} maxWidth="max-w-[580px]" maxHeight="max-h-[90dvh]">
+        {/* ── Header ──────────────────────────────── */}
         <div className="flex items-center gap-2 px-4 h-11 border-b border-border shrink-0">
-          <StatusBadge value={task.status} onChange={(status) => save({ status })} />
+          {/* Status button → popover */}
+          <button
+            ref={statusAnchor}
+            onClick={() => setStatusOpen((v) => !v)}
+            className={cn(
+              "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-fast",
+              task.status === "done"        && "bg-green-500/10 text-green-600 dark:text-green-400",
+              task.status === "in_progress" && "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+              task.status === "cancelled"   && "bg-muted text-muted-foreground line-through",
+              task.status === "todo"        && "bg-muted text-muted-foreground",
+            )}
+          >
+            <ChevronDown size={10} className="opacity-60" />
+            {statusLabel}
+          </button>
+
           <span className="flex-1 text-xs text-muted-foreground tabular-nums">
             Updated {formatDate(task.updatedAt)}
           </span>
+
           <button
             onClick={() => { void deleteTask(task.id); closeTask(); }}
             className="p-1.5 rounded text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-fast"
@@ -112,11 +137,11 @@ export function TaskDetail() {
           </button>
         </div>
 
-        {/* Body — scrollable */}
+        {/* ── Body ────────────────────────────────── */}
         <div className="flex-1 overflow-y-auto">
 
           {/* Title */}
-          <div className="px-4 pt-4 pb-1">
+          <div className="px-5 pt-5 pb-1">
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -128,65 +153,55 @@ export function TaskDetail() {
           </div>
 
           {/* Description */}
-          <div className="px-4 pb-4">
+          <div className="px-5 pb-4">
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              onBlur={() => { if (description !== (task.description ?? "")) save({ description: description || undefined }); }}
+              onBlur={() => {
+                if (description !== (task.description ?? ""))
+                  save({ description: description || undefined });
+              }}
               className="w-full text-sm text-muted-foreground bg-transparent outline-none resize-none leading-relaxed"
               placeholder="Add description…"
               rows={3}
             />
           </div>
 
-          {/* Metadata */}
+          {/* Metadata grid */}
           <div className="border-y border-border divide-y divide-border/50">
+
             {/* Project */}
             <MetaRow label="Project" icon={<FolderKanban size={13} />}>
-              <div className="flex items-center gap-2 flex-1">
-                <select
-                  value={task.projectId ?? ""}
-                  onChange={(e) => save({ projectId: e.target.value || undefined })}
-                  className="flex-1 text-sm bg-transparent outline-none text-foreground max-w-[160px]"
-                >
-                  <option value="">No project</option>
-                  {activeProjects.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-                {project && (
-                  <button
-                    onClick={() => {
-                      closeTask();
-                      bus.emit("navigate:to", { path: "/projects" });
-                      setTimeout(() => bus.emit("project:open", { projectId: project.id }), 80);
-                    }}
-                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-fast shrink-0"
-                    title={`Open ${project.name}`}
-                  >
-                    <ProjectDot color={project.color} size={8} />
-                    <span className="max-w-[80px] truncate">{project.name} ↗</span>
-                  </button>
-                )}
-              </div>
+              <button
+                ref={projectAnchor}
+                onClick={() => setProjectOpen((v) => !v)}
+                className="flex items-center gap-2 text-sm hover:text-primary transition-fast"
+              >
+                {project
+                  ? <><ProjectDot color={project.color} size={8} />{project.name}</>
+                  : <span className="text-muted-foreground/60 text-xs">No project</span>}
+                <ChevronDown size={11} className="opacity-40" />
+              </button>
             </MetaRow>
 
             {/* Priority */}
             <MetaRow label="Priority" icon={<Flag size={13} />}>
-              <PriorityPicker value={task.priority} onChange={(priority) => save({ priority })} />
-            </MetaRow>
-
-            {/* Status */}
-            <MetaRow label="Status" icon={<CheckSquare size={13} />}>
-              <select
-                value={task.status}
-                onChange={(e) => save({ status: e.target.value as TaskStatus })}
-                className="text-sm bg-transparent outline-none text-foreground"
+              <button
+                ref={priorityAnchor}
+                onClick={() => setPriorityOpen((v) => !v)}
+                className={cn(
+                  "flex items-center gap-1.5 text-sm transition-fast",
+                  task.priority === "urgent" && "text-red-500",
+                  task.priority === "high"   && "text-orange-500",
+                  task.priority === "medium" && "text-yellow-500",
+                  task.priority === "low"    && "text-blue-400",
+                  task.priority === "none"   && "text-muted-foreground/60 text-xs",
+                )}
               >
-                {STATUS_OPTIONS.map((s) => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
-                ))}
-              </select>
+                <Flag size={12} strokeWidth={1.75} />
+                {priorityLabel}
+                <ChevronDown size={11} className="opacity-40" />
+              </button>
             </MetaRow>
 
             {/* Due date */}
@@ -213,7 +228,7 @@ export function TaskDetail() {
                 />
                 <span className="text-xs text-muted-foreground">min</span>
                 {task.estimateMinutes && (
-                  <span className="text-xs text-muted-foreground/60">
+                  <span className="text-xs text-muted-foreground/50">
                     ({Math.round(task.estimateMinutes / 60 * 10) / 10}h)
                   </span>
                 )}
@@ -222,48 +237,50 @@ export function TaskDetail() {
           </div>
 
           {/* Checklist */}
-          <div className="px-4 py-4">
+          <div className="px-5 py-4">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
                 Checklist
+                {task.checklistItems.length > 0 && (
+                  <span className="ml-1.5 normal-case font-normal text-muted-foreground/40">
+                    {completedChecklist}/{task.checklistItems.length}
+                  </span>
+                )}
               </span>
-              {task.checklistItems.length > 0 && (
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  {completedChecklist}/{task.checklistItems.length}
-                </span>
-              )}
             </div>
 
             {task.checklistItems.length > 0 && (
-              <div className="h-1 rounded-full bg-muted mb-4 overflow-hidden">
+              <div className="mb-3 h-1 rounded-full bg-border overflow-hidden">
                 <div
-                  className="h-full bg-green-500 rounded-full transition-all duration-300"
+                  className="h-full bg-green-500 rounded-full transition-all duration-500"
                   style={{ width: `${(completedChecklist / task.checklistItems.length) * 100}%` }}
                 />
               </div>
             )}
 
-            <div className="space-y-1.5">
+            <div className="space-y-1 mb-2">
               {task.checklistItems.map((item) => (
-                <div key={item.id} className="flex items-center gap-2 group">
+                <div key={item.id} className="group flex items-center gap-2 py-1">
                   <button
                     onClick={() => void toggleChecklistItem(task.id, item.id)}
-                    className="shrink-0 text-muted-foreground hover:text-primary transition-fast"
+                    className={cn(
+                      "shrink-0 transition-fast",
+                      item.checked ? "text-green-500" : "text-muted-foreground/30 hover:text-primary"
+                    )}
                   >
                     {item.checked
-                      ? <CheckSquare size={14} className="text-green-500" />
-                      : <Circle size={14} />
-                    }
+                      ? <CheckSquare size={14} />
+                      : <Circle size={14} />}
                   </button>
                   <span className={cn(
-                    "flex-1 text-sm leading-snug",
-                    item.checked && "line-through text-muted-foreground/50"
+                    "flex-1 text-sm",
+                    item.checked && "line-through text-muted-foreground/40"
                   )}>
                     {item.text}
                   </span>
                   <button
                     onClick={() => void deleteChecklistItem(task.id, item.id)}
-                    className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-muted-foreground hover:text-red-500 transition-fast"
+                    className="opacity-0 group-hover:opacity-100 p-1 rounded text-muted-foreground/40 hover:text-red-500 transition-fast"
                   >
                     <X size={11} />
                   </button>
@@ -271,9 +288,8 @@ export function TaskDetail() {
               ))}
             </div>
 
-            {/* New item input */}
-            <div className="flex items-center gap-2 mt-3">
-              <Plus size={12} className="text-muted-foreground/50 shrink-0" />
+            <div className="flex items-center gap-2">
+              <Plus size={13} className="text-muted-foreground/40 shrink-0" />
               <input
                 value={newCheckItem}
                 onChange={(e) => setNewCheckItem(e.target.value)}
@@ -282,272 +298,155 @@ export function TaskDetail() {
                     void addChecklistItem(task.id, newCheckItem.trim());
                     setNewCheckItem("");
                   }
-                  if (e.key === "Escape") setNewCheckItem("");
                 }}
-                placeholder="Add checklist item…"
-                className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground/40"
+                placeholder="Add item…"
+                className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground/30"
               />
             </div>
           </div>
 
-          {/* Activity / metadata footer */}
-          <div className="px-4 pb-4">
-
-            {/* Linked notes */}
-            <div className="mb-4">
-              <div className="flex items-center justify-between mb-2">
-                <SectionLabel>Linked Notes</SectionLabel>
+          {/* Linked notes */}
+          {(linkedNotes.length > 0 || linkNoteOpen) && (
+            <div className="px-5 pb-4 border-t border-border/50 pt-4">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 mb-2">
+                Linked notes
+              </p>
+              {linkedNotes.map((n) => (
                 <button
-                  onClick={() => { setLinkNoteOpen((v) => !v); setNoteSearch(""); }}
-                  className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-fast"
-                  title="Link a note"
+                  key={n.id}
+                  onClick={() => useNoteStore.getState().openNote(n.id)}
+                  className="flex items-center gap-2 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-fast w-full"
                 >
-                  <Plus size={12} />
+                  <FileText size={13} className="shrink-0" />
+                  <span className="flex-1 truncate text-left">{n.title || "Untitled"}</span>
+                  <ExternalLink size={11} className="shrink-0 opacity-40" />
                 </button>
-              </div>
-
-              {/* Link note search */}
+              ))}
               {linkNoteOpen && (
-                <div className="mb-2 border border-border rounded-lg overflow-hidden">
+                <div className="mt-2 space-y-1">
                   <input
+                    autoFocus
                     value={noteSearch}
                     onChange={(e) => setNoteSearch(e.target.value)}
                     placeholder="Search notes…"
-                    autoFocus
-                    className="w-full px-2.5 py-1.5 text-xs bg-transparent outline-none border-b border-border"
+                    className="w-full text-sm bg-muted/50 rounded-lg px-3 py-2 outline-none border border-border focus:border-primary/50"
                   />
-                  <div className="max-h-36 overflow-y-auto">
-                    {filteredNotes.map((n) => (
-                      <button
-                        key={n.id}
-                        onClick={() => handleLinkNote(n.id)}
-                        className={cn(
-                          "w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-left hover:bg-accent transition-fast",
-                          task.linkedNoteIds.includes(n.id) && "opacity-40 pointer-events-none"
-                        )}
-                      >
-                        <FileText size={11} className="text-muted-foreground shrink-0" />
-                        <span className="truncate flex-1">{n.title}</span>
-                        {task.linkedNoteIds.includes(n.id) && (
-                          <span className="text-[10px] text-muted-foreground">linked</span>
-                        )}
-                      </button>
-                    ))}
-                    {filteredNotes.length === 0 && (
-                      <p className="px-3 py-2 text-xs text-muted-foreground/50">No notes found</p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {linkedNotes.length > 0 ? (
-                <div className="space-y-1">
-                  {linkedNotes.map((n) => (
-                    <div key={n.id} className="flex items-center gap-2 group px-1">
-                      <FileText size={11} className="text-muted-foreground/50 shrink-0" />
-                      <button
-                        onClick={() => {
-                          useNoteStore.getState().openNote(n.id);
-                          bus.emit("navigate:to", { path: "/notes" });
-                          closeTask();
-                        }}
-                        className="flex-1 text-xs text-left truncate hover:text-primary transition-fast"
-                      >
-                        {n.title}
-                      </button>
-                      <button
-                        onClick={() => save({ linkedNoteIds: task.linkedNoteIds.filter((id) => id !== n.id) })}
-                        className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-muted-foreground hover:text-red-500 transition-fast"
-                      >
-                        <X size={10} />
-                      </button>
-                    </div>
+                  {filteredNotes.map((n) => (
+                    <button
+                      key={n.id}
+                      onClick={() => handleLinkNote(n.id)}
+                      className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm hover:bg-accent transition-fast text-left"
+                    >
+                      <FileText size={12} className="shrink-0 text-muted-foreground/50" />
+                      {n.title || "Untitled"}
+                    </button>
                   ))}
                 </div>
-              ) : (
-                <p className="text-xs text-muted-foreground/40 px-1">No linked notes</p>
               )}
             </div>
-
-            {/* Calendar events */}
-            {linkedEvents.length > 0 && (
-              <div className="mb-4">
-                <SectionLabel>Calendar Events</SectionLabel>
-                <div className="space-y-1 mt-1">
-                  {linkedEvents.map((e) => (
-                    <div key={e.id} className="flex items-center gap-2 group px-1">
-                      <Calendar size={11} className="text-muted-foreground/50 shrink-0" />
-                      <button
-                        onClick={() => {
-                          bus.emit("navigate:to", { path: "/calendar" });
-                          closeTask();
-                        }}
-                        className="flex-1 text-xs text-left truncate hover:text-primary transition-fast"
-                      >
-                        {e.title}
-                      </button>
-                      <span className="text-[10px] text-muted-foreground/50 tabular-nums shrink-0">
-                        {e.startAt.slice(0, 10)} {e.startAt.slice(11, 16)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Schedule to calendar */}
-            <div className="mb-4">
-              <div className="flex items-center justify-between mb-2">
-                <SectionLabel>Schedule</SectionLabel>
-                <button
-                  onClick={() => setScheduleOpen((v) => !v)}
-                  className={cn(
-                    "p-1 rounded transition-fast text-xs flex items-center gap-1",
-                    scheduleOpen
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:text-foreground hover:bg-accent"
-                  )}
-                >
-                  <Calendar size={12} />
-                  {task.scheduledDate ? formatDate(task.scheduledDate) : "Add to calendar"}
-                </button>
-              </div>
-
-              {scheduleOpen && (
-                <div className="border border-border rounded-lg p-3 space-y-2 bg-surface-1">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="date"
-                      value={scheduleDate}
-                      onChange={(e) => setScheduleDate(e.target.value)}
-                      className="flex-1 text-xs bg-background border border-border rounded px-2 py-1.5 outline-none"
-                    />
-                    <input
-                      type="time"
-                      value={scheduleTime}
-                      onChange={(e) => setScheduleTime(e.target.value)}
-                      className="w-24 text-xs bg-background border border-border rounded px-2 py-1.5 outline-none"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => save({ scheduledDate: scheduleDate })}
-                      className="flex-1 px-2 py-1.5 text-xs border border-border rounded hover:bg-accent transition-fast"
-                    >
-                      Set date only
-                    </button>
-                    <button
-                      onClick={() => void handleScheduleToCalendar()}
-                      className="flex-1 px-2 py-1.5 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-fast"
-                    >
-                      Add to calendar
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Footer metadata */}
-            <div className="text-xs text-muted-foreground/40 space-y-0.5 pt-2 border-t border-border/50">
-              <p>Created {formatDate(task.createdAt)}</p>
-              <p>ID: {task.id.slice(0, 8)}</p>
-            </div>
-          </div>
+          )}
         </div>
-      </div>
-    </div>
+
+        {/* ── Footer actions ───────────────────────── */}
+        <div className="flex items-center gap-2 px-5 py-3 border-t border-border shrink-0 bg-muted/20">
+          <button
+            onClick={() => setLinkNoteOpen((v) => !v)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-accent border border-transparent hover:border-border/60 transition-fast"
+          >
+            <FileText size={12} /> Link note
+          </button>
+          <button
+            onClick={() => setScheduleOpen((v) => !v)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-accent border border-transparent hover:border-border/60 transition-fast"
+          >
+            <Calendar size={12} /> Schedule
+          </button>
+          {scheduleOpen && (
+            <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-black/40" onClick={() => setScheduleOpen(false)} />
+              <div className="relative z-10 bg-popover border border-border rounded-2xl shadow-xl p-5 w-72 animate-fade-in">
+                <p className="text-sm font-semibold mb-3">Schedule to calendar</p>
+                <label className="block text-xs text-muted-foreground mb-1">Date</label>
+                <input type="date" value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)}
+                  className="w-full text-sm bg-muted/50 rounded-lg px-3 py-2 outline-none border border-border focus:border-primary/50 mb-3" />
+                <label className="block text-xs text-muted-foreground mb-1">Time</label>
+                <input type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)}
+                  className="w-full text-sm bg-muted/50 rounded-lg px-3 py-2 outline-none border border-border focus:border-primary/50 mb-4" />
+                <div className="flex gap-2">
+                  <button onClick={() => setScheduleOpen(false)}
+                    className="flex-1 px-3 py-2 rounded-lg text-xs border border-border text-muted-foreground hover:bg-accent transition-fast">
+                    Cancel
+                  </button>
+                  <button onClick={() => void handleScheduleToCalendar()}
+                    className="flex-1 px-3 py-2 rounded-lg text-xs bg-primary text-primary-foreground hover:bg-primary/90 transition-fast font-medium">
+                    Add to calendar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          <div className="flex-1" />
+          <span className="text-[10px] text-muted-foreground/40">ID: {task.id.slice(0, 8)}</span>
+        </div>
+      </Modal>
+
+      {/* Status popover */}
+      <Popover anchor={statusAnchor} open={statusOpen} onClose={() => setStatusOpen(false)} className="w-44">
+        {STATUS_OPTIONS.map((s) => (
+          <PopoverItem
+            key={s.value}
+            active={task.status === s.value}
+            onClick={() => { save({ status: s.value }); setStatusOpen(false); }}
+          >
+            {s.label}
+          </PopoverItem>
+        ))}
+      </Popover>
+
+      {/* Priority popover */}
+      <Popover anchor={priorityAnchor} open={priorityOpen} onClose={() => setPriorityOpen(false)} className="w-44">
+        {(["urgent", "high", "medium", "low", "none"] as const).map((p) => (
+          <PopoverItem
+            key={p}
+            active={task.priority === p}
+            icon={Flag}
+            onClick={() => { save({ priority: p }); setPriorityOpen(false); }}
+          >
+            {PRIORITY_LABELS[p]}
+          </PopoverItem>
+        ))}
+      </Popover>
+
+      {/* Project popover */}
+      <Popover anchor={projectAnchor} open={projectOpen} onClose={() => setProjectOpen(false)} className="w-52">
+        <PopoverItem active={!task.projectId} onClick={() => { save({ projectId: undefined }); setProjectOpen(false); }}>
+          No project
+        </PopoverItem>
+        <PopoverDivider />
+        {activeProjects.map((p) => (
+          <PopoverItem
+            key={p.id}
+            active={task.projectId === p.id}
+            onClick={() => { save({ projectId: p.id }); setProjectOpen(false); }}
+          >
+            <span className="flex items-center gap-2">
+              <ProjectDot color={p.color} size={7} />{p.name}
+            </span>
+          </PopoverItem>
+        ))}
+      </Popover>
+    </>
   );
 }
 
-// ── Sub-components ────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────
 
 function MetaRow({ label, icon, children }: { label: string; icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-3 px-4 py-2.5">
-      <div className="flex items-center gap-2 w-24 shrink-0 text-muted-foreground text-xs">
-        {icon}
-        <span>{label}</span>
-      </div>
-      <div className="flex-1 min-w-0">{children}</div>
-    </div>
-  );
-}
-
-function StatusBadge({ value, onChange }: { value: TaskStatus; onChange: (s: TaskStatus) => void }) {
-  const [open, setOpen] = useState(false);
-  const labels: Record<TaskStatus, string> = {
-    todo: "To do", in_progress: "In progress", done: "Done", cancelled: "Cancelled", archived: "Archived",
-  };
-  const colors: Record<TaskStatus, string> = {
-    todo:        "bg-muted text-muted-foreground",
-    in_progress: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-    done:        "bg-green-500/10 text-green-600 dark:text-green-400",
-    cancelled:   "bg-muted text-muted-foreground/60",
-    archived:    "bg-muted text-muted-foreground/40",
-  };
-  return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className={cn("flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-fast", colors[value])}
-      >
-        {labels[value]}
-        <ChevronDown size={10} />
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute top-8 left-0 z-20 w-36 rounded-lg border border-border bg-popover shadow-xl py-1 animate-fade-in">
-            {STATUS_OPTIONS.map((s) => (
-              <button
-                key={s.value}
-                onClick={() => { onChange(s.value); setOpen(false); }}
-                className={cn(
-                  "w-full text-left px-3 py-1.5 text-xs hover:bg-accent transition-fast",
-                  value === s.value && "text-primary font-medium"
-                )}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function PriorityPicker({ value, onChange }: { value: Priority; onChange: (p: Priority) => void }) {
-  const [open, setOpen] = useState(false);
-  const priorities: Priority[] = ["urgent", "high", "medium", "low", "none"];
-  return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className={cn("flex items-center gap-1.5 text-sm transition-fast", PRIORITY_COLORS[value])}
-      >
-        <Flag size={13} />
-        {PRIORITY_LABELS[value]}
-        <ChevronDown size={10} />
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute top-7 left-0 z-20 w-36 rounded-lg border border-border bg-popover shadow-xl py-1 animate-fade-in">
-            {priorities.map((p) => (
-              <button
-                key={p}
-                onClick={() => { onChange(p); setOpen(false); }}
-                className={cn("w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-accent transition-fast", PRIORITY_COLORS[p])}
-              >
-                <Flag size={11} />
-                {PRIORITY_LABELS[p]}
-                {value === p && <span className="ml-auto text-primary">✓</span>}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
+    <div className="flex items-center gap-3 px-5 py-2.5">
+      <span className="text-muted-foreground/50 shrink-0">{icon}</span>
+      <span className="text-[12px] text-muted-foreground w-20 shrink-0 font-medium">{label}</span>
+      <div className="flex-1 text-[13px]">{children}</div>
     </div>
   );
 }
