@@ -5,8 +5,6 @@ import App from "./App";
 import { db } from "@/kernel/db";
 
 // ── CRITICAL: Register ALL module migrations before db.init() ──
-// Modules are lazy-loaded, so they can't self-register.
-// Add every module's migrations here as they are built.
 import { TASK_MIGRATIONS }     from "@/modules/tasks/db";
 import { PROJECT_MIGRATIONS }  from "@/modules/projects/db";
 import { PLANNER_MIGRATIONS }  from "@/modules/planner/db";
@@ -16,9 +14,11 @@ import { JOURNAL_MIGRATIONS }  from "@/modules/journal/db";
 import { FOCUS_MIGRATIONS }    from "@/modules/focus/db";
 import { TIME_MIGRATIONS }     from "@/modules/time-tracking/db";
 
+// ── Kernel services ───────────────────────────────────────────
+import { startTaskCalendarSync } from "@/kernel/task-calendar-sync";
+
 import "./styles/globals.css";
 
-// Register eagerly — before init()
 db.registerMigrations(TASK_MIGRATIONS);
 db.registerMigrations(PROJECT_MIGRATIONS);
 db.registerMigrations(PLANNER_MIGRATIONS);
@@ -41,8 +41,10 @@ const queryClient = new QueryClient({
 
 async function boot() {
   try {
-    // DB init runs AFTER all migrations are registered above
     await db.init();
+
+    // Start kernel services that depend on the DB being ready
+    startTaskCalendarSync();
 
     ReactDOM.createRoot(document.getElementById("root")!).render(
       <React.StrictMode>
