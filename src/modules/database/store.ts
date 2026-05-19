@@ -1,451 +1,402 @@
-// ============================================================
-// DATABASE MODULE — Zustand store
-// No cross-module store writes. Use bus.emit() for side effects.
-// ============================================================
-
 import { create } from "zustand";
+import { immer } from "zustand/middleware/immer";
 import { db } from "@/kernel/db";
 import { bus } from "@/kernel/event-bus";
-import { generateId, now } from "@/shared/utils";
+import { nanoid } from "nanoid";
 import type {
-  ID,
   DatabaseTable,
   DatabaseColumn,
   DatabaseRow,
+  DatabaseView,
+  DatabaseFilter,
+  DatabaseSort,
+  DatabaseColumnType,
 } from "@/shared/types";
 
-// ── View types (module-local, stored in db_views) ────────────
+// ─── Row cell map ─────────────────────────────────────────────────────────────
+export type CellMap = Record<string, Record<string, unknown>>; // rowId → colId → value
 
-export type ViewType = "grid" | "kanban";
-
-export interface DatabaseView {
-  id: ID;
-  tableId: ID;
-  name: string;
-  type: ViewType;
-  columnOrder: ID[];
-  hiddenColumns: ID[];
-  groupByColumnId?: ID;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export type FilterOperator =
-  | "eq" | "neq" | "contains" | "not_contains"
-  | "is_empty" | "is_not_empty" | "gt" | "lt";
-
-export interface ViewFilter {
-  id: ID;
-  viewId: ID;
-  columnId: ID;
-  operator: FilterOperator;
-  value?: string;
-  filterOrder: number;
-}
-
-export interface ViewSort {
-  id: ID;
-  viewId: ID;
-  columnId: ID;
-  direction: "asc" | "desc";
-  sortOrder: number;
-}
-
-// ── Store shape ──────────────────────────────────────────────
-
+// ─── Store state ──────────────────────────────────────────────────────────────
 interface DatabaseState {
-  tables: DatabaseTable[];
-  views: DatabaseView[];
-  rows: Record<ID, DatabaseRow[]>;     // tableId → rows
-  filters: Record<ID, ViewFilter[]>;   // viewId  → filters
-  sorts: Record<ID, ViewSort[]>;       // viewId  → sorts
-  activeTableId: ID | null;
-  activeViewId: ID | null;
-  openRowId: ID | null;
-  loading: boolean;
+  tables:  DatabaseTable[];
+  columns: Record<string, DatabaseColumn[]>;  // tableId → columns
+  rows:    Record<string, DatabaseRow[]>;      // tableId → rows
+  cells:   Record<string, CellMap>;            // tableId → rowId → colId → value
+  views:   Record<string, DatabaseView[]>;     // tableId → views
+  filters: Record<string, DatabaseFilter[]>;   // viewId  → filters
+  sorts:   Record<string, DatabaseSort[]>;     // viewId  → sorts
 
-  // Table ops
+  activeTableId: string | null;
+  activeViewId:  string | null;
+  openRowId:     string | null;
+
+  isLoading: boolean;
+
+  // Actions
   loadTables: () => Promise<void>;
-  createTable: (name: string, description?: string) => Promise<DatabaseTable>;
-  updateTable: (id: ID, patch: Partial<Pick<DatabaseTable, "name" | "description" | "linkedProjectId" | "linkedNoteId">>) => Promise<void>;
-  deleteTable: (id: ID) => Promise<void>;
-  addColumn: (tableId: ID, col: Omit<DatabaseColumn, "id" | "order">) => Promise<void>;
-  updateColumn: (tableId: ID, colId: ID, patch: Partial<Omit<DatabaseColumn, "id">>) => Promise<void>;
-  deleteColumn: (tableId: ID, colId: ID) => Promise<void>;
+  loadTable:  (tableId: string) => Promise<void>;
 
-  // View ops
-  loadViews: (tableId: ID) => Promise<void>;
-  createView: (tableId: ID, name: string, type: ViewType) => Promise<DatabaseView>;
-  updateView: (viewId: ID, patch: Partial<Pick<DatabaseView, "name" | "columnOrder" | "hiddenColumns" | "groupByColumnId">>) => Promise<void>;
-  deleteView: (viewId: ID) => Promise<void>;
+  createTable: (payload: { name: string; icon?: string; description?: string }) => Promise<string>;
+  updateTable: (tableId: string, patch: Partial<Pick<DatabaseTable, "name" | "icon" | "description">>) => Promise<void>;
+  deleteTable: (tableId: string) => Promise<void>;
 
-  // Row ops
-  loadRows: (tableId: ID) => Promise<void>;
-  createRow: (tableId: ID) => Promise<DatabaseRow>;
-  updateCell: (rowId: ID, columnId: ID, value: unknown) => Promise<void>;
-  deleteRow: (rowId: ID, tableId: ID) => Promise<void>;
+  addColumn:    (payload: Omit<DatabaseColumn, "id" | "createdAt">) => Promise<string>;
+  updateColumn: (columnId: string, patch: Partial<Pick<DatabaseColumn, "name" | "type" | "options" | "position">>) => Promise<void>;
+  deleteColumn: (columnId: string) => Promise<void>;
 
-  // Filter / sort ops
-  loadFilters: (viewId: ID) => Promise<void>;
-  addFilter: (viewId: ID, columnId: ID, operator: FilterOperator, value?: string) => Promise<void>;
-  removeFilter: (filterId: ID, viewId: ID) => Promise<void>;
-  loadSorts: (viewId: ID) => Promise<void>;
-  addSort: (viewId: ID, columnId: ID, direction: "asc" | "desc") => Promise<void>;
-  removeSort: (sortId: ID, viewId: ID) => Promise<void>;
+  addRow:    (tableId: string) => Promise<string>;
+  deleteRow: (tableId: string, rowId: string) => Promise<void>;
+  setCellValue: (tableId: string, rowId: string, columnId: string, value: unknown) => Promise<void>;
 
-  // UI
-  setActiveTable: (tableId: ID | null) => void;
-  setActiveView: (viewId: ID | null) => void;
-  setOpenRow: (rowId: ID | null) => void;
+  addView:    (payload: Omit<DatabaseView, "id" | "createdAt">) => Promise<string>;
+  updateView: (viewId: string, patch: Partial<Pick<DatabaseView, "name" | "type" | "config">>) => Promise<void>;
+  deleteView: (viewId: string) => Promise<void>;
+
+  setFilter: (viewId: string, filter: Omit<DatabaseFilter, "id">) => Promise<void>;
+  removeFilter: (filterId: string) => Promise<void>;
+
+  setSort: (viewId: string, sort: Omit<DatabaseSort, "id">) => Promise<void>;
+  removeSort: (sortId: string) => Promise<void>;
+
+  setActiveTable: (tableId: string | null) => void;
+  setActiveView:  (viewId:  string | null) => void;
+  setOpenRow:     (rowId:   string | null) => void;
 }
 
-// ── Serialisation helpers ────────────────────────────────────
+const now = () => new Date().toISOString();
 
-function parseSchema(json: string): DatabaseColumn[] {
-  try { return JSON.parse(json) as DatabaseColumn[]; }
-  catch { return []; }
-}
-
-function rowFromDb(r: Record<string, unknown>): DatabaseRow {
-  return {
-    id: r.id as ID,
-    tableId: r.table_id as ID,
-    cells: JSON.parse((r.cells_json as string) || "{}") as Record<ID, unknown>,
-    order: r.row_order as number,
-    createdAt: r.created_at as string,
-    updatedAt: r.updated_at as string,
-  };
-}
-
-function tableFromDb(r: Record<string, unknown>): DatabaseTable {
-  return {
-    id: r.id as ID,
-    name: r.name as string,
-    description: (r.description as string) ?? undefined,
-    schema: parseSchema(r.schema_json as string),
-    linkedProjectId: (r.linked_project_id as ID) ?? undefined,
-    linkedNoteId: (r.linked_note_id as ID) ?? undefined,
-    createdAt: r.created_at as string,
-    updatedAt: r.updated_at as string,
-  };
-}
-
-function viewFromDb(r: Record<string, unknown>): DatabaseView {
-  return {
-    id: r.id as ID,
-    tableId: r.table_id as ID,
-    name: r.name as string,
-    type: r.type as ViewType,
-    columnOrder: JSON.parse((r.column_order as string) || "[]") as ID[],
-    hiddenColumns: JSON.parse((r.hidden_columns as string) || "[]") as ID[],
-    groupByColumnId: (r.group_by_column_id as ID) ?? undefined,
-    createdAt: r.created_at as string,
-    updatedAt: r.updated_at as string,
-  };
-}
-
-// ── Store ────────────────────────────────────────────────────
-
-export const useDatabaseStore = create<DatabaseState>((set, get) => ({
-  tables: [],
-  views: [],
-  rows: {},
+export const useDatabaseStore = create<DatabaseState>()(immer((set, get) => ({
+  tables:  [],
+  columns: {},
+  rows:    {},
+  cells:   {},
+  views:   {},
   filters: {},
-  sorts: {},
+  sorts:   {},
   activeTableId: null,
-  activeViewId: null,
-  openRowId: null,
-  loading: false,
+  activeViewId:  null,
+  openRowId:     null,
+  isLoading:     false,
 
-  // ── Tables ────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────
+  // LOAD
+  // ─────────────────────────────────────────────────────────
 
   loadTables: async () => {
-    set({ loading: true });
-    const rows = await db.select<Record<string, unknown>>("SELECT * FROM db_tables ORDER BY created_at ASC");
-    set({ tables: rows.map(tableFromDb), loading: false });
+    set((s) => { s.isLoading = true; });
+    const rows = await db.select<DatabaseTable>("SELECT * FROM db_tables ORDER BY created_at ASC", []);
+    set((s) => { s.tables = rows; s.isLoading = false; });
   },
 
-  createTable: async (name, description) => {
-    const t: DatabaseTable = {
-      id: generateId(),
-      name,
-      description,
-      schema: [],
-      createdAt: now(),
-      updatedAt: now(),
-    };
-    await db.execute(
-      `INSERT INTO db_tables (id, name, description, linked_project_id, linked_note_id, schema_json, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [t.id, t.name, t.description ?? null, null, null, "[]", t.createdAt, t.updatedAt]
+  loadTable: async (tableId) => {
+    const [columns, rows] = await Promise.all([
+      db.select<DatabaseColumn>(
+        "SELECT * FROM db_columns WHERE table_id = ? ORDER BY position ASC",
+        [tableId],
+      ),
+      db.select<DatabaseRow>(
+        "SELECT * FROM db_rows WHERE table_id = ? ORDER BY position ASC",
+        [tableId],
+      ),
+    ]);
+    const rowIds = rows.map((r) => r.id);
+    // Load cells for all rows
+    let cellRows: Array<{ id: string; row_id: string; column_id: string; value: string }> = [];
+    if (rowIds.length > 0) {
+      const placeholders = rowIds.map(() => "?").join(",");
+      cellRows = await db.select(
+        `SELECT * FROM db_cells WHERE row_id IN (${placeholders})`,
+        rowIds,
+      );
+    }
+    // Load views
+    const views = await db.select<DatabaseView>(
+      "SELECT * FROM db_views WHERE table_id = ? ORDER BY position ASC",
+      [tableId],
     );
-    set((s) => ({ tables: [...s.tables, t] }));
-    bus.emit("database:created", { database: t as unknown as import("@/shared/types").Database });
-    return t;
+    const viewIds = views.map((v) => v.id);
+    let filters: DatabaseFilter[] = [];
+    let sorts:   DatabaseSort[]   = [];
+    if (viewIds.length > 0) {
+      const vp = viewIds.map(() => "?").join(",");
+      filters = await db.select(`SELECT * FROM db_filters WHERE view_id IN (${vp}) ORDER BY position ASC`, viewIds);
+      sorts   = await db.select(`SELECT * FROM db_sorts   WHERE view_id IN (${vp}) ORDER BY position ASC`, viewIds);
+    }
+    // Build cell map
+    const cellMap: CellMap = {};
+    for (const cell of cellRows) {
+      if (!cellMap[cell.row_id]) cellMap[cell.row_id] = {};
+      try { cellMap[cell.row_id][cell.column_id] = JSON.parse(cell.value); }
+      catch { cellMap[cell.row_id][cell.column_id] = cell.value; }
+    }
+    // Build filter/sort maps
+    const filterMap: Record<string, DatabaseFilter[]> = {};
+    for (const f of filters) {
+      if (!filterMap[f.viewId]) filterMap[f.viewId] = [];
+      filterMap[f.viewId].push(f);
+    }
+    const sortMap: Record<string, DatabaseSort[]> = {};
+    for (const s of sorts) {
+      if (!sortMap[s.viewId]) sortMap[s.viewId] = [];
+      sortMap[s.viewId].push(s);
+    }
+    set((st) => {
+      st.columns[tableId] = columns;
+      st.rows[tableId]    = rows;
+      st.cells[tableId]   = cellMap;
+      st.views[tableId]   = views;
+      for (const [vid, fv] of Object.entries(filterMap)) st.filters[vid] = fv;
+      for (const [vid, sv] of Object.entries(sortMap))   st.sorts[vid]   = sv;
+    });
   },
 
-  updateTable: async (id, patch) => {
+  // ─────────────────────────────────────────────────────────
+  // TABLE CRUD
+  // ─────────────────────────────────────────────────────────
+
+  createTable: async ({ name, icon, description }) => {
+    const id = nanoid();
     const ts = now();
     await db.execute(
-      `UPDATE db_tables SET name=?, description=?, linked_project_id=?, linked_note_id=?, updated_at=? WHERE id=?`,
-      [patch.name ?? null, patch.description ?? null, patch.linkedProjectId ?? null, patch.linkedNoteId ?? null, ts, id]
+      "INSERT INTO db_tables (id, name, icon, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+      [id, name, icon ?? null, description ?? null, ts, ts],
     );
-    set((s) => ({
-      tables: s.tables.map((t) =>
-        t.id === id ? { ...t, ...patch, updatedAt: ts } : t
-      ),
-    }));
+    const table: DatabaseTable = { id, name, icon, description, createdAt: ts, updatedAt: ts };
+    set((s) => { s.tables.push(table); });
+    // Add default primary column "Name"
+    await get().addColumn({
+      tableId:   id,
+      name:      "Name",
+      type:      "text" as DatabaseColumnType,
+      options:   {},
+      position:  0,
+      isPrimary: true,
+    });
+    bus.emit("database:created", { database: table });
+    return id;
   },
 
-  deleteTable: async (id) => {
-    await db.execute(`DELETE FROM db_tables WHERE id=?`, [id]);
-    set((s) => ({
-      tables: s.tables.filter((t) => t.id !== id),
-      rows: Object.fromEntries(Object.entries(s.rows).filter(([k]) => k !== id)),
-      activeTableId: s.activeTableId === id ? null : s.activeTableId,
-    }));
-    bus.emit("database:deleted", { databaseId: id });
+  updateTable: async (tableId, patch) => {
+    const ts = now();
+    const fields = Object.keys(patch).map((k) => `${k} = ?`).join(", ");
+    await db.execute(
+      `UPDATE db_tables SET ${fields}, updated_at = ? WHERE id = ?`,
+      [...Object.values(patch), ts, tableId],
+    );
+    set((s) => {
+      const t = s.tables.find((x) => x.id === tableId);
+      if (t) Object.assign(t, patch, { updatedAt: ts });
+    });
   },
 
-  addColumn: async (tableId, col) => {
-    const table = get().tables.find((t) => t.id === tableId);
-    if (!table) return;
-    const newCol: DatabaseColumn = { ...col, id: generateId(), order: table.schema.length };
-    const schema = [...table.schema, newCol];
+  deleteTable: async (tableId) => {
+    await db.execute("DELETE FROM db_tables WHERE id = ?", [tableId]);
+    set((s) => {
+      s.tables = s.tables.filter((t) => t.id !== tableId);
+      delete s.columns[tableId];
+      delete s.rows[tableId];
+      delete s.cells[tableId];
+      delete s.views[tableId];
+      if (s.activeTableId === tableId) {
+        s.activeTableId = null;
+        s.activeViewId  = null;
+      }
+    });
+    bus.emit("database:deleted", { tableId });
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // COLUMN CRUD
+  // ─────────────────────────────────────────────────────────
+
+  addColumn: async ({ tableId, name, type, options, position, isPrimary }) => {
+    const id = nanoid();
     const ts = now();
     await db.execute(
-      `UPDATE db_tables SET schema_json=?, updated_at=? WHERE id=?`,
-      [JSON.stringify(schema), ts, tableId]
+      "INSERT INTO db_columns (id, table_id, name, type, options, position, is_primary, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      [id, tableId, name, type, JSON.stringify(options ?? {}), position ?? 0, isPrimary ? 1 : 0, ts],
     );
-    set((s) => ({
-      tables: s.tables.map((t) =>
-        t.id === tableId ? { ...t, schema, updatedAt: ts } : t
-      ),
-    }));
+    const col: DatabaseColumn = { id, tableId, name, type, options: options ?? {}, position: position ?? 0, isPrimary: !!isPrimary, createdAt: ts };
+    set((s) => {
+      if (!s.columns[tableId]) s.columns[tableId] = [];
+      s.columns[tableId].push(col);
+    });
+    return id;
   },
 
-  updateColumn: async (tableId, colId, patch) => {
-    const table = get().tables.find((t) => t.id === tableId);
-    if (!table) return;
-    const schema = table.schema.map((c) => (c.id === colId ? { ...c, ...patch } : c));
+  updateColumn: async (columnId, patch) => {
+    const col = Object.values(get().columns).flat().find((c) => c.id === columnId);
+    if (!col) return;
+    const fields = Object.keys(patch).map((k) => `${k} = ?`).join(", ");
+    await db.execute(
+      `UPDATE db_columns SET ${fields} WHERE id = ?`,
+      [...Object.values(patch), columnId],
+    );
+    set((s) => {
+      const arr = s.columns[col.tableId];
+      const idx = arr?.findIndex((c) => c.id === columnId) ?? -1;
+      if (idx >= 0) Object.assign(arr[idx], patch);
+    });
+  },
+
+  deleteColumn: async (columnId) => {
+    const col = Object.values(get().columns).flat().find((c) => c.id === columnId);
+    if (!col) return;
+    await db.execute("DELETE FROM db_columns WHERE id = ?", [columnId]);
+    set((s) => {
+      s.columns[col.tableId] = s.columns[col.tableId]?.filter((c) => c.id !== columnId) ?? [];
+    });
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // ROW CRUD
+  // ─────────────────────────────────────────────────────────
+
+  addRow: async (tableId) => {
+    const id = nanoid();
+    const ts = now();
+    const existing = get().rows[tableId] ?? [];
+    const position = existing.length;
+    await db.execute(
+      "INSERT INTO db_rows (id, table_id, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+      [id, tableId, position, ts, ts],
+    );
+    const row: DatabaseRow = { id, tableId, position, cells: {}, createdAt: ts, updatedAt: ts };
+    set((s) => {
+      if (!s.rows[tableId]) s.rows[tableId] = [];
+      s.rows[tableId].push(row);
+      if (!s.cells[tableId]) s.cells[tableId] = {};
+      s.cells[tableId][id] = {};
+    });
+    bus.emit("database:row-created", { tableId, rowId: id });
+    return id;
+  },
+
+  deleteRow: async (tableId, rowId) => {
+    await db.execute("DELETE FROM db_rows WHERE id = ?", [rowId]);
+    set((s) => {
+      s.rows[tableId] = s.rows[tableId]?.filter((r) => r.id !== rowId) ?? [];
+      if (s.cells[tableId]) delete s.cells[tableId][rowId];
+      if (s.openRowId === rowId) s.openRowId = null;
+    });
+    bus.emit("database:row-deleted", { tableId, rowId });
+  },
+
+  setCellValue: async (tableId, rowId, columnId, value) => {
+    const cellId = nanoid();
+    const serialised = JSON.stringify(value);
+    await db.execute(
+      "INSERT INTO db_cells (id, row_id, column_id, value) VALUES (?, ?, ?, ?) ON CONFLICT(row_id, column_id) DO UPDATE SET value = excluded.value",
+      [cellId, rowId, columnId, serialised],
+    );
+    set((s) => {
+      if (!s.cells[tableId]) s.cells[tableId] = {};
+      if (!s.cells[tableId][rowId]) s.cells[tableId][rowId] = {};
+      s.cells[tableId][rowId][columnId] = value;
+      const row = s.rows[tableId]?.find((r) => r.id === rowId);
+      if (row) row.updatedAt = now();
+    });
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // VIEW CRUD
+  // ─────────────────────────────────────────────────────────
+
+  addView: async ({ tableId, name, type, config, position }) => {
+    const id = nanoid();
     const ts = now();
     await db.execute(
-      `UPDATE db_tables SET schema_json=?, updated_at=? WHERE id=?`,
-      [JSON.stringify(schema), ts, tableId]
+      "INSERT INTO db_views (id, table_id, name, type, config, position, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [id, tableId, name, type ?? "grid", JSON.stringify(config ?? {}), position ?? 0, ts],
     );
-    set((s) => ({
-      tables: s.tables.map((t) =>
-        t.id === tableId ? { ...t, schema, updatedAt: ts } : t
-      ),
-    }));
-  },
-
-  deleteColumn: async (tableId, colId) => {
-    const table = get().tables.find((t) => t.id === tableId);
-    if (!table) return;
-    const schema = table.schema.filter((c) => c.id !== colId).map((c, i) => ({ ...c, order: i }));
-    const ts = now();
-    await db.execute(
-      `UPDATE db_tables SET schema_json=?, updated_at=? WHERE id=?`,
-      [JSON.stringify(schema), ts, tableId]
-    );
-    set((s) => ({
-      tables: s.tables.map((t) =>
-        t.id === tableId ? { ...t, schema, updatedAt: ts } : t
-      ),
-    }));
-  },
-
-  // ── Views ─────────────────────────────────────────────────
-
-  loadViews: async (tableId) => {
-    const rows = await db.select<Record<string, unknown>>(
-      `SELECT * FROM db_views WHERE table_id=? ORDER BY created_at ASC`,
-      [tableId]
-    );
-    set({ views: rows.map(viewFromDb) });
-  },
-
-  createView: async (tableId, name, type) => {
-    const v: DatabaseView = {
-      id: generateId(),
-      tableId,
-      name,
-      type,
-      columnOrder: [],
-      hiddenColumns: [],
-      createdAt: now(),
-      updatedAt: now(),
-    };
-    await db.execute(
-      `INSERT INTO db_views (id, table_id, name, type, column_order, hidden_columns, group_by_column_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [v.id, v.tableId, v.name, v.type, "[]", "[]", null, v.createdAt, v.updatedAt]
-    );
-    set((s) => ({ views: [...s.views, v] }));
-    return v;
+    const view: DatabaseView = { id, tableId, name, type: type ?? "grid", config: config ?? {}, position: position ?? 0, createdAt: ts };
+    set((s) => {
+      if (!s.views[tableId]) s.views[tableId] = [];
+      s.views[tableId].push(view);
+    });
+    return id;
   },
 
   updateView: async (viewId, patch) => {
-    const ts = now();
-    const v = get().views.find((x) => x.id === viewId);
-    if (!v) return;
-    const updated = { ...v, ...patch, updatedAt: ts };
+    const view = Object.values(get().views).flat().find((v) => v.id === viewId);
+    if (!view) return;
+    const fields = Object.keys(patch).map((k) => `${k} = ?`).join(", ");
     await db.execute(
-      `UPDATE db_views SET name=?, column_order=?, hidden_columns=?, group_by_column_id=?, updated_at=? WHERE id=?`,
-      [
-        updated.name,
-        JSON.stringify(updated.columnOrder),
-        JSON.stringify(updated.hiddenColumns),
-        updated.groupByColumnId ?? null,
-        ts,
-        viewId,
-      ]
+      `UPDATE db_views SET ${fields} WHERE id = ?`,
+      [...Object.values(patch), viewId],
     );
-    set((s) => ({ views: s.views.map((x) => (x.id === viewId ? updated : x)) }));
+    set((s) => {
+      const arr = s.views[view.tableId];
+      const idx = arr?.findIndex((v) => v.id === viewId) ?? -1;
+      if (idx >= 0) Object.assign(arr[idx], patch);
+    });
   },
 
   deleteView: async (viewId) => {
-    await db.execute(`DELETE FROM db_views WHERE id=?`, [viewId]);
-    set((s) => ({
-      views: s.views.filter((v) => v.id !== viewId),
-      filters: Object.fromEntries(Object.entries(s.filters).filter(([k]) => k !== viewId)),
-      sorts: Object.fromEntries(Object.entries(s.sorts).filter(([k]) => k !== viewId)),
-      activeViewId: s.activeViewId === viewId ? null : s.activeViewId,
-    }));
-  },
-
-  // ── Rows ──────────────────────────────────────────────────
-
-  loadRows: async (tableId) => {
-    const rows = await db.select<Record<string, unknown>>(
-      `SELECT * FROM db_rows WHERE table_id=? ORDER BY row_order ASC`,
-      [tableId]
-    );
-    set((s) => ({ rows: { ...s.rows, [tableId]: rows.map(rowFromDb) } }));
-  },
-
-  createRow: async (tableId) => {
-    const existing = get().rows[tableId] ?? [];
-    const order = existing.length;
-    const r: DatabaseRow = {
-      id: generateId(),
-      tableId,
-      cells: {},
-      order,
-      createdAt: now(),
-      updatedAt: now(),
-    };
-    await db.execute(
-      `INSERT INTO db_rows (id, table_id, cells_json, row_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
-      [r.id, r.tableId, "{}", r.order, r.createdAt, r.updatedAt]
-    );
-    set((s) => ({ rows: { ...s.rows, [tableId]: [...(s.rows[tableId] ?? []), r] } }));
-    bus.emit("database:row:created", { databaseId: tableId, rowId: r.id });
-    return r;
-  },
-
-  updateCell: async (rowId, columnId, value) => {
-    const ts = now();
-    const tableId = Object.keys(get().rows).find((tid) =>
-      get().rows[tid].some((r) => r.id === rowId)
-    );
-    if (!tableId) return;
-    const tableRows = get().rows[tableId].map((r) => {
-      if (r.id !== rowId) return r;
-      const cells = { ...r.cells, [columnId]: value };
-      return { ...r, cells, updatedAt: ts };
+    const view = Object.values(get().views).flat().find((v) => v.id === viewId);
+    if (!view) return;
+    await db.execute("DELETE FROM db_views WHERE id = ?", [viewId]);
+    set((s) => {
+      s.views[view.tableId] = s.views[view.tableId]?.filter((v) => v.id !== viewId) ?? [];
+      delete s.filters[viewId];
+      delete s.sorts[viewId];
+      if (s.activeViewId === viewId) s.activeViewId = null;
     });
-    const row = tableRows.find((r) => r.id === rowId);
-    if (!row) return;
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // FILTER / SORT
+  // ─────────────────────────────────────────────────────────
+
+  setFilter: async (viewId, { columnId, operator, value, position }) => {
+    const id = nanoid();
     await db.execute(
-      `UPDATE db_rows SET cells_json=?, updated_at=? WHERE id=?`,
-      [JSON.stringify(row.cells), ts, rowId]
+      "INSERT INTO db_filters (id, view_id, column_id, operator, value, position) VALUES (?, ?, ?, ?, ?, ?)",
+      [id, viewId, columnId, operator, JSON.stringify(value), position ?? 0],
     );
-    set((s) => ({ rows: { ...s.rows, [tableId]: tableRows } }));
+    const filter: DatabaseFilter = { id, viewId, columnId, operator, value, position: position ?? 0 };
+    set((s) => {
+      if (!s.filters[viewId]) s.filters[viewId] = [];
+      s.filters[viewId].push(filter);
+    });
   },
 
-  deleteRow: async (rowId, tableId) => {
-    await db.execute(`DELETE FROM db_rows WHERE id=?`, [rowId]);
-    set((s) => ({
-      rows: { ...s.rows, [tableId]: (s.rows[tableId] ?? []).filter((r) => r.id !== rowId) },
-      openRowId: s.openRowId === rowId ? null : s.openRowId,
-    }));
-    bus.emit("database:row:deleted", { databaseId: tableId, rowId });
+  removeFilter: async (filterId) => {
+    await db.execute("DELETE FROM db_filters WHERE id = ?", [filterId]);
+    set((s) => {
+      for (const vid of Object.keys(s.filters)) {
+        s.filters[vid] = s.filters[vid].filter((f) => f.id !== filterId);
+      }
+    });
   },
 
-  // ── Filters ───────────────────────────────────────────────
-
-  loadFilters: async (viewId) => {
-    const rows = await db.select<Record<string, unknown>>(
-      `SELECT * FROM db_filters WHERE view_id=? ORDER BY filter_order ASC`,
-      [viewId]
-    );
-    const filters: ViewFilter[] = rows.map((r) => ({
-      id: r.id as ID,
-      viewId: r.view_id as ID,
-      columnId: r.column_id as ID,
-      operator: r.operator as FilterOperator,
-      value: (r.value as string) ?? undefined,
-      filterOrder: r.filter_order as number,
-    }));
-    set((s) => ({ filters: { ...s.filters, [viewId]: filters } }));
-  },
-
-  addFilter: async (viewId, columnId, operator, value) => {
-    const existing = get().filters[viewId] ?? [];
-    const f: ViewFilter = { id: generateId(), viewId, columnId, operator, value, filterOrder: existing.length };
+  setSort: async (viewId, { columnId, direction, position }) => {
+    const id = nanoid();
     await db.execute(
-      `INSERT INTO db_filters (id, view_id, column_id, operator, value, filter_order) VALUES (?, ?, ?, ?, ?, ?)`,
-      [f.id, f.viewId, f.columnId, f.operator, f.value ?? null, f.filterOrder]
+      "INSERT INTO db_sorts (id, view_id, column_id, direction, position) VALUES (?, ?, ?, ?, ?)",
+      [id, viewId, columnId, direction ?? "asc", position ?? 0],
     );
-    set((s) => ({ filters: { ...s.filters, [viewId]: [...existing, f] } }));
+    const sort: DatabaseSort = { id, viewId, columnId, direction: direction ?? "asc", position: position ?? 0 };
+    set((s) => {
+      if (!s.sorts[viewId]) s.sorts[viewId] = [];
+      s.sorts[viewId].push(sort);
+    });
   },
 
-  removeFilter: async (filterId, viewId) => {
-    await db.execute(`DELETE FROM db_filters WHERE id=?`, [filterId]);
-    set((s) => ({
-      filters: { ...s.filters, [viewId]: (s.filters[viewId] ?? []).filter((f) => f.id !== filterId) },
-    }));
+  removeSort: async (sortId) => {
+    await db.execute("DELETE FROM db_sorts WHERE id = ?", [sortId]);
+    set((s) => {
+      for (const vid of Object.keys(s.sorts)) {
+        s.sorts[vid] = s.sorts[vid].filter((s2) => s2.id !== sortId);
+      }
+    });
   },
 
-  // ── Sorts ─────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────
+  // UI state
+  // ─────────────────────────────────────────────────────────
 
-  loadSorts: async (viewId) => {
-    const rows = await db.select<Record<string, unknown>>(
-      `SELECT * FROM db_sorts WHERE view_id=? ORDER BY sort_order ASC`,
-      [viewId]
-    );
-    const sorts: ViewSort[] = rows.map((r) => ({
-      id: r.id as ID,
-      viewId: r.view_id as ID,
-      columnId: r.column_id as ID,
-      direction: r.direction as "asc" | "desc",
-      sortOrder: r.sort_order as number,
-    }));
-    set((s) => ({ sorts: { ...s.sorts, [viewId]: sorts } }));
-  },
-
-  addSort: async (viewId, columnId, direction) => {
-    const existing = get().sorts[viewId] ?? [];
-    const s: ViewSort = { id: generateId(), viewId, columnId, direction, sortOrder: existing.length };
-    await db.execute(
-      `INSERT INTO db_sorts (id, view_id, column_id, direction, sort_order) VALUES (?, ?, ?, ?, ?)`,
-      [s.id, s.viewId, s.columnId, s.direction, s.sortOrder]
-    );
-    set((st) => ({ sorts: { ...st.sorts, [viewId]: [...existing, s] } }));
-  },
-
-  removeSort: async (sortId, viewId) => {
-    await db.execute(`DELETE FROM db_sorts WHERE id=?`, [sortId]);
-    set((s) => ({
-      sorts: { ...s.sorts, [viewId]: (s.sorts[viewId] ?? []).filter((x) => x.id !== sortId) },
-    }));
-  },
-
-  // ── UI ────────────────────────────────────────────────────
-
-  setActiveTable: (tableId) => set({ activeTableId: tableId }),
-  setActiveView: (viewId) => set({ activeViewId: viewId }),
-  setOpenRow: (rowId) => set({ openRowId: rowId }),
-}));
+  setActiveTable: (tableId) => set((s) => { s.activeTableId = tableId; }),
+  setActiveView:  (viewId)  => set((s) => { s.activeViewId  = viewId; }),
+  setOpenRow:     (rowId)   => set((s) => { s.openRowId     = rowId; }),
+})));

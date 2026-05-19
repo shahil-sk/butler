@@ -1,96 +1,106 @@
-// ============================================================
-// DATABASE — Kanban view (group by select column)
-// ============================================================
-
 import { useMemo } from "react";
-import { Plus } from "lucide-react";
 import { useDatabaseStore } from "../store";
-import type { DatabaseView } from "../store";
-import type { DatabaseTable, DatabaseRow, DatabaseColumn } from "@/shared/types";
-import { CellEditor } from "./CellEditor";
+import type { SelectOption } from "@/shared/types";
+import { cn } from "@/shared/utils";
 
 interface Props {
-  table: DatabaseTable;
-  view: DatabaseView;
-  rows: DatabaseRow[];
+  tableId: string;
+  viewId:  string;
 }
 
-export function KanbanView({ table, view, rows }: Props) {
-  const { createRow, updateCell, setOpenRow } = useDatabaseStore((s) => ({
-    createRow: s.createRow,
-    updateCell: s.updateCell,
-    setOpenRow: s.setOpenRow,
-  }));
+export function KanbanView({ tableId, viewId }: Props) {
+  const columns     = useDatabaseStore((s) => s.columns[tableId] ?? []);
+  const rows        = useDatabaseStore((s) => s.rows[tableId]    ?? []);
+  const cells       = useDatabaseStore((s) => s.cells[tableId]   ?? {});
+  const views       = useDatabaseStore((s) => s.views[tableId]   ?? []);
+  const { setCellValue, addRow, setOpenRow } = useDatabaseStore();
 
-  const groupCol: DatabaseColumn | undefined =
-    view.groupByColumnId
-      ? table.schema.find((c) => c.id === view.groupByColumnId)
-      : table.schema.find((c) => c.type === "select");
+  // Config: which column is the kanban groupBy?
+  const view = views.find((v) => v.id === viewId);
+  const groupByColId = (view?.config as Record<string, string>)?.groupBy;
+  const groupByCol = columns.find((c) => c.id === groupByColId)
+    ?? columns.find((c) => c.type === "select");
 
-  const groups = useMemo(() => {
-    if (!groupCol) return [{ label: "All", rows }];
-    const opts = groupCol.options ?? [];
-    const buckets = new Map<string, DatabaseRow[]>(
-      ["(none)", ...opts].map((o) => [o, []])
-    );
+  const lanes: SelectOption[] = useMemo(() => {
+    if (!groupByCol) return [];
+    return (groupByCol.options?.selectOptions ?? []) as SelectOption[];
+  }, [groupByCol]);
+
+  const grouped = useMemo(() => {
+    const map: Record<string, typeof rows> = { "__none__": [] };
+    for (const lane of lanes) map[lane.label] = [];
     for (const row of rows) {
-      const val = (row.cells[groupCol.id] as string) || "(none)";
-      const key = buckets.has(val) ? val : "(none)";
-      buckets.get(key)!.push(row);
+      const val = groupByCol ? String(cells[row.id]?.[groupByCol.id] ?? "") : "";
+      const key = lanes.find((l) => l.label === val)?.label ?? "__none__";
+      map[key].push(row);
     }
-    return Array.from(buckets.entries()).map(([label, rows]) => ({ label, rows }));
-  }, [groupCol, rows]);
+    return map;
+  }, [rows, cells, groupByCol, lanes]);
 
-  // Title column (first text col)
-  const titleCol: DatabaseColumn | undefined =
-    table.schema.find((c) => c.type === "text") ?? table.schema[0];
+  const primaryCol = columns.find((c) => c.isPrimary) ?? columns[0];
+
+  if (!groupByCol) {
+    return (
+      <div className="flex items-center justify-center h-48 text-muted-foreground text-sm">
+        Kanban requires a <strong className="mx-1">Select</strong> column. Add one and set it as the group-by field in view settings.
+      </div>
+    );
+  }
+
+  const allLanes = [...lanes.map((l) => l.label), "__none__"];
 
   return (
-    <div className="flex gap-3 overflow-x-auto h-full p-4 items-start">
-      {groups.map(({ label, rows: groupRows }) => (
-        <div key={label} className="flex-shrink-0 w-60">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              {label}
-            </span>
-            <span className="text-xs text-muted-foreground">{groupRows.length}</span>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            {groupRows.map((row) => (
-              <div
-                key={row.id}
-                className="bg-surface border border-border rounded-lg p-3 cursor-pointer hover:bg-surface-2 transition-colors"
-                onClick={() => setOpenRow(row.id)}
-              >
-                {titleCol && (
-                  <p className="text-sm truncate">
-                    {(row.cells[titleCol.id] as string) || (
-                      <span className="text-muted-foreground">Untitled</span>
-                    )}
-                  </p>
+    <div className="flex gap-3 p-4 overflow-x-auto h-full items-start">
+      {allLanes.map((lane) => {
+        const laneRows = grouped[lane] ?? [];
+        const color    = lanes.find((l) => l.label === lane)?.color;
+        return (
+          <div
+            key={lane}
+            className="flex flex-col gap-2 min-w-[240px] max-w-[280px]"
+          >
+            {/* Lane header */}
+            <div className="flex items-center justify-between mb-1">
+              <span
+                className={cn(
+                  "text-xs font-semibold px-2 py-0.5 rounded-full",
+                  color ? "" : "bg-muted text-muted-foreground",
                 )}
-                {table.schema.slice(0, 3).filter((c) => c.id !== titleCol?.id && c.id !== groupCol?.id).map((col) => (
-                  <div key={col.id} className="mt-1">
-                    <span className="text-xs text-muted-foreground">{col.name}: </span>
-                    <span className="text-xs">{String(row.cells[col.id] ?? "")}</span>
-                  </div>
-                ))}
-              </div>
+                style={color ? { background: color + "22", color } : undefined}
+              >
+                {lane === "__none__" ? "No status" : lane}
+              </span>
+              <span className="text-xs text-muted-foreground">{laneRows.length}</span>
+            </div>
+
+            {/* Cards */}
+            {laneRows.map((row) => (
+              <button
+                key={row.id}
+                onClick={() => setOpenRow(row.id)}
+                className="w-full text-left bg-card border border-border rounded-lg p-3 hover:shadow-md transition-shadow"
+              >
+                <p className="text-sm font-medium truncate">
+                  {String(cells[row.id]?.[primaryCol?.id ?? ""] ?? "Untitled")}
+                </p>
+              </button>
             ))}
 
+            {/* Add card */}
             <button
               onClick={async () => {
-                const row = await createRow(table.id);
-                if (groupCol) void updateCell(row.id, groupCol.id, label === "(none)" ? null : label);
+                const rowId = await addRow(tableId);
+                if (groupByCol && lane !== "__none__") {
+                  await setCellValue(tableId, rowId, groupByCol.id, lane);
+                }
               }}
-              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 py-1"
+              className="w-full text-xs text-muted-foreground hover:text-foreground py-1.5 rounded-md hover:bg-muted/30 transition-colors text-center"
             >
-              <Plus size={12} /> Add row
+              + Add card
             </button>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
