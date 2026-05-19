@@ -12,8 +12,8 @@ export function setupResearchEventListeners(): () => void {
   // When focus session starts — offer to restore reading context
   unsubs.push(
     bus.on("focus:session-started", ({ session }) => {
-      const { activeDocumentId, activeThreadId } = useResearchStore.getState();
-      if (activeDocumentId || activeThreadId) {
+      const { activeSourceId, activeThreadId } = useResearchStore.getState();
+      if (activeSourceId || activeThreadId) {
         bus.emit("ui:notification", {
           id: `research-focus-${session.id}`,
           type: "info",
@@ -30,12 +30,8 @@ export function setupResearchEventListeners(): () => void {
       const store = useResearchStore.getState();
       store.highlights
         .filter((h) => h.linkedTaskId === taskId)
-        .forEach((h) => store.updateHighlight(h.id, { linkedTaskId: undefined }));
-      store.annotations
-        .filter((a) => a.linkedTaskId === taskId)
-        .forEach((a) => {
-          // no direct linked field mutation needed — annotations don't block deletion
-        });
+        .forEach((h) => void store.updateHighlight(h.id, { linkedTaskId: undefined }));
+      // annotations: no direct mutation needed — task link is informational only
     })
   );
 
@@ -45,13 +41,13 @@ export function setupResearchEventListeners(): () => void {
       const store = useResearchStore.getState();
       store.highlights
         .filter((h) => h.linkedNoteId === noteId)
-        .forEach((h) => store.updateHighlight(h.id, { linkedNoteId: undefined }));
+        .forEach((h) => void store.updateHighlight(h.id, { linkedNoteId: undefined }));
     })
   );
 
   // Invalidate search index when research changes
   unsubs.push(
-    bus.on("research:source-imported",   ({ source }) =>
+    bus.on("research:source-imported", ({ source }) =>
       bus.emit("search:index-invalidated", { entityType: "research_document", id: source.id })
     )
   );
@@ -61,7 +57,7 @@ export function setupResearchEventListeners(): () => void {
     )
   );
   unsubs.push(
-    bus.on("research:thread-created",    ({ thread }) =>
+    bus.on("research:thread-created", ({ thread }) =>
       bus.emit("search:index-invalidated", { entityType: "research_thread", id: thread.id })
     )
   );

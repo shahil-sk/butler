@@ -68,6 +68,7 @@ export interface ResearchState {
 
   // sources
   importSource: (input: ImportSourceInput) => Promise<ResearchSource>;
+  updateSource: (id: string, patch: Partial<Pick<ResearchSource, "title" | "tags">>) => Promise<void>;
   updateSourceStatus: (id: string, status: ResearchSource["processingStatus"], error?: string) => Promise<void>;
   deleteSource: (id: string) => Promise<void>;
 
@@ -96,8 +97,10 @@ export interface ResearchState {
   updateThread: (id: string, patch: Partial<ResearchThread>) => Promise<void>;
   deleteThread: (id: string) => Promise<void>;
   addSourceToThread: (threadId: string, sourceId: string) => Promise<void>;
+  removeSourceFromThread: (threadId: string, sourceId: string) => Promise<void>;
 
   // navigation
+  setActiveSource: (id: string | null) => void;
   setActiveDocument: (id: string | null) => void;
   setActiveThread: (id: string | null) => void;
   setActiveView: (view: ResearchState["activeView"]) => void;
@@ -183,18 +186,21 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
   sidebarTab: "info",
 
   // ── init ─────────────────────────────────────────────────
+  // Fix #3: also hydrate aiJobs on init
   init: async () => {
     set({ isLoading: true });
     try {
-      const [sourceRows, docRows, threadRows] = await Promise.all([
+      const [sourceRows, docRows, threadRows, jobRows] = await Promise.all([
         db.select<Record<string, unknown>>(SQL.SELECT_SOURCES, []),
         db.select<Record<string, unknown>>(SQL.SELECT_DOCUMENTS, []),
         db.select<Record<string, unknown>>(SQL.SELECT_THREADS, []),
+        db.select<Record<string, unknown>>(SQL.SELECT_PENDING_JOBS, []),
       ]);
       set({
         sources: sourceRows.map(rowToSource) as ResearchSource[],
         documents: docRows.map(rowToDocument) as ResearchDocument[],
         threads: threadRows.map(rowToThread) as ResearchThread[],
+        aiJobs: jobRows as ResearchAiJob[],
         isLoading: false,
       });
     } catch (err) {
@@ -228,12 +234,29 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
       JSON.stringify(source.threadIds), JSON.stringify(source.tags),
       source.importedAt, source.updatedAt,
     ]);
-    // FTS
     await db.execute(SQL.FTS_INSERT, [source.id, "source", source.title, source.rawContent ?? ""]);
     set((s) => ({ sources: [source, ...s.sources] }));
     bus.emit("research:source-imported", { source });
     bus.emit("search:index-invalidated", { entityType: "research_document", id: source.id });
     return source;
+  },
+
+  // ── updateSource ─────────────────────────────────────────
+  // Fix #5: dedicated updateSource action for rename / re-tag
+  updateSource: async (id, patch) => {
+    const src = get().sources.find((s) => s.id === id);
+    if (!src) return;
+    const updated = { ...src, ...patch, updatedAt: now() };
+    await db.execute(SQL.UPDATE_SOURCE, [
+      updated.title,
+      JSON.stringify(updated.tags),
+      JSON.stringify(updated.threadIds),
+      updated.updatedAt,
+      id,
+    ]);
+    set((s) => ({
+      sources: s.sources.map((x) => (x.id === id ? updated : x)),
+    }));
   },
 
   // ── updateSourceStatus ───────────────────────────────────
@@ -418,14 +441,18 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
   },
 
   // ── updateAnnotation ─────────────────────────────────────
+  // Fix #4: preserve original type — don't re-save from stale closure
   updateAnnotation: async (id, content) => {
     const a = get().annotations.find((x) => x.id === id);
     if (!a) return;
     const updated = { ...a, content, updatedAt: now() };
     await db.execute(SQL.UPDATE_ANNOTATION, [
-      updated.content, updated.type,
-      updated.linkedNoteId ?? null, updated.linkedTaskId ?? null,
-      updated.updatedAt, id,
+      updated.content,
+      a.type, // explicitly use original type
+      updated.linkedNoteId ?? null,
+      updated.linkedTaskId ?? null,
+      updated.updatedAt,
+      id,
     ]);
     set((s) => ({ annotations: s.annotations.map((x) => (x.id === id ? updated : x)) }));
     bus.emit("research:annotation-updated", { annotation: updated });
@@ -499,40 +526,85 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
   },
 
   // ── addSourceToThread ────────────────────────────────────
+  // Fix #13: wrapped in try/catch to surface errors
   addSourceToThread: async (threadId, sourceId) => {
-    const thread = get().threads.find((t) => t.id === threadId);
-    if (!thread) return;
-    if (thread.sourceIds.includes(sourceId)) return;
-    const updated = { ...thread, sourceIds: [...thread.sourceIds, sourceId] };
-    await get().updateThread(threadId, { sourceIds: updated.sourceIds });
-    // also update source.threadIds
-    const source = get().sources.find((s) => s.id === sourceId);
-    if (source && !source.threadIds.includes(threadId)) {
-      const newThreadIds = [...source.threadIds, threadId];
-      await db.execute(SQL.UPDATE_SOURCE, [
-        source.title, JSON.stringify(source.tags), JSON.stringify(newThreadIds), now(), sourceId,
-      ]);
-      set((s) => ({
-        sources: s.sources.map((src) =>
-          src.id === sourceId ? { ...src, threadIds: newThreadIds, updatedAt: now() } : src
-        ),
-      }));
+    try {
+      const thread = get().threads.find((t) => t.id === threadId);
+      if (!thread) return;
+      if (thread.sourceIds.includes(sourceId)) return;
+      const updatedSourceIds = [...thread.sourceIds, sourceId];
+      await get().updateThread(threadId, { sourceIds: updatedSourceIds });
+      const source = get().sources.find((s) => s.id === sourceId);
+      if (source && !source.threadIds.includes(threadId)) {
+        const newThreadIds = [...source.threadIds, threadId];
+        await db.execute(SQL.UPDATE_SOURCE, [
+          source.title, JSON.stringify(source.tags), JSON.stringify(newThreadIds), now(), sourceId,
+        ]);
+        set((s) => ({
+          sources: s.sources.map((src) =>
+            src.id === sourceId ? { ...src, threadIds: newThreadIds, updatedAt: now() } : src
+          ),
+        }));
+      }
+    } catch (err) {
+      console.error("[ResearchStore] addSourceToThread failed:", err);
+      bus.emit("ui:notification", {
+        id: `research-add-src-err-${Date.now()}`,
+        type: "error",
+        message: "Failed to add source to thread.",
+        durationMs: 4000,
+      });
+    }
+  },
+
+  // ── removeSourceFromThread ───────────────────────────────
+  // Fix #1: new action — inverse of addSourceToThread
+  removeSourceFromThread: async (threadId, sourceId) => {
+    try {
+      const thread = get().threads.find((t) => t.id === threadId);
+      if (!thread) return;
+      await get().updateThread(threadId, {
+        sourceIds: thread.sourceIds.filter((id) => id !== sourceId),
+      });
+      const src = get().sources.find((s) => s.id === sourceId);
+      if (src) {
+        const newThreadIds = src.threadIds.filter((id) => id !== threadId);
+        await db.execute(SQL.UPDATE_SOURCE, [
+          src.title, JSON.stringify(src.tags), JSON.stringify(newThreadIds), now(), sourceId,
+        ]);
+        set((s) => ({
+          sources: s.sources.map((x) =>
+            x.id === sourceId ? { ...x, threadIds: newThreadIds, updatedAt: now() } : x
+          ),
+        }));
+      }
+    } catch (err) {
+      console.error("[ResearchStore] removeSourceFromThread failed:", err);
+      bus.emit("ui:notification", {
+        id: `research-rm-src-err-${Date.now()}`,
+        type: "error",
+        message: "Failed to remove source from thread.",
+        durationMs: 4000,
+      });
     }
   },
 
   // ── navigation ───────────────────────────────────────────
+  setActiveSource: (id) => set({ activeSourceId: id }),
   setActiveDocument: (id) => set({ activeDocumentId: id }),
   setActiveThread: (id) => set({ activeThreadId: id }),
   setActiveView: (view) => set({ activeView: view }),
   setSidebarTab: (tab) => set({ sidebarTab: tab }),
 
   // ── search ───────────────────────────────────────────────
+  // Fix #14: sanitize FTS query to avoid special-char crashes
   search: async (query) => {
     set({ searchQuery: query });
     if (!query.trim()) { set({ searchResults: [] }); return; }
     try {
+      const safeQ = query.replace(/[^a-zA-Z0-9 ]/g, "").trim() + "*";
       const rows = await db.select<{ id: string; entity_type: string; title: string; excerpt?: string }>(
-        SQL.FTS_SEARCH, [query + "*", 30]
+        SQL.FTS_SEARCH, [safeQ, 30]
       );
       set({
         searchResults: rows.map((r) => ({
