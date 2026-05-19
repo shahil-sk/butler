@@ -1,26 +1,15 @@
 // ============================================================
-// CALENDAR — EventForm  (improved)
+// CALENDAR — EventForm
 //
-// Guard: if the event being edited is a task shadow event
-// (editingId starts with 'task:'), renders TaskEventPanel
-// instead of the calendar form — you should not edit synthetic
-// calendar_events fields on a task-owned row.
+// Guard: if editingId starts with 'task:', renders TaskEventPanel
+// instead — task-owned shadow events should not be edited here.
 //
-// WHAT “LINKS” DOES:
-// The Links tab stores two JSON arrays in calendar_events:
-//   linkedTaskIds — IDs of tasks associated with this event
-//   linkedNoteIds — IDs of notes associated with this event
-//
-// These are soft, bidirectional references. They do NOT create
-// calendar events for those tasks (that is handled automatically
-// by task-calendar-sync.ts). The intended use-case is:
-//   • A meeting event → link the meeting notes note
-//   • A deadline event → link the tasks that must be done by then
-//   • A focus block → link the tasks you plan to work on
-//
-// Linked items surface in DayView’s context panel (right sidebar)
-// so when you view your day, you see the event + its related
-// tasks and notes in one place without switching modules.
+// WHAT "LINKS" DOES:
+// The Links tab stores linkedTaskIds / linkedNoteIds as JSON
+// arrays in calendar_events. Linked items surface in DayView's
+// right sidebar so you see event + related context together.
+// Tasks with due/scheduled dates already appear via sync;
+// linking is for manual context (meeting notes, focus tasks).
 // ============================================================
 
 import { useState, useEffect } from "react";
@@ -30,6 +19,7 @@ import { useCalendarStore } from "./store";
 import { useTaskStore } from "@/modules/tasks/store";
 import { useNoteStore } from "@/modules/notes/store";
 import { TaskEventPanel } from "./TaskEventPanel";
+import { DateTimePicker } from "./DateTimePicker";
 
 const PRESET_COLORS = [
   "#3b82f6","#8b5cf6","#ec4899","#f97316","#eab308","#22c55e","#14b8a6","#ef4444",
@@ -86,21 +76,35 @@ export function EventForm() {
 
   if (!open) return null;
 
-  // Guard: task shadow events are managed by TaskEventPanel, not here
   if (editingId?.startsWith("task:")) {
     const taskId = editingId.replace(/^task:/, "");
     return <TaskEventPanel taskId={taskId} onClose={closeEventForm} />;
   }
 
+  const handleStartChange = (iso: string) => {
+    setStartAt(iso);
+    // Auto-advance end by 1 h if end is now before new start
+    const newStart = new Date(iso).getTime();
+    const curEnd   = new Date(endAt).getTime();
+    if (!isNaN(newStart) && (!curEnd || curEnd <= newStart)) {
+      setEndAt(new Date(newStart + 3_600_000).toISOString().slice(0, 16));
+    }
+  };
+
   const submit = async () => {
     if (!title.trim()) return;
+    const toISO = (v: string, fb: string) =>
+      v ? (v.includes("T") ? v : `${v}${fb}`) : v;
     const payload = {
-      title: title.trim(), startAt, endAt, allDay,
-      calendarId: calId,
-      color: color || undefined,
-      description: description || undefined,
+      title:         title.trim(),
+      startAt:       toISO(startAt, "T00:00:00"),
+      endAt:         toISO(endAt,   "T23:59:59"),
+      allDay,
+      calendarId:    calId,
+      color:         color || undefined,
+      description:   description || undefined,
       isTimeBlock,
-      recurrence: recurrence ? { frequency: recurrence as "daily" | "weekly" | "monthly" } : undefined,
+      recurrence:    recurrence ? { frequency: recurrence as "daily" | "weekly" | "monthly" } : undefined,
       linkedTaskIds: linkedTasks,
       linkedNoteIds: linkedNotes,
     };
@@ -165,40 +169,45 @@ export function EventForm() {
           ))}
         </div>
 
-        {/* Tab body */}
+        {/* Body */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {tab === "details" && (
             <>
               <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
-                <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} className="rounded accent-primary" />
+                <input
+                  type="checkbox"
+                  checked={allDay}
+                  onChange={(e) => setAllDay(e.target.checked)}
+                  className="rounded accent-primary"
+                />
                 All day event
               </label>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Start</label>
-                  <input
-                    type={allDay ? "date" : "datetime-local"}
-                    value={allDay ? startAt.slice(0,10) : startAt}
-                    onChange={(e) => setStartAt(allDay ? `${e.target.value}T00:00:00` : e.target.value)}
-                    className="w-full text-xs bg-transparent outline-none border border-border rounded-md px-2 py-1.5 mt-1"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">End</label>
-                  <input
-                    type={allDay ? "date" : "datetime-local"}
-                    value={allDay ? endAt.slice(0,10) : endAt}
-                    onChange={(e) => setEndAt(allDay ? `${e.target.value}T23:59:59` : e.target.value)}
-                    className="w-full text-xs bg-transparent outline-none border border-border rounded-md px-2 py-1.5 mt-1"
-                  />
-                </div>
+              {/* Split date + time pickers */}
+              <div className="grid grid-cols-2 gap-3">
+                <DateTimePicker
+                  label="Start"
+                  value={allDay ? startAt.slice(0, 10) : startAt}
+                  timeDisabled={allDay}
+                  onChange={handleStartChange}
+                />
+                <DateTimePicker
+                  label="End"
+                  value={allDay ? endAt.slice(0, 10) : endAt}
+                  timeDisabled={allDay}
+                  min={allDay ? startAt.slice(0, 10) : undefined}
+                  onChange={setEndAt}
+                />
               </div>
 
               {calendars.length > 0 && (
                 <div>
                   <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Calendar</label>
-                  <select value={calId} onChange={(e) => setCalId(e.target.value)} className="w-full text-xs bg-popover outline-none border border-border rounded-md px-2 py-1.5 mt-1">
+                  <select
+                    value={calId}
+                    onChange={(e) => setCalId(e.target.value)}
+                    className="w-full text-xs bg-popover outline-none border border-border rounded-md px-2 py-1.5 mt-1"
+                  >
                     {calendars.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
@@ -207,9 +216,18 @@ export function EventForm() {
               <div>
                 <label className="text-[10px] text-muted-foreground uppercase tracking-wide block mb-1.5">Color</label>
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <button onClick={() => setColor("")} className={cn("w-5 h-5 rounded-full border-2 bg-muted transition-fast", !color ? "border-foreground" : "border-transparent")} title="Calendar default" />
+                  <button
+                    onClick={() => setColor("")}
+                    className={cn("w-5 h-5 rounded-full border-2 bg-muted transition-fast", !color ? "border-foreground" : "border-transparent")}
+                    title="Calendar default"
+                  />
                   {PRESET_COLORS.map((c) => (
-                    <button key={c} onClick={() => setColor(c)} className={cn("w-5 h-5 rounded-full border-2 transition-fast", color === c ? "border-foreground scale-110" : "border-transparent")} style={{ backgroundColor: c }} />
+                    <button
+                      key={c}
+                      onClick={() => setColor(c)}
+                      className={cn("w-5 h-5 rounded-full border-2 transition-fast", color === c ? "border-foreground scale-110" : "border-transparent")}
+                      style={{ backgroundColor: c }}
+                    />
                   ))}
                 </div>
               </div>
@@ -218,14 +236,23 @@ export function EventForm() {
                 <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Repeat</label>
                 <div className="flex items-center gap-1.5 mt-1">
                   <Repeat size={12} className="text-muted-foreground/50 shrink-0" />
-                  <select value={recurrence} onChange={(e) => setRecurrence(e.target.value)} className="flex-1 text-xs bg-popover outline-none border border-border rounded-md px-2 py-1.5">
+                  <select
+                    value={recurrence}
+                    onChange={(e) => setRecurrence(e.target.value)}
+                    className="flex-1 text-xs bg-popover outline-none border border-border rounded-md px-2 py-1.5"
+                  >
                     {RECURRENCE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 </div>
               </div>
 
               <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
-                <input type="checkbox" checked={isTimeBlock} onChange={(e) => setIsTimeBlock(e.target.checked)} className="rounded accent-primary" />
+                <input
+                  type="checkbox"
+                  checked={isTimeBlock}
+                  onChange={(e) => setIsTimeBlock(e.target.checked)}
+                  className="rounded accent-primary"
+                />
                 <Timer size={11} className="text-muted-foreground" />
                 <span className="text-muted-foreground">Mark as time block (focus session)</span>
               </label>
@@ -242,7 +269,6 @@ export function EventForm() {
 
           {tab === "links" && (
             <>
-              {/* What Links does — inline explanation */}
               <div className="rounded-lg bg-muted/40 border border-border/60 px-3 py-2.5 text-[11px] text-muted-foreground leading-relaxed">
                 <p className="font-medium text-foreground mb-1">What does linking do?</p>
                 Linked tasks and notes are <strong>associated</strong> with this calendar event.
@@ -261,13 +287,25 @@ export function EventForm() {
                 </div>
                 <div className="relative mb-2">
                   <Search size={10} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
-                  <input value={taskSearch} onChange={(e) => setTaskSearch(e.target.value)} placeholder="Search tasks…" className="w-full text-xs pl-6 pr-2 py-1.5 border border-border rounded-md bg-muted/30 outline-none" />
+                  <input
+                    value={taskSearch}
+                    onChange={(e) => setTaskSearch(e.target.value)}
+                    placeholder="Search tasks…"
+                    className="w-full text-xs pl-6 pr-2 py-1.5 border border-border rounded-md bg-muted/30 outline-none"
+                  />
                 </div>
                 <div className="space-y-0.5 max-h-36 overflow-y-auto">
                   {filteredTasks.map((t) => {
                     const linked = linkedTasks.includes(t.id);
                     return (
-                      <button key={t.id} onClick={() => toggleTask(t.id)} className={cn("w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-xs transition-fast", linked ? "bg-primary/10 text-primary" : "text-foreground hover:bg-accent")}>
+                      <button
+                        key={t.id}
+                        onClick={() => toggleTask(t.id)}
+                        className={cn(
+                          "w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-xs transition-fast",
+                          linked ? "bg-primary/10 text-primary" : "text-foreground hover:bg-accent"
+                        )}
+                      >
                         <div className={cn("w-3 h-3 rounded border-2 shrink-0 flex items-center justify-center transition-fast", linked ? "bg-primary border-primary" : "border-border")}>
                           {linked && <div className="w-1.5 h-1.5 bg-white rounded-sm" />}
                         </div>
@@ -289,18 +327,30 @@ export function EventForm() {
                 </div>
                 <div className="relative mb-2">
                   <Search size={10} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
-                  <input value={noteSearch} onChange={(e) => setNoteSearch(e.target.value)} placeholder="Search notes…" className="w-full text-xs pl-6 pr-2 py-1.5 border border-border rounded-md bg-muted/30 outline-none" />
+                  <input
+                    value={noteSearch}
+                    onChange={(e) => setNoteSearch(e.target.value)}
+                    placeholder="Search notes…"
+                    className="w-full text-xs pl-6 pr-2 py-1.5 border border-border rounded-md bg-muted/30 outline-none"
+                  />
                 </div>
                 <div className="space-y-0.5 max-h-36 overflow-y-auto">
                   {filteredNotes.map((n) => {
                     const linked = linkedNotes.includes(n.id);
                     return (
-                      <button key={n.id} onClick={() => toggleNote(n.id)} className={cn("w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-xs transition-fast", linked ? "bg-primary/10 text-primary" : "text-foreground hover:bg-accent")}>
+                      <button
+                        key={n.id}
+                        onClick={() => toggleNote(n.id)}
+                        className={cn(
+                          "w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-xs transition-fast",
+                          linked ? "bg-primary/10 text-primary" : "text-foreground hover:bg-accent"
+                        )}
+                      >
                         <div className={cn("w-3 h-3 rounded border-2 shrink-0 flex items-center justify-center transition-fast", linked ? "bg-primary border-primary" : "border-border")}>
                           {linked && <div className="w-1.5 h-1.5 bg-white rounded-sm" />}
                         </div>
                         <span className="flex-1 truncate">{n.title || "Untitled"}</span>
-                        <span className="text-[9px] text-muted-foreground tabular-nums shrink-0">{n.updatedAt?.slice(0,10)}</span>
+                        <span className="text-[9px] text-muted-foreground tabular-nums shrink-0">{n.updatedAt?.slice(0, 10)}</span>
                       </button>
                     );
                   })}
@@ -314,12 +364,19 @@ export function EventForm() {
         {/* Footer */}
         <div className="flex items-center gap-2 px-4 py-3 border-t border-border shrink-0">
           {editingId && (
-            <button onClick={async () => { await deleteEvent(editingId); closeEventForm(); }} className="text-xs text-destructive hover:text-destructive/80 transition-fast mr-auto">
+            <button
+              onClick={async () => { await deleteEvent(editingId); closeEventForm(); }}
+              className="text-xs text-destructive hover:text-destructive/80 transition-fast mr-auto"
+            >
               Delete
             </button>
           )}
           <button onClick={closeEventForm} className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-accent transition-fast">Cancel</button>
-          <button onClick={() => void submit()} disabled={!title.trim()} className="px-3 py-1.5 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 transition-fast">
+          <button
+            onClick={() => void submit()}
+            disabled={!title.trim()}
+            className="px-3 py-1.5 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 transition-fast"
+          >
             {editingId ? "Save changes" : "Create event"}
           </button>
         </div>

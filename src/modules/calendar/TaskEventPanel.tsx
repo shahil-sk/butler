@@ -1,19 +1,19 @@
 // ============================================================
 // TASK EVENT PANEL
-// Slide-in panel shown when clicking a task shadow event
-// in any calendar view. Lets you view, quick-edit, complete,
-// or navigate to the full task detail panel.
+// Shown when clicking a task shadow event in the calendar.
+// View, quick-edit, complete, or navigate to full task detail.
 // ============================================================
 
 import { useState, useEffect } from "react";
 import {
   X, CheckCircle2, Circle, ExternalLink,
-  AlertTriangle, Calendar, Flag,
+  AlertTriangle, Flag,
 } from "lucide-react";
 import { cn } from "@/shared/utils";
 import { useTaskStore } from "@/modules/tasks/store";
 import { bus } from "@/kernel/event-bus";
-import type { Task, Priority, TaskStatus } from "@/shared/types";
+import { DateTimePicker } from "./DateTimePicker";
+import type { Priority, TaskStatus } from "@/shared/types";
 
 const PRIORITY_LABELS: Record<Priority, string> = {
   none: "None", low: "Low", medium: "Medium", high: "High", urgent: "Urgent",
@@ -39,7 +39,6 @@ export function TaskEventPanel({ taskId, onClose }: Props) {
   const { tasks, updateTask, completeTask, restoreTask } = useTaskStore();
   const task = tasks.find((t) => t.id === taskId);
 
-  // Local edit state
   const [editing,       setEditing]       = useState(false);
   const [title,         setTitle]         = useState("");
   const [dueDate,       setDueDate]       = useState("");
@@ -70,18 +69,14 @@ export function TaskEventPanel({ taskId, onClose }: Props) {
     );
   }
 
-  const isDone   = task.status === "done";
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const isOverdue = task.dueDate && task.dueDate < todayStr && !isDone;
+  const isDone     = task.status === "done";
+  const todayStr   = new Date().toISOString().slice(0, 10);
+  const isOverdue  = task.dueDate && task.dueDate < todayStr && !isDone;
   const isDueToday = (task.dueDate === todayStr || task.scheduledDate === todayStr) && !isDone;
 
   const handleToggleComplete = async () => {
-    if (isDone) {
-      await restoreTask(task.id);
-    } else {
-      await completeTask(task.id);
-      onClose(); // shadow event disappears — close panel
-    }
+    if (isDone) await restoreTask(task.id);
+    else { await completeTask(task.id); onClose(); }
   };
 
   const handleSave = async () => {
@@ -109,13 +104,12 @@ export function TaskEventPanel({ taskId, onClose }: Props) {
 
         {/* Header */}
         <div className="flex items-center gap-2 px-4 py-3 border-b border-border shrink-0">
-          {/* Status badge */}
           <span className={cn(
             "px-2 py-0.5 rounded-full text-[10px] font-medium",
-            isDone        ? "bg-green-500/15 text-green-500" :
-            isOverdue     ? "bg-red-500/15 text-red-500" :
-            isDueToday    ? "bg-orange-500/15 text-orange-500" :
-                            "bg-primary/10 text-primary"
+            isDone     ? "bg-green-500/15 text-green-500" :
+            isOverdue  ? "bg-red-500/15 text-red-500" :
+            isDueToday ? "bg-orange-500/15 text-orange-500" :
+                         "bg-primary/10 text-primary"
           )}>
             {isDone ? "Done" : isOverdue ? "Overdue" : isDueToday ? "Due today" : STATUS_LABELS[task.status]}
           </span>
@@ -155,7 +149,10 @@ export function TaskEventPanel({ taskId, onClose }: Props) {
                 onChange={(e) => setTitle(e.target.value)}
                 className="flex-1 text-sm font-semibold bg-transparent border-b border-primary outline-none pb-0.5"
                 autoFocus
-                onKeyDown={(e) => { if (e.key === "Enter") void handleSave(); if (e.key === "Escape") setEditing(false); }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void handleSave();
+                  if (e.key === "Escape") setEditing(false);
+                }}
               />
             ) : (
               <h2
@@ -179,56 +176,26 @@ export function TaskEventPanel({ taskId, onClose }: Props) {
             </div>
           )}
 
-          {/* Metadata grid */}
-          <div className="grid grid-cols-2 gap-2">
+          {/* Date pickers — date-only, timeDisabled, locked until editing */}
+          <div className="grid grid-cols-2 gap-3">
+            <DateTimePicker
+              label="Due date"
+              value={dueDate}
+              timeDisabled
+              disabled={!editing}
+              onChange={setDueDate}
+            />
+            <DateTimePicker
+              label="Scheduled"
+              value={scheduledDate}
+              timeDisabled
+              disabled={!editing}
+              onChange={setScheduledDate}
+            />
+          </div>
 
-            <div className="space-y-1">
-              <label className="flex items-center gap-1 text-[10px] text-muted-foreground uppercase tracking-wide">
-                <Calendar size={9} /> Due date
-              </label>
-              {editing ? (
-                <input
-                  type="date"
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                  className="w-full text-xs bg-transparent border border-border rounded-md px-2 py-1.5 outline-none"
-                />
-              ) : (
-                <p
-                  onClick={() => setEditing(true)}
-                  className={cn(
-                    "text-xs cursor-pointer hover:text-primary transition-fast",
-                    isOverdue ? "text-red-400 font-medium" :
-                    isDueToday ? "text-orange-400 font-medium" :
-                    task.dueDate ? "text-foreground" : "text-muted-foreground/40"
-                  )}
-                >
-                  {task.dueDate ?? "No due date"}
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-1">
-              <label className="flex items-center gap-1 text-[10px] text-muted-foreground uppercase tracking-wide">
-                <Calendar size={9} /> Scheduled
-              </label>
-              {editing ? (
-                <input
-                  type="date"
-                  value={scheduledDate}
-                  onChange={(e) => setScheduledDate(e.target.value)}
-                  className="w-full text-xs bg-transparent border border-border rounded-md px-2 py-1.5 outline-none"
-                />
-              ) : (
-                <p
-                  onClick={() => setEditing(true)}
-                  className={cn("text-xs cursor-pointer hover:text-primary transition-fast", task.scheduledDate ? "text-foreground" : "text-muted-foreground/40")}
-                >
-                  {task.scheduledDate ?? "Not scheduled"}
-                </p>
-              )}
-            </div>
-
+          {/* Priority + Status */}
+          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="flex items-center gap-1 text-[10px] text-muted-foreground uppercase tracking-wide">
                 <Flag size={9} /> Priority
@@ -254,16 +221,14 @@ export function TaskEventPanel({ taskId, onClose }: Props) {
             </div>
 
             <div className="space-y-1">
-              <label className="flex items-center gap-1 text-[10px] text-muted-foreground uppercase tracking-wide">
-                Status
-              </label>
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wide block">Status</label>
               {editing ? (
                 <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value as TaskStatus)}
                   className="w-full text-xs bg-popover border border-border rounded-md px-2 py-1.5 outline-none"
                 >
-                  {(Object.keys(STATUS_LABELS) as TaskStatus[]).filter(s => s !== "archived").map((s) => (
+                  {(Object.keys(STATUS_LABELS) as TaskStatus[]).filter((s) => s !== "archived").map((s) => (
                     <option key={s} value={s}>{STATUS_LABELS[s]}</option>
                   ))}
                 </select>
@@ -290,7 +255,7 @@ export function TaskEventPanel({ taskId, onClose }: Props) {
           {task.checklistItems?.length > 0 && (
             <div className="space-y-1.5">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
-                Checklist ({task.checklistItems.filter(i => i.checked).length}/{task.checklistItems.length})
+                Checklist ({task.checklistItems.filter((i) => i.checked).length}/{task.checklistItems.length})
               </p>
               {task.checklistItems.slice(0, 4).map((item) => (
                 <div key={item.id} className="flex items-center gap-2 text-xs">
@@ -319,19 +284,12 @@ export function TaskEventPanel({ taskId, onClose }: Props) {
             </>
           ) : (
             <>
-              <button
-                onClick={() => setEditing(true)}
-                className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-accent transition-fast"
-              >
-                Edit
-              </button>
+              <button onClick={() => setEditing(true)} className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-accent transition-fast">Edit</button>
               <button
                 onClick={handleToggleComplete}
                 className={cn(
                   "flex-1 py-1.5 text-xs rounded-md font-medium transition-fast",
-                  isDone
-                    ? "bg-muted text-muted-foreground hover:bg-accent"
-                    : "bg-green-600 text-white hover:bg-green-700"
+                  isDone ? "bg-muted text-muted-foreground hover:bg-accent" : "bg-green-600 text-white hover:bg-green-700"
                 )}
               >
                 {isDone ? "Restore task" : "✓ Mark complete"}
