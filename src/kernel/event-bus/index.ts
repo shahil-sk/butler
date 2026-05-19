@@ -14,6 +14,7 @@ import type {
   TimeEntry,
   JournalEntry,
   SearchResult,
+  Database,
 } from "@/shared/types";
 
 // ── Event map ────────────────────────────────────────────────
@@ -85,6 +86,13 @@ export interface ButlerEventMap {
   "journal:entry-created":     { entry: JournalEntry };
   "journal:entry-updated":     { entry: JournalEntry };
   "journal:open-date":         { date: string };
+
+  // ── Database events ───────────────────────────────────────
+  "database:created":       { database: Database };
+  "database:updated":       { database: Database };
+  "database:deleted":       { databaseId: string };
+  "database:row:created":   { databaseId: string; rowId: string };
+  "database:row:deleted":   { databaseId: string; rowId: string };
 
   // ── Search events ─────────────────────────────────────────
   "search:open":               { query?: string };

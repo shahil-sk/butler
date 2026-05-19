@@ -148,11 +148,4 @@ export interface DatabaseDetail {
   views: View[];
 }
 
-// ── Events ────────────────────────────────────────────────────
-export type DatabaseEvent =
-  | { type: 'database:created'; payload: Database }
-  | { type: 'database:updated'; payload: Database }
-  | { type: 'database:deleted'; payload: { id: string } }
-  | { type: 'database:row:created'; payload: { database_id: string; row: Row } }
-  | { type: 'database:row:deleted'; payload: { database_id: string; row_id: string } }
-  | { type: 'database:cell:updated'; payload: { row_id: string; column_id: string; value: string | null } };
+// ── Events — see @/kernel/event-bus ButlerEventMap for database:* entries ──
