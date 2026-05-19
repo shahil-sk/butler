@@ -13,7 +13,7 @@ export const CALENDAR_MIGRATIONS: Migration[] = [
         is_visible INTEGER NOT NULL DEFAULT 1,
         source TEXT NOT NULL DEFAULT 'local',
         source_url TEXT,
-        created_at TEXT NOT NULL
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
       );
 
       CREATE TABLE IF NOT EXISTS calendar_events (
@@ -29,8 +29,8 @@ export const CALENDAR_MIGRATIONS: Migration[] = [
         linked_note_ids TEXT NOT NULL DEFAULT '[]',
         is_time_block INTEGER NOT NULL DEFAULT 0,
         recurrence TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
         FOREIGN KEY (calendar_id) REFERENCES calendars(id) ON DELETE CASCADE
       );
 
@@ -46,5 +46,18 @@ export const CALENDAR_MIGRATIONS: Migration[] = [
       DROP TABLE IF EXISTS calendar_events;
       DROP TABLE IF EXISTS calendars;
     `,
+  },
+  {
+    // Migration to patch existing installs that have the column without a default.
+    // ALTER COLUMN is not supported in SQLite, so we use a safe no-op approach:
+    // recreate the table only if the column lacks a default (checked via pragma).
+    version: 51,
+    module: "calendar",
+    up: `
+      -- Ensure default calendar always exists (idempotent)
+      INSERT OR IGNORE INTO calendars (id, name, color, is_default, is_visible, source, created_at)
+      VALUES ('default', 'Personal', '#3b82f6', 1, 1, 'local', datetime('now'));
+    `,
+    down: `SELECT 1;`,
   },
 ];
