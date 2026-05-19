@@ -3,7 +3,7 @@
 // ============================================================
 
 import { useEffect, useState } from "react";
-import { Plus, LayoutGrid, List, CheckSquare, ChevronDown } from "lucide-react";
+import { Plus, LayoutGrid, List, CheckSquare, ChevronDown, AlertTriangle } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { registry } from "@/kernel/router";
 import { bus } from "@/kernel/event-bus";
@@ -26,10 +26,11 @@ type GroupId = "overdue" | "today" | "in_progress" | "todo" | "done";
 interface TaskGroup {
   id: GroupId;
   label: string;
-  colorClass: string;          // Tailwind text color for the dot
-  bgClass: string;             // Tailwind bg color for the badge
-  textClass: string;           // Tailwind text color for the badge count
-  borderClass: string;         // left-border accent
+  colorClass: string;
+  bgClass: string;
+  textClass: string;
+  borderClass: string;
+  stripClass: string;        // subtle section background tint
   defaultOpen: boolean;
 }
 
@@ -39,27 +40,30 @@ const GROUPS: TaskGroup[] = [
     id: "overdue",
     label: "Overdue",
     colorClass: "text-red-500",
-    bgClass: "bg-red-50 dark:bg-red-950/40",
-    textClass: "text-red-600 dark:text-red-400",
-    borderClass: "border-l-red-400",
+    bgClass: "bg-red-100 dark:bg-red-950/60",
+    textClass: "text-red-700 dark:text-red-300",
+    borderClass: "border-l-red-500",
+    stripClass: "bg-red-50/60 dark:bg-red-950/20",
     defaultOpen: true,
   },
   {
     id: "today",
     label: "Due Today",
     colorClass: "text-amber-500",
-    bgClass: "bg-amber-50 dark:bg-amber-950/40",
-    textClass: "text-amber-600 dark:text-amber-400",
-    borderClass: "border-l-amber-400",
+    bgClass: "bg-amber-100 dark:bg-amber-950/60",
+    textClass: "text-amber-700 dark:text-amber-300",
+    borderClass: "border-l-amber-500",
+    stripClass: "bg-amber-50/60 dark:bg-amber-950/20",
     defaultOpen: true,
   },
   {
     id: "in_progress",
     label: "In Progress",
     colorClass: "text-blue-500",
-    bgClass: "bg-blue-50 dark:bg-blue-950/40",
-    textClass: "text-blue-600 dark:text-blue-400",
-    borderClass: "border-l-blue-400",
+    bgClass: "bg-blue-100 dark:bg-blue-950/60",
+    textClass: "text-blue-700 dark:text-blue-300",
+    borderClass: "border-l-blue-500",
+    stripClass: "bg-blue-50/40 dark:bg-blue-950/20",
     defaultOpen: true,
   },
   {
@@ -69,16 +73,18 @@ const GROUPS: TaskGroup[] = [
     bgClass: "bg-muted",
     textClass: "text-muted-foreground",
     borderClass: "border-l-border",
+    stripClass: "bg-transparent",
     defaultOpen: true,
   },
   {
     id: "done",
     label: "Completed",
     colorClass: "text-emerald-500",
-    bgClass: "bg-emerald-50 dark:bg-emerald-950/40",
-    textClass: "text-emerald-600 dark:text-emerald-400",
-    borderClass: "border-l-emerald-400",
-    defaultOpen: false,         // collapsed by default — keeps UI clean
+    bgClass: "bg-emerald-100 dark:bg-emerald-950/60",
+    textClass: "text-emerald-700 dark:text-emerald-300",
+    borderClass: "border-l-emerald-500",
+    stripClass: "bg-emerald-50/40 dark:bg-emerald-950/20",
+    defaultOpen: false,
   },
 ];
 
@@ -111,9 +117,51 @@ const FILTER_TABS: FilterTab[] = [
   { id: "inbox",    label: "Inbox" },
 ];
 
-// ─── Sub-components ───────────────────────────────────────────
+// ─── KPI card ─────────────────────────────────────────────────
+function KpiCard({
+  label,
+  value,
+  total,
+  accent,
+  warn = false,
+}: {
+  label: string;
+  value: number;
+  total: number;
+  accent: string;   // Tailwind bg class for the progress bar
+  warn?: boolean;
+}) {
+  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
+  return (
+    <div className="rounded-xl border border-border bg-card px-4 pt-3 pb-3 flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+          {label}
+        </p>
+        {warn && value > 0 && (
+          <AlertTriangle size={12} className="text-red-500 shrink-0" />
+        )}
+      </div>
+      <p
+        className={cn(
+          "text-[26px] font-bold tabular-nums leading-none",
+          warn && value > 0 ? "text-red-500" : "text-foreground",
+        )}
+      >
+        {value}
+      </p>
+      {/* Progress bar */}
+      <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
+        <div
+          className={cn("h-full rounded-full transition-all duration-500", accent)}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
 
-/** Collapsible section header for a task group */
+// ─── Group header ─────────────────────────────────────────────
 function GroupHeader({
   group,
   count,
@@ -129,44 +177,41 @@ function GroupHeader({
     <button
       onClick={onToggle}
       className={cn(
-        "w-full flex items-center gap-3 py-2.5 px-3",
-        "rounded-xl border-l-2 bg-transparent",
-        "hover:bg-accent/50 transition-colors text-left",
+        "w-full flex items-center gap-3 py-2 px-3",
+        "rounded-lg border-l-[3px] bg-transparent",
+        "hover:bg-accent/40 active:bg-accent/60 transition-colors text-left",
         group.borderClass,
       )}
     >
-      {/* Status dot */}
+      {/* Colored dot */}
       <span
         className={cn(
-          "w-2 h-2 rounded-full shrink-0",
+          "w-2.5 h-2.5 rounded-full shrink-0",
           group.colorClass.replace("text-", "bg-"),
         )}
         aria-hidden
       />
 
       {/* Label */}
-      <span className="text-[13px] font-semibold tracking-wide flex-1">
+      <span className="text-[13px] font-semibold flex-1 tracking-tight">
         {group.label}
       </span>
 
-      {/* Count badge */}
-      {count > 0 && (
-        <span
-          className={cn(
-            "text-[11px] font-semibold px-2 py-0.5 rounded-full tabular-nums",
-            group.bgClass,
-            group.textClass,
-          )}
-        >
-          {count}
-        </span>
-      )}
+      {/* Count badge — always visible, prominent */}
+      <span
+        className={cn(
+          "min-w-[22px] text-center text-[11px] font-bold px-2 py-0.5 rounded-full tabular-nums",
+          count > 0 ? cn(group.bgClass, group.textClass) : "bg-muted text-muted-foreground/50",
+        )}
+      >
+        {count}
+      </span>
 
       {/* Chevron */}
       <ChevronDown
         size={14}
         className={cn(
-          "text-muted-foreground transition-transform duration-200 shrink-0",
+          "text-muted-foreground/60 transition-transform duration-200 shrink-0",
           open ? "rotate-0" : "-rotate-90",
         )}
       />
@@ -174,7 +219,7 @@ function GroupHeader({
   );
 }
 
-/** Single segregated group with header + task grid/list */
+// ─── Task group section ───────────────────────────────────────
 function TaskGroup({
   group,
   tasks,
@@ -189,20 +234,29 @@ function TaskGroup({
   const [open, setOpen] = useState(group.defaultOpen);
 
   return (
-    <div className="mb-5">
-      <GroupHeader
-        group={group}
-        count={tasks.length}
-        open={open}
-        onToggle={() => setOpen((v) => !v)}
-      />
+    <div
+      className={cn(
+        "mb-3 rounded-xl overflow-hidden",
+        open && tasks.length > 0 ? cn("border border-border/60", group.stripClass) : "",
+      )}
+    >
+      {/* Header — always outside the tinted strip */}
+      <div className={cn("px-1 pt-1", open && tasks.length > 0 ? "pb-0" : "pb-1")}>
+        <GroupHeader
+          group={group}
+          count={tasks.length}
+          open={open}
+          onToggle={() => setOpen((v) => !v)}
+        />
+      </div>
 
+      {/* Task grid/list */}
       {open && tasks.length > 0 && (
         <div
           className={cn(
-            "mt-2",
+            "px-2 pb-2 pt-2",
             view === "grid"
-              ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
+              ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5"
               : "flex flex-col gap-1.5",
           )}
         >
@@ -212,18 +266,22 @@ function TaskGroup({
         </div>
       )}
 
+      {/* Empty state */}
       {open && tasks.length === 0 && (
-        <p className="text-[12px] text-muted-foreground px-3 pt-2 pb-1">
-          Nothing here yet.{" "}
+        <div className="flex items-center gap-2 px-4 py-2">
+          <span className="text-[12px] text-muted-foreground/70 italic">Nothing here.</span>
           {group.id !== "done" && (
             <button
               onClick={openQuickAdd}
-              className="underline underline-offset-2 hover:text-foreground transition-colors"
+              className={cn(
+                "text-[12px] font-medium px-2 py-0.5 rounded-md transition-colors",
+                "bg-muted hover:bg-accent text-muted-foreground hover:text-foreground",
+              )}
             >
-              Add a task
+              + Add task
             </button>
           )}
-        </p>
+        </div>
       )}
     </div>
   );
@@ -246,12 +304,11 @@ export function TasksModule() {
 
   const location = useLocation();
   const [localView, setLocalView] = useState<"grid" | "list">("grid");
-  // "grouped" is the new default; "flat" keeps the old flat behaviour
   const [layout, setLayout] = useState<"grouped" | "flat">("grouped");
 
   useEffect(() => {
     void loadTasks();
-    void loadProjects();           // ← ensures project names/dots are ready
+    void loadProjects();
     const cleanup = setupTaskEventListeners();
     return cleanup;
   }, []);
@@ -276,7 +333,6 @@ export function TasksModule() {
     bus.emit("navigate:to", { path: paths[id] ?? "/tasks" });
   };
 
-  // Group tasks for segregated view
   const grouped = GROUPS.map((g) => ({
     group: g,
     tasks: tasks.filter((t) => bucketTask(t) === g.id),
@@ -286,64 +342,60 @@ export function TasksModule() {
     <div className="flex flex-col h-full overflow-hidden">
 
       {/* ── Page header ──────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-4 px-5 pt-5 pb-4 shrink-0">
+      <div className="flex items-center justify-between gap-4 px-5 pt-5 pb-3 shrink-0">
         <div className="flex items-center gap-2.5">
           <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center"
+            className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm"
             style={{ background: "hsl(var(--color-primary) / 0.12)" }}
           >
-            <CheckSquare size={16} style={{ color: "hsl(var(--color-primary))" }} />
+            <CheckSquare size={17} style={{ color: "hsl(var(--color-primary))" }} />
           </div>
           <div>
-            <h1 className="text-[17px] font-semibold leading-tight tracking-tight">Tasks</h1>
-            <p className="text-[12px] text-muted-foreground leading-tight">
-              {tasks.length} task{tasks.length !== 1 ? "s" : ""}
+            <h1 className="text-[17px] font-bold leading-tight tracking-tight">Tasks</h1>
+            <p className="text-[12px] leading-tight flex items-center gap-1.5">
+              <span className="text-muted-foreground">
+                {tasks.length} task{tasks.length !== 1 ? "s" : ""}
+              </span>
+              {overdueCount > 0 && (
+                <span className="inline-flex items-center gap-1 text-red-500 font-medium">
+                  <AlertTriangle size={10} />
+                  {overdueCount} overdue
+                </span>
+              )}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Layout toggle: grouped / flat */}
-          <div className="flex items-center rounded-md border border-border overflow-hidden text-[11px] font-medium">
-            <button
-              onClick={() => setLayout("grouped")}
-              className={cn(
-                "px-2.5 py-1.5 transition-fast",
-                layout === "grouped"
-                  ? "bg-accent text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-              title="Grouped view"
-            >
-              Grouped
-            </button>
-            <button
-              onClick={() => setLayout("flat")}
-              className={cn(
-                "px-2.5 py-1.5 transition-fast border-l border-border",
-                layout === "flat"
-                  ? "bg-accent text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-              title="Flat view"
-            >
-              Flat
-            </button>
-          </div>
-
-          {/* View toggle (grid / list) */}
-          <div className="flex items-center rounded-md border border-border overflow-hidden">
+          {/* Combined layout + view toggle */}
+          <div className="flex items-center rounded-lg border border-border overflow-hidden text-[11px] font-medium bg-background">
+            {(["Grouped", "Flat"] as const).map((l, i) => (
+              <button
+                key={l}
+                onClick={() => setLayout(l.toLowerCase() as "grouped" | "flat")}
+                className={cn(
+                  "px-2.5 py-1.5 transition-fast",
+                  i > 0 && "border-l border-border",
+                  layout === l.toLowerCase()
+                    ? "bg-accent text-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {l}
+              </button>
+            ))}
+            <div className="w-px h-4 bg-border mx-0.5" />
             <button
               onClick={() => setLocalView("grid")}
               className={cn(
-                "p-1.5 transition-fast",
+                "p-1.5 transition-fast border-l border-border",
                 localView === "grid"
                   ? "bg-accent text-foreground"
                   : "text-muted-foreground hover:text-foreground",
               )}
               title="Grid view"
             >
-              <LayoutGrid size={14} />
+              <LayoutGrid size={13} />
             </button>
             <button
               onClick={() => setLocalView("list")}
@@ -355,7 +407,7 @@ export function TasksModule() {
               )}
               title="List view"
             >
-              <List size={14} />
+              <List size={13} />
             </button>
           </div>
 
@@ -367,29 +419,11 @@ export function TasksModule() {
       </div>
 
       {/* ── KPI strip ────────────────────────────────────── */}
-      <div className="grid grid-cols-4 gap-3 px-5 pb-4 shrink-0">
-        {[
-          { label: "Total",       value: tasks.length,     color: "text-foreground" },
-          { label: "In Progress", value: inProgressCount,  color: "text-blue-500" },
-          { label: "Completed",   value: doneCount,        color: "text-emerald-500" },
-          {
-            label: "Overdue",
-            value: overdueCount,
-            color: overdueCount > 0 ? "text-red-500" : "text-muted-foreground",
-          },
-        ].map((kpi) => (
-          <div
-            key={kpi.label}
-            className="rounded-xl border border-border bg-card px-4 py-3"
-          >
-            <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide mb-1">
-              {kpi.label}
-            </p>
-            <p className={cn("text-[22px] font-bold tabular-nums leading-none", kpi.color)}>
-              {kpi.value}
-            </p>
-          </div>
-        ))}
+      <div className="grid grid-cols-4 gap-2.5 px-5 pb-3 shrink-0">
+        <KpiCard label="Total"       value={tasks.length}    total={tasks.length}  accent="bg-foreground/30" />
+        <KpiCard label="In Progress" value={inProgressCount} total={tasks.length}  accent="bg-blue-500" />
+        <KpiCard label="Completed"   value={doneCount}       total={tasks.length}  accent="bg-emerald-500" />
+        <KpiCard label="Overdue"     value={overdueCount}    total={tasks.length}  accent="bg-red-500" warn />
       </div>
 
       {/* ── Filter bar ───────────────────────────────────── */}
@@ -405,7 +439,7 @@ export function TasksModule() {
       />
 
       {/* ── Content ──────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto px-5 py-4">
+      <div className="flex-1 overflow-y-auto px-5 py-3">
         {tasks.length === 0 ? (
           <EmptyState
             title={
@@ -425,8 +459,7 @@ export function TasksModule() {
             action={{ label: "New task", onClick: () => openQuickAdd() }}
           />
         ) : layout === "grouped" ? (
-          /* ── GROUPED VIEW (new) ── */
-          <div>
+          <div className="flex flex-col gap-0.5">
             {grouped.map(({ group, tasks: groupTasks }) => (
               <TaskGroup
                 key={group.id}
@@ -438,14 +471,12 @@ export function TasksModule() {
             ))}
           </div>
         ) : localView === "grid" ? (
-          /* ── FLAT GRID (original) ── */
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {tasks.map((t) => (
               <TaskCard key={t.id} task={t} view="grid" />
             ))}
           </div>
         ) : (
-          /* ── FLAT LIST (original) ── */
           <div className="flex flex-col gap-2">
             {tasks.map((t) => (
               <TaskCard key={t.id} task={t} view="list" />
