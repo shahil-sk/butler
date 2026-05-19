@@ -23,15 +23,13 @@ const CalendarModule     = lazy(() => import("@/modules/calendar").then((m) => (
 const JournalModule      = lazy(() => import("@/modules/journal"));
 const FocusModule        = lazy(() => import("@/modules/focus"));
 const TimeTrackingModule = lazy(() => import("@/modules/time-tracking"));
+const DatabaseModule     = lazy(() => import("@/modules/database"));
 
 function ModulePlaceholder({ name }: { name: string }) {
   return (
     <div className="flex-1 flex items-center justify-center h-full">
       <div className="text-center space-y-1.5">
-        <div
-          className="w-10 h-10 rounded-xl mx-auto mb-3 skeleton"
-          aria-hidden
-        />
+        <div className="w-10 h-10 rounded-xl mx-auto mb-3 skeleton" aria-hidden />
         <p className="text-sm font-semibold text-foreground tracking-tight">{name}</p>
         <p className="text-xs text-muted-foreground">Coming soon</p>
       </div>
@@ -126,7 +124,7 @@ export function Shell() {
                       <Route path="/journal/*"   element={<JournalModule />} />
                       <Route path="/focus/*"     element={<FocusModule />} />
                       <Route path="/time/*"      element={<TimeTrackingModule />} />
-                      <Route path="/database/*"  element={<ModulePlaceholder name="Database" />} />
+                      <Route path="/database/*"  element={<DatabaseModule />} />
                       <Route path="/pdf/*"       element={<ModulePlaceholder name="Research & PDF" />} />
                       <Route path="/settings/*"  element={<ModulePlaceholder name="Settings" />} />
                       <Route path="*"            element={<Navigate to="/tasks" replace />} />
@@ -141,7 +139,6 @@ export function Shell() {
         <CommandPalette />
         <Notifications />
         <GlobalQuickAdd />
-        {/* GlobalTaskDetail: always mounted so openTask() works from any module */}
         <GlobalTaskDetail />
         <ErrorBoundary name="IntegrationLayer">
           <IntegrationLayer />
@@ -157,8 +154,6 @@ function GlobalQuickAdd() {
   return <QuickAdd />;
 }
 
-// Renders TaskDetail at the Shell root (outside module routes) so
-// openTask() pops the modal regardless of which module is active.
 function GlobalTaskDetail() {
   const openTaskId = useTaskStore((s) => s.openTaskId);
   if (!openTaskId) return null;

@@ -15,7 +15,6 @@ import { useJournalStore } from "@/modules/journal/store";
 import { useFocusStore } from "@/modules/focus/store";
 import { useTimeStore } from "@/modules/time-tracking/store";
 import { useShellStore } from "@/shell/store";
-import { databaseManifest } from "@/modules/database"
 
 export function IntegrationLayer() {
   useEffect(() => {
@@ -228,7 +227,6 @@ export function IntegrationLayer() {
     // FOCUS ↔ TASKS
     // =========================================================
 
-    // focus:session-completed → update task.actualMinutes
     unsubs.push(bus.on("focus:session-completed", ({ session }) => {
       if (!session.taskId) return;
       const task = useTaskStore.getState().getTaskById(session.taskId);
@@ -239,23 +237,14 @@ export function IntegrationLayer() {
       });
     }));
 
-    // focus:session-completed → if task has estimateMinutes, warn over/under
     unsubs.push(bus.on("focus:session-completed", ({ session }) => {
       if (!session.taskId) return;
       const task = useTaskStore.getState().getTaskById(session.taskId);
       if (!task?.estimateMinutes) return;
-
-      // Sum ALL completed focus sessions for this task
       const allSessions = useFocusStore.getState().sessions;
       const totalActual = allSessions
-        .filter(
-          (s) =>
-            s.taskId === session.taskId &&
-            s.type === "focus" &&
-            s.actualMinutes
-        )
+        .filter((s) => s.taskId === session.taskId && s.type === "focus" && s.actualMinutes)
         .reduce((a, s) => a + (s.actualMinutes ?? 0), 0);
-
       const estimate = task.estimateMinutes;
       if (totalActual > estimate * 1.2) {
         notify({
@@ -276,7 +265,6 @@ export function IntegrationLayer() {
     // FOCUS ↔ JOURNAL
     // =========================================================
 
-    // focus:session-completed → link session's task to today's daily journal
     unsubs.push(bus.on("focus:session-completed", ({ session }) => {
       if (!session.taskId) return;
       const todayStr = new Date().toISOString().slice(0, 10);
@@ -288,11 +276,9 @@ export function IntegrationLayer() {
       }
     }));
 
-    // focus:session-completed → open/ensure today's daily journal exists
     unsubs.push(bus.on("focus:session-completed", ({ session }) => {
       if (session.type !== "focus") return;
       const todayStr = new Date().toISOString().slice(0, 10);
-      // Ensure daily journal entry exists (IntegrationLayer creates it via journal:open-date)
       bus.emit("journal:open-date", { date: todayStr });
     }));
 
@@ -300,12 +286,10 @@ export function IntegrationLayer() {
     // FOCUS ↔ PROJECTS
     // =========================================================
 
-    // focus:session-completed → check milestone completion for linked project
     unsubs.push(bus.on("focus:session-completed", ({ session }) => {
       if (!session.taskId || !session.projectId) return;
       const project = useProjectStore.getState().getProjectById(session.projectId);
       if (!project) return;
-
       project.milestones.forEach((milestone) => {
         if (milestone.completedAt) return;
         if (!milestone.linkedTaskIds.includes(session.taskId!)) return;
@@ -315,17 +299,13 @@ export function IntegrationLayer() {
         });
         if (allDone) {
           void useProjectStore.getState().completeMilestone(project.id, milestone.id);
-          notify({
-            type: "success",
-            message: `Milestone "${milestone.title}" completed!`,
-            durationMs: 4000,
-          });
+          notify({ type: "success", message: `Milestone "${milestone.title}" completed!`, durationMs: 4000 });
         }
       });
     }));
 
     // =========================================================
-    // FOCUS — TOAST & NOTIFICATIONS
+    // FOCUS — TOAST
     // =========================================================
 
     unsubs.push(bus.on("focus:session-completed", ({ session }) => {
@@ -335,20 +315,16 @@ export function IntegrationLayer() {
         ? useTaskStore.getState().getTaskById(session.taskId)?.title
         : null;
       const interrupts = session.interruptCount ?? 0;
-
       let msg = `Focus session complete — ${mins}m logged.`;
       if (taskTitle) msg += ` Task: "${taskTitle}".`;
       if (interrupts > 0) msg += ` ${interrupts} interruption${interrupts > 1 ? "s" : ""}.`;
-
       notify({ type: "success", message: msg, durationMs: 6000 });
     }));
-
 
     // =========================================================
     // TIME TRACKING ↔ TASKS
     // =========================================================
 
-    // time:entry-created → accumulate task.actualMinutes
     unsubs.push(bus.on("time:entry-created", ({ entry }) => {
       if (!entry.taskId || !entry.durationMinutes) return;
       const task = useTaskStore.getState().getTaskById(entry.taskId);
@@ -358,7 +334,6 @@ export function IntegrationLayer() {
       });
     }));
 
-    // time:entry-updated → recompute task.actualMinutes from all entries
     unsubs.push(bus.on("time:entry-updated", ({ entry }) => {
       if (!entry.taskId) return;
       const allEntries = useTimeStore.getState().entries.filter(
@@ -370,12 +345,8 @@ export function IntegrationLayer() {
       void useTaskStore.getState().updateTask(entry.taskId, { actualMinutes: total });
     }));
 
-    // time:entry-deleted → recompute task.actualMinutes
-    unsubs.push(bus.on("time:entry-deleted", ({ entryId }) => {
-      // Find which task this entry belonged to before deletion
-      // Entry already removed from store — recompute from remaining entries
+    unsubs.push(bus.on("time:entry-deleted", () => {
       const store = useTimeStore.getState();
-      // Group remaining entries by taskId and recompute all affected tasks
       const taskMinutes = new Map<string, number>();
       store.entries.filter((e) => e.taskId && e.durationMinutes && e.endAt).forEach((e) => {
         taskMinutes.set(e.taskId!, (taskMinutes.get(e.taskId!) ?? 0) + (e.durationMinutes ?? 0));
@@ -392,11 +363,8 @@ export function IntegrationLayer() {
     // TIME TRACKING ↔ PROJECTS
     // =========================================================
 
-    // project:deleted → delete all time entries for that project
     unsubs.push(bus.on("project:deleted", ({ projectId }) => {
-      const entries = useTimeStore.getState().entries.filter(
-        (e) => e.projectId === projectId
-      );
+      const entries = useTimeStore.getState().entries.filter((e) => e.projectId === projectId);
       entries.forEach((e) => void useTimeStore.getState().deleteEntry(e.id));
     }));
 
@@ -404,7 +372,6 @@ export function IntegrationLayer() {
     // TIME TRACKING ↔ FOCUS
     // =========================================================
 
-    // focus:session-completed → auto-create TimeEntry (focus sessions only)
     unsubs.push(bus.on("focus:session-completed", ({ session }) => {
       if (session.type !== "focus") return;
       if (!session.startedAt || !session.completedAt) return;
@@ -425,7 +392,6 @@ export function IntegrationLayer() {
     // TIME TRACKING — NOTIFICATIONS
     // =========================================================
 
-    // Warn when a task goes 20%+ over estimate based on logged time
     unsubs.push(bus.on("time:entry-created", ({ entry }) => {
       if (!entry.taskId || !entry.durationMinutes) return;
       const task = useTaskStore.getState().getTaskById(entry.taskId);
@@ -443,7 +409,15 @@ export function IntegrationLayer() {
     }));
 
     // =========================================================
-    // SEARCH INVALIDATION
+    // DATABASE — NOTIFICATIONS
+    // =========================================================
+
+    unsubs.push(bus.on("database:created", ({ database }) => {
+      notify({ type: "success", message: `Table "${(database as { name: string }).name}" created`, durationMs: 2000 });
+    }));
+
+    // =========================================================
+    // SEARCH
     // =========================================================
 
     unsubs.push(bus.on("search:result-selected", ({ result }) => {
@@ -464,6 +438,9 @@ export function IntegrationLayer() {
           break;
         case "journal":
           bus.emit("navigate:to", { path: "/journal" });
+          break;
+        case "database_row":
+          bus.emit("navigate:to", { path: "/database" });
           break;
       }
     }));
