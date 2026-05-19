@@ -13,7 +13,7 @@ import {
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { cn } from "@/shared/utils";
 import { useCalendarStore } from "./store";
-import { MonthGrid }  from "./MonthGrid";
+import { MonthGrid }  from "./components/MonthGrid";
 import { WeekView }   from "./WeekView";
 import { DayView }    from "./DayView";
 import { AgendaView } from "./AgendaView";
@@ -71,7 +71,7 @@ export function CalendarModule() {
     if (view === "week") {
       const ws = startOfWeek(anchor, { weekStartsOn: 1 });
       const we = endOfWeek(anchor, { weekStartsOn: 1 });
-      return `${format(ws, "MMM d")} – ${format(we, "MMM d, yyyy")}`;
+      return `${format(ws, "MMM d")} \u2013 ${format(we, "MMM d, yyyy")}`;
     }
     if (view === "day") return format(anchor, "EEEE, MMMM d, yyyy");
     return format(anchor, "MMMM yyyy");
