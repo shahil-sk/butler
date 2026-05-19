@@ -24,6 +24,7 @@ const JournalModule      = lazy(() => import("@/modules/journal"));
 const FocusModule        = lazy(() => import("@/modules/focus"));
 const TimeTrackingModule = lazy(() => import("@/modules/time-tracking"));
 const DatabaseModule     = lazy(() => import("@/modules/database"));
+const ResearchModule     = lazy(() => import("@/modules/research").then((m) => ({ default: m.ResearchModule })));
 
 function ModulePlaceholder({ name }: { name: string }) {
   return (
@@ -115,19 +116,19 @@ export function Shell() {
                 <ErrorBoundary name="module">
                   <Suspense fallback={<ModuleLoader />}>
                     <Routes>
-                      <Route path="/"            element={<Navigate to="/tasks" replace />} />
-                      <Route path="/tasks/*"     element={<TasksModule />} />
-                      <Route path="/projects/*"  element={<ProjectsModule />} />
-                      <Route path="/planner/*"   element={<PlannerModule />} />
-                      <Route path="/notes/*"     element={<NotesModule />} />
-                      <Route path="/calendar/*"  element={<CalendarModule />} />
-                      <Route path="/journal/*"   element={<JournalModule />} />
-                      <Route path="/focus/*"     element={<FocusModule />} />
-                      <Route path="/time/*"      element={<TimeTrackingModule />} />
-                      <Route path="/database/*"  element={<DatabaseModule />} />
-                      <Route path="/pdf/*"       element={<ModulePlaceholder name="Research & PDF" />} />
-                      <Route path="/settings/*"  element={<ModulePlaceholder name="Settings" />} />
-                      <Route path="*"            element={<Navigate to="/tasks" replace />} />
+                      <Route path="/"             element={<Navigate to="/tasks" replace />} />
+                      <Route path="/tasks/*"      element={<TasksModule />} />
+                      <Route path="/projects/*"   element={<ProjectsModule />} />
+                      <Route path="/planner/*"    element={<PlannerModule />} />
+                      <Route path="/notes/*"      element={<NotesModule />} />
+                      <Route path="/calendar/*"   element={<CalendarModule />} />
+                      <Route path="/journal/*"    element={<JournalModule />} />
+                      <Route path="/focus/*"      element={<FocusModule />} />
+                      <Route path="/time/*"       element={<TimeTrackingModule />} />
+                      <Route path="/database/*"   element={<DatabaseModule />} />
+                      <Route path="/research/*"   element={<ResearchModule />} />
+                      <Route path="/settings/*"   element={<ModulePlaceholder name="Settings" />} />
+                      <Route path="*"             element={<Navigate to="/tasks" replace />} />
                     </Routes>
                   </Suspense>
                 </ErrorBoundary>
