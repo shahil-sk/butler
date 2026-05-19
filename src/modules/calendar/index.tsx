@@ -1,176 +1,137 @@
+// ============================================================
+// CALENDAR — Module root  (improved)
+// - Correct hook placement (no hooks inside callbacks)
+// - Bus listeners: tasks/notes auto-reload context
+// - WeekView / DayView / AgendaView wired in
+// ============================================================
+
 import { useEffect } from "react";
 import {
-  ChevronLeft, ChevronRight, Plus,
-  LayoutGrid, List, Calendar as CalIcon, AlignLeft,
-} from "lucide-react";
-import { format, parseISO, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from "date-fns";
-import { registry } from "@/kernel/router";
-import { useCalendarStore, type CalendarView } from "./store";
-import { MonthGrid } from "./components/MonthGrid";
-import { EventForm } from "./components/EventForm";
-import { PageHeader, ViewSwitcher, PrimaryButton } from "@/shared/ui";
-import { cn, toISODate } from "@/shared/utils";
-import type { ModuleManifest } from "@/shared/types";
+  startOfMonth, endOfMonth, startOfWeek, endOfWeek,
+  format, parseISO,
+} from "date-fns";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { cn } from "@/shared/utils";
+import { useCalendarStore } from "./store";
+import { MonthGrid }  from "./MonthGrid";
+import { WeekView }   from "./WeekView";
+import { DayView }    from "./DayView";
+import { AgendaView } from "./AgendaView";
+import { EventForm }  from "./EventForm";
+import { bus }        from "@/kernel/event-bus";
+import { useTaskStore } from "@/modules/tasks/store";
+import { useNoteStore } from "@/modules/notes/store";
 
-const manifest: ModuleManifest = {
-  id: "calendar", name: "Calendar", icon: "CalendarDays",
-  sidebarOrder: 5, isEnabled: true,
-  routes: [{ path: "/calendar", label: "Calendar" }],
-  commands: [
-    { id: "cal.new", label: "New event", group: "Calendar", action: "calendar:event-form" },
-  ],
-  shortcuts: [
-    { keys: "g c", action: "navigate:to", description: "Go to Calendar", global: false },
-  ],
-};
-registry.register(manifest);
-
-const VIEW_OPTIONS = [
-  { value: "month"  as CalendarView, icon: LayoutGrid,  label: "Month" },
-  { value: "week"   as CalendarView, icon: List,         label: "Week"  },
-  { value: "day"    as CalendarView, icon: CalIcon,      label: "Day"   },
-  { value: "agenda" as CalendarView, icon: AlignLeft,    label: "Agenda"},
-];
+const VIEW_LABELS = { month: "Month", week: "Week", day: "Day", agenda: "Agenda" } as const;
 
 export function CalendarModule() {
   const {
-    view, setView, activeDate,
-    loadEvents, loadCalendars,
-    goToday, goNext, goPrev,
-    openEventForm, eventForm,
-    getEventsInRange,
+    view, activeDate,
+    loadCalendars, loadEvents,
+    setView, goNext, goPrev, goToday,
+    openEventForm,
   } = useCalendarStore();
 
-  const anchor = parseISO(activeDate);
+  const loadTasks = useTaskStore((s) => s.loadTasks);
+  const loadNotes = useNoteStore((s) => s.loadNotes);
 
-  // Compute load range based on view
+  const anchor = parseISO(activeDate);
+  const from   = startOfMonth(startOfWeek(anchor, { weekStartsOn: 1 }));
+  const to     = endOfMonth(endOfWeek(anchor, { weekStartsOn: 1 }));
+
   useEffect(() => {
     void loadCalendars();
+    void (loadTasks as (() => Promise<void>) | undefined)?.();
+    void (loadNotes as (() => Promise<void>) | undefined)?.();
   }, []);
 
   useEffect(() => {
-    let from: string, to: string;
-    if (view === "month") {
-      from = startOfMonth(anchor).toISOString();
-      to   = endOfMonth(anchor).toISOString();
-    } else if (view === "week") {
-      from = startOfWeek(anchor, { weekStartsOn: 1 }).toISOString();
-      to   = endOfWeek(anchor,   { weekStartsOn: 1 }).toISOString();
-    } else {
-      from = `${activeDate}T00:00:00Z`;
-      to   = `${activeDate}T23:59:59Z`;
-    }
-    void loadEvents(from, to);
+    void loadEvents(from.toISOString(), to.toISOString());
   }, [activeDate, view]);
 
-  const isToday = activeDate === toISODate(new Date());
+  useEffect(() => {
+    const unsubs = [
+      bus.on("task:created",  () => void (loadTasks as any)?.()),
+      bus.on("task:updated",  () => void (loadTasks as any)?.()),
+      bus.on("task:deleted",  () => void (loadTasks as any)?.()),
+      bus.on("note:created",  () => void (loadNotes as any)?.()),
+      bus.on("note:updated",  () => void (loadNotes as any)?.()),
+      bus.on("note:deleted",  () => void (loadNotes as any)?.()),
+      bus.on("calendar:open-for-date", ({ date }: { date: string }) => {
+        useCalendarStore.getState().setActiveDate(date);
+        useCalendarStore.getState().setView("day");
+        openEventForm({ startAt: `${date}T09:00:00`, endAt: `${date}T10:00:00` });
+      }),
+    ];
+    return () => unsubs.forEach((u) => u());
+  }, []);
 
-  const dateLabel = (() => {
-    if (view === "month")  return format(anchor, "MMMM yyyy");
-    if (view === "week")   return `Week of ${format(startOfWeek(anchor, { weekStartsOn: 1 }), "MMM d, yyyy")}`;
-    if (view === "day")    return format(anchor, "EEEE, MMMM d, yyyy");
+  const headerLabel = (() => {
+    if (view === "month") return format(anchor, "MMMM yyyy");
+    if (view === "week") {
+      const ws = startOfWeek(anchor, { weekStartsOn: 1 });
+      const we = endOfWeek(anchor, { weekStartsOn: 1 });
+      return `${format(ws, "MMM d")} – ${format(we, "MMM d, yyyy")}`;
+    }
+    if (view === "day") return format(anchor, "EEEE, MMMM d, yyyy");
     return format(anchor, "MMMM yyyy");
   })();
 
-  // Agenda view — flat sorted list
-  const agendaEvents = view === "agenda"
-    ? getEventsInRange(
-        startOfMonth(anchor).toISOString(),
-        endOfMonth(anchor).toISOString()
-      ).sort((a, b) => a.startAt.localeCompare(b.startAt))
-    : [];
-
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <PageHeader title="Calendar">
-        {/* Date navigation */}
-        <button
-          onClick={goPrev}
-          className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-fast"
-        >
+    <div className="flex flex-col h-full bg-background">
+      {/* Toolbar */}
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border shrink-0">
+        <button onClick={goPrev} className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-fast">
           <ChevronLeft size={14} />
         </button>
-
-        <button
-          onClick={goToday}
-          className={cn(
-            "px-2.5 py-1 rounded-md text-xs transition-fast",
-            isToday
-              ? "bg-primary/10 text-primary font-medium"
-              : "text-muted-foreground hover:bg-accent hover:text-foreground"
-          )}
-        >
-          Today
-        </button>
-
-        <span className="text-xs font-medium text-foreground min-w-[200px] text-center">
-          {dateLabel}
-        </span>
-
-        <button
-          onClick={goNext}
-          className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-fast"
-        >
+        <button onClick={goNext} className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-fast">
           <ChevronRight size={14} />
         </button>
+        <button onClick={goToday} className="px-2.5 py-1 text-xs rounded border border-border hover:bg-accent transition-fast">
+          Today
+        </button>
+        <h1 className="text-sm font-semibold flex-1 text-center">{headerLabel}</h1>
 
-        <ViewSwitcher options={VIEW_OPTIONS} value={view} onChange={setView} />
+        <div className="flex items-center rounded-lg border border-border overflow-hidden">
+          {(Object.keys(VIEW_LABELS) as (keyof typeof VIEW_LABELS)[]).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={cn(
+                "px-2.5 py-1 text-[11px] transition-fast border-r last:border-r-0 border-border",
+                view === v
+                  ? "bg-primary/10 text-primary font-medium"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
+              )}
+            >
+              {VIEW_LABELS[v]}
+            </button>
+          ))}
+        </div>
 
-        <PrimaryButton onClick={() => openEventForm({ startAt: `${activeDate}T09:00:00` })}>
-          <Plus size={13} />
+        <button
+          onClick={() => openEventForm({ startAt: `${activeDate}T09:00:00`, endAt: `${activeDate}T10:00:00` })}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-fast"
+        >
+          <Plus size={12} />
           New event
-        </PrimaryButton>
-      </PageHeader>
-
-      {/* View content */}
-      <div className="flex-1 overflow-hidden flex flex-col">
-        {view === "month" && <MonthGrid />}
-
-        {view === "agenda" && (
-          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-1">
-            {agendaEvents.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-12">
-                No events this month.
-              </p>
-            ) : (
-              agendaEvents.map((evt) => {
-                const cal   = useCalendarStore.getState().calendars.find((c) => c.id === evt.calendarId);
-                const color = evt.color ?? cal?.color ?? "#3b82f6";
-                return (
-                  <div
-                    key={evt.id}
-                    onClick={() => openEventForm(evt, evt.id)}
-                    className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-border hover:border-primary/30 cursor-pointer transition-fast group"
-                  >
-                    <div
-                      className="w-1 h-8 rounded-full shrink-0"
-                      style={{ backgroundColor: color }}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{evt.title}</p>
-                      <p className="text-xs text-muted-foreground tabular-nums">
-                        {evt.allDay
-                          ? evt.startAt.slice(0, 10)
-                          : `${evt.startAt.slice(0,10)} ${evt.startAt.slice(11,16)} – ${evt.endAt.slice(11,16)}`
-                        }
-                      </p>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        )}
-
-        {(view === "week" || view === "day") && (
-          <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">
-            Week/day view — use Planner module for time-blocking workflows.
-          </div>
-        )}
+        </button>
       </div>
 
-      {/* Event form modal */}
-      {eventForm.open && <EventForm />}
+      {(view === "month" || view === "week") && (
+        <div className="grid grid-cols-7 border-b border-border shrink-0">
+          {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d) => (
+            <div key={d} className="py-1.5 text-center text-[11px] font-medium text-muted-foreground">{d}</div>
+          ))}
+        </div>
+      )}
+
+      {view === "month"  && <MonthGrid />}
+      {view === "week"   && <WeekView />}
+      {view === "day"    && <DayView />}
+      {view === "agenda" && <AgendaView />}
+
+      <EventForm />
     </div>
   );
 }
