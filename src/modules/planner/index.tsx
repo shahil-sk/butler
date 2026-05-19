@@ -10,7 +10,7 @@ import { useTimeStore } from "@/modules/time-tracking/store";
 import { useFocusStore } from "@/modules/focus/store";
 import { DayColumn } from "./components/DayColumn";
 import { TaskSidebar } from "./components/TaskSidebar";
-import { PageHeader, ViewSwitcher } from "@/shared/ui";
+
 import { cn, toISODate } from "@/shared/utils";
 import { format, parseISO, startOfWeek, addDays } from "date-fns";
 import type { ModuleManifest } from "@/shared/types";
@@ -65,7 +65,7 @@ function StatsBar({ date }: { date: string }) {
   if (s.totalBlocks === 0 && totalTracked === 0) return null;
 
   return (
-    <div className="flex items-center gap-2 px-4 py-2 border-b border-border/40 bg-surface-1/40 shrink-0 backdrop-blur-sm flex-wrap">
+    <div className="flex items-center gap-3 px-6 py-2.5 border-b border-border/40 bg-surface-1/40 shrink-0 backdrop-blur-sm flex-wrap">
       {s.totalBlocks > 0 && (
         <StatPill icon={<Layers size={9} />} label={`${s.totalBlocks} blocks`} />
       )}
@@ -108,10 +108,10 @@ function StatPill({
 }: { icon: React.ReactNode; label: string; accent?: boolean; color?: string }) {
   return (
     <div className={cn(
-      "flex items-center gap-1.5 text-[10px] font-medium tabular-nums tracking-wide",
+      "flex items-center gap-1.5 text-[11px] font-medium tabular-nums",
       color ?? (accent ? "text-primary" : "text-muted-foreground/60")
     )}>
-      <span className={cn("opacity-70", (accent || color) && "opacity-100")}>{icon}</span>
+      <span className={cn("opacity-60", (accent || color) && "opacity-100")}>{icon}</span>
       {label}
     </div>
   );
@@ -312,47 +312,70 @@ export function PlannerModule() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-background">
-      <PageHeader title="Planner">
-        {/* Nav cluster */}
-        <div className="flex items-center gap-0.5 rounded-lg border border-border/50 bg-surface-1/60 p-0.5">
-          <button onClick={prev}
-            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/70 transition-all duration-150">
-            <ChevronLeft size={13} />
-          </button>
-          <button onClick={goToday}
-            className={cn(
-              "px-2.5 py-1 rounded-md text-[11px] font-semibold tracking-wide transition-all duration-150",
-              isToday
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-accent/70 hover:text-foreground"
-            )}>
-            Today
-          </button>
-          <button onClick={next}
-            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/70 transition-all duration-150">
-            <ChevronRight size={13} />
-          </button>
+
+      {/* ── Row 1: Title + actions ────────────────────────── */}
+      <div className="flex items-center justify-between px-6 pt-6 pb-3 shrink-0">
+        <div>
+          <h1 className="text-[18px] font-bold leading-tight tracking-tight">Planner</h1>
+          <p className="text-[12px] text-muted-foreground mt-0.5 leading-tight">{rangeLabel}</p>
         </div>
 
-        {/* Range label */}
-        <span className="text-[12px] font-medium text-foreground/80 min-w-[200px] text-center tabular-nums tracking-tight select-none">
-          {rangeLabel}
-        </span>
+        <div className="flex items-center gap-2">
+          {/* Nav cluster */}
+          <div className="flex items-center gap-0.5">
+            <button onClick={prev}
+              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+              <ChevronLeft size={14} />
+            </button>
+            <button onClick={goToday}
+              className={cn(
+                "px-2.5 py-1 rounded-md text-[12px] font-semibold transition-colors",
+                isToday
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent"
+              )}>
+              Today
+            </button>
+            <button onClick={next}
+              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+              <ChevronRight size={14} />
+            </button>
+          </div>
 
-        <ViewSwitcher options={VIEW_OPTIONS} value={view} onChange={setView} />
+          <div className="w-px h-4 bg-border" />
 
-        {/* Custom Plan button */}
-        <button
-          onClick={() => setShowPlanModal(true)}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-          title="Custom plan templates"
-        >
-          <BookTemplate size={12} />
-          Plan
-        </button>
-      </PageHeader>
+          {/* Custom Plan button */}
+          <button
+            onClick={() => setShowPlanModal(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          >
+            <BookTemplate size={13} />
+            Templates
+          </button>
+        </div>
+      </div>
 
-      {/* Stats bar (day view only — shows live tracked+focus time) */}
+      {/* ── Row 2: View switcher tabs ─────────────────────── */}
+      <div className="flex items-center px-6 border-b border-border shrink-0">
+        {VIEW_OPTIONS.map(({ value, icon: Icon, label }) => (
+          <button
+            key={value}
+            onClick={() => setView(value)}
+            className={cn(
+              "inline-flex items-center gap-1.5 px-3 py-3 text-[13px] font-medium",
+              "border-b-2 -mb-px transition-colors",
+              view === value
+                ? "border-foreground text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground hover:border-border",
+            )}
+          >
+            <Icon size={13} />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Stats bar (day view only) */}
       {view === "day" && <StatsBar date={activeDate} />}
 
       <div className="flex flex-1 overflow-hidden">
@@ -362,16 +385,14 @@ export function PlannerModule() {
 
           {/* Multi-day column headers */}
           {view !== "day" && (
-            <div className="flex border-b border-border/60 shrink-0 bg-surface-1/30">
+            <div className="flex border-b border-border/50 shrink-0 bg-surface-1/20">
               <div className="w-10 shrink-0" />
               {displayDates.map((date, i) => {
                 const d          = parseISO(date);
                 const isDay      = date === toISODate(new Date());
                 const weekDayIdx = view === "week" ? i : (d.getDay() + 6) % 7;
                 const blockCount = getBlocksForDate(date).length;
-                // task count: scheduled tasks for this date
                 const taskCount  = tasks.filter((t) => t.scheduledDate === date && t.status !== "done").length;
-                // time tracking entries for this date
                 const timeEntries = useTimeStore.getState().entries;
                 const trackedMins = timeEntries
                   .filter((e) => e.endAt && e.startAt.startsWith(date))
@@ -383,46 +404,47 @@ export function PlannerModule() {
                       setView("day");
                     }}
                     className={cn(
-                      "flex-1 flex flex-col items-center py-2.5 text-xs transition-all duration-150 hover:bg-accent/50 group",
+                      "flex-1 flex flex-col items-center py-3 text-xs transition-colors hover:bg-accent/40 group",
                       isDay && "text-primary"
                     )}
                   >
+                    {/* Day label */}
                     <span className={cn(
-                      "text-[9px] font-semibold tracking-widest uppercase mb-1",
+                      "text-[10px] font-semibold tracking-widest uppercase mb-1.5",
                       isDay ? "text-primary/70" : "text-muted-foreground/40"
                     )}>
                       {WEEK_DAYS[weekDayIdx]}
                     </span>
+
+                    {/* Date circle */}
                     <span className={cn(
-                      "w-7 h-7 flex items-center justify-center rounded-full text-[13px] font-semibold transition-all duration-150",
+                      "w-7 h-7 flex items-center justify-center rounded-full text-[13px] font-semibold transition-colors",
                       isDay
-                        ? "bg-primary text-primary-foreground shadow-sm"
+                        ? "bg-primary text-primary-foreground"
                         : "text-foreground/80 group-hover:bg-accent"
                     )}>
                       {format(d, "d")}
                     </span>
-                    {/* Block + task + tracked time chips */}
-                    <div className="mt-1.5 flex items-center gap-1 flex-wrap justify-center">
+
+                    {/* Chips */}
+                    <div className="mt-2 flex items-center gap-1 flex-wrap justify-center min-h-[16px]">
                       {blockCount > 0 && (
                         <span className={cn(
-                          "text-[9px] font-medium tabular-nums px-1 rounded",
-                          isDay ? "text-primary/70 bg-primary/10" : "text-muted-foreground/50 bg-muted/50"
+                          "text-[9px] font-medium tabular-nums px-1.5 py-0.5 rounded",
+                          isDay ? "text-primary/80 bg-primary/10" : "text-muted-foreground/50 bg-muted/60"
                         )}>
                           {blockCount}b
                         </span>
                       )}
                       {taskCount > 0 && (
-                        <span className="text-[9px] font-medium tabular-nums px-1 rounded text-amber-600 bg-amber-500/10">
+                        <span className="text-[9px] font-medium tabular-nums px-1.5 py-0.5 rounded text-amber-600 bg-amber-500/10">
                           {taskCount}t
                         </span>
                       )}
                       {trackedMins > 0 && (
-                        <span className="text-[9px] font-medium tabular-nums px-1 rounded text-emerald-600 bg-emerald-500/10">
+                        <span className="text-[9px] font-medium tabular-nums px-1.5 py-0.5 rounded text-emerald-600 bg-emerald-500/10">
                           {fmtMins(trackedMins)}
                         </span>
-                      )}
-                      {blockCount === 0 && taskCount === 0 && (
-                        <span className="mt-1.5 text-[9px] opacity-0">·</span>
                       )}
                     </div>
                   </button>
@@ -432,14 +454,14 @@ export function PlannerModule() {
           )}
 
           {/* Scrollable grid */}
-          <div className="flex flex-1 overflow-auto">
-            {/* Hour labels */}
-            <div className="w-10 shrink-0 relative select-none">
+          <div className="flex flex-1 overflow-y-auto overflow-x-hidden">
+            {/* Hour labels — must match 16 * 64px = 1024px total height */}
+            <div className="w-10 shrink-0 relative select-none" style={{ height: 1024 }}>
               {Array.from({ length: 16 }, (_, i) => i + 6).map((h) => (
                 <div key={h} className="absolute left-0 right-0 flex justify-end pr-2"
                   style={{ top: (h - 6) * 64 - 8 }}>
                   <span className={cn(
-                    "text-[9px] font-medium tabular-nums tracking-wide",
+                    "text-[9px] font-medium tabular-nums leading-none",
                     h === 12 ? "text-muted-foreground/60" : "text-muted-foreground/30"
                   )}>
                     {h === 12 ? "12p" : h > 12 ? `${h - 12}p` : `${h}a`}
@@ -448,23 +470,24 @@ export function PlannerModule() {
               ))}
             </div>
 
-            {/* Day columns */}
-            {view === "day" ? (
-              <DayColumn date={activeDate} />
-            ) : (
-              <div className="flex flex-1">
-                {displayDates.map((date) => (
-                  <div key={date} className="flex-1 border-l border-border/40 first:border-l-0">
-                    <DayColumn date={date} compact={view === "week"} />
-                  </div>
-                ))}
-              </div>
-            )}
+            {/* Day columns — stretch to fill, min-height anchors scroll */}
+            <div className={cn("flex flex-1 min-h-full")} style={{ minHeight: 1024 }}>
+              {view === "day" ? (
+                <DayColumn date={activeDate} />
+              ) : (
+                <>
+                  {displayDates.map((date) => (
+                    <div key={date} className="flex-1 border-l border-border/40 first:border-l-0">
+                      <DayColumn date={date} compact={view === "week"} />
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Custom plan modal */}
       {showPlanModal && <CustomPlanModal onClose={() => setShowPlanModal(false)} />}
     </div>
   );

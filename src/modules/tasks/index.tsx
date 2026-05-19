@@ -161,65 +161,7 @@ function KpiCard({
   );
 }
 
-// ─── Group header ─────────────────────────────────────────────
-function GroupHeader({
-  group,
-  count,
-  open,
-  onToggle,
-}: {
-  group: TaskGroup;
-  count: number;
-  open: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <button
-      onClick={onToggle}
-      className={cn(
-        "w-full flex items-center gap-3 py-2 px-3",
-        "rounded-lg border-l-[3px] bg-transparent",
-        "hover:bg-accent/40 active:bg-accent/60 transition-colors text-left",
-        group.borderClass,
-      )}
-    >
-      {/* Colored dot */}
-      <span
-        className={cn(
-          "w-2.5 h-2.5 rounded-full shrink-0",
-          group.colorClass.replace("text-", "bg-"),
-        )}
-        aria-hidden
-      />
-
-      {/* Label */}
-      <span className="text-[13px] font-semibold flex-1 tracking-tight">
-        {group.label}
-      </span>
-
-      {/* Count badge — always visible, prominent */}
-      <span
-        className={cn(
-          "min-w-[22px] text-center text-[11px] font-bold px-2 py-0.5 rounded-full tabular-nums",
-          count > 0 ? cn(group.bgClass, group.textClass) : "bg-muted text-muted-foreground/50",
-        )}
-      >
-        {count}
-      </span>
-
-      {/* Chevron */}
-      <ChevronDown
-        size={14}
-        className={cn(
-          "text-muted-foreground/60 transition-transform duration-200 shrink-0",
-          open ? "rotate-0" : "-rotate-90",
-        )}
-      />
-    </button>
-  );
-}
-
-// ─── Task group section ───────────────────────────────────────
+// ─── Task group section (redesigned) ─────────────────────────
 function TaskGroup({
   group,
   tasks,
@@ -232,31 +174,58 @@ function TaskGroup({
   openQuickAdd: () => void;
 }) {
   const [open, setOpen] = useState(group.defaultOpen);
+  const dotColor = group.colorClass.replace("text-", "bg-");
 
   return (
-    <div
-      className={cn(
-        "mb-3 rounded-xl overflow-hidden",
-        open && tasks.length > 0 ? cn("border border-border/60", group.stripClass) : "",
-      )}
-    >
-      {/* Header — always outside the tinted strip */}
-      <div className={cn("px-1 pt-1", open && tasks.length > 0 ? "pb-0" : "pb-1")}>
-        <GroupHeader
-          group={group}
-          count={tasks.length}
-          open={open}
-          onToggle={() => setOpen((v) => !v)}
-        />
+    <div className="mb-8">
+      {/* Header row */}
+      <div className="flex items-center gap-2.5 mb-3">
+        <span className={cn("w-2 h-2 rounded-full shrink-0", dotColor)} aria-hidden />
+
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="flex items-center gap-2 group"
+        >
+          <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground group-hover:text-foreground transition-colors">
+            {group.label}
+          </span>
+          <span
+            className={cn(
+              "text-[11px] font-semibold tabular-nums px-1.5 py-0.5 rounded",
+              tasks.length > 0
+                ? cn(group.bgClass, group.textClass)
+                : "text-muted-foreground/40",
+            )}
+          >
+            {tasks.length}
+          </span>
+          <ChevronDown
+            size={12}
+            className={cn(
+              "text-muted-foreground/40 group-hover:text-muted-foreground transition-all duration-200",
+              open ? "rotate-0" : "-rotate-90",
+            )}
+          />
+        </button>
+
+        <div className="flex-1 h-px bg-border/50" />
+
+        {group.id !== "done" && (
+          <button
+            onClick={openQuickAdd}
+            className="text-muted-foreground/40 hover:text-foreground transition-colors rounded p-0.5"
+            title={`Add to ${group.label}`}
+          >
+            <Plus size={13} />
+          </button>
+        )}
       </div>
 
-      {/* Task grid/list */}
       {open && tasks.length > 0 && (
         <div
           className={cn(
-            "px-2 pb-2 pt-2",
             view === "grid"
-              ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5"
+              ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
               : "flex flex-col gap-1.5",
           )}
         >
@@ -266,22 +235,8 @@ function TaskGroup({
         </div>
       )}
 
-      {/* Empty state */}
       {open && tasks.length === 0 && (
-        <div className="flex items-center gap-2 px-4 py-2">
-          <span className="text-[12px] text-muted-foreground/70 italic">Nothing here.</span>
-          {group.id !== "done" && (
-            <button
-              onClick={openQuickAdd}
-              className={cn(
-                "text-[12px] font-medium px-2 py-0.5 rounded-md transition-colors",
-                "bg-muted hover:bg-accent text-muted-foreground hover:text-foreground",
-              )}
-            >
-              + Add task
-            </button>
-          )}
-        </div>
+        <p className="text-[12px] text-muted-foreground/40 pl-0 py-1 italic">No tasks</p>
       )}
     </div>
   );
@@ -341,85 +296,64 @@ export function TasksModule() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
 
-      {/* ── Page header ──────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-4 px-5 pt-5 pb-3 shrink-0">
-        <div className="flex items-center gap-2.5">
-          <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm"
-            style={{ background: "hsl(var(--color-primary) / 0.12)" }}
-          >
-            <CheckSquare size={17} style={{ color: "hsl(var(--color-primary))" }} />
-          </div>
-          <div>
-            <h1 className="text-[17px] font-bold leading-tight tracking-tight">Tasks</h1>
-            <p className="text-[12px] leading-tight flex items-center gap-1.5">
-              <span className="text-muted-foreground">
-                {tasks.length} task{tasks.length !== 1 ? "s" : ""}
+      {/* ── Row 1: Title + action ────────────────────────── */}
+      <div className="flex items-center justify-between px-6 pt-6 pb-3 shrink-0">
+        <div>
+          <h1 className="text-[18px] font-bold leading-tight tracking-tight">Tasks</h1>
+          <p className="text-[12px] leading-tight flex items-center gap-1.5 mt-0.5">
+            <span className="text-muted-foreground">
+              {tasks.length} task{tasks.length !== 1 ? "s" : ""}
+            </span>
+            {overdueCount > 0 && (
+              <span className="inline-flex items-center gap-1 text-red-500 font-medium">
+                <AlertTriangle size={10} />
+                {overdueCount} overdue
               </span>
-              {overdueCount > 0 && (
-                <span className="inline-flex items-center gap-1 text-red-500 font-medium">
-                  <AlertTriangle size={10} />
-                  {overdueCount} overdue
-                </span>
-              )}
-            </p>
-          </div>
+            )}
+          </p>
         </div>
+        <PrimaryButton onClick={() => openQuickAdd()}>
+          <Plus size={13} />
+          New task
+        </PrimaryButton>
+      </div>
 
-        <div className="flex items-center gap-2">
-          {/* Combined layout + view toggle */}
-          <div className="flex items-center rounded-lg border border-border overflow-hidden text-[11px] font-medium bg-background">
-            {(["Grouped", "Flat"] as const).map((l, i) => (
-              <button
-                key={l}
-                onClick={() => setLayout(l.toLowerCase() as "grouped" | "flat")}
-                className={cn(
-                  "px-2.5 py-1.5 transition-fast",
-                  i > 0 && "border-l border-border",
-                  layout === l.toLowerCase()
-                    ? "bg-accent text-foreground"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {l}
-              </button>
-            ))}
-            <div className="w-px h-4 bg-border mx-0.5" />
+      {/* ── Row 2: View switcher ──────────────────────────── */}
+      <div className="flex items-center px-6 border-b border-border shrink-0">
+        {([
+          { id: "board",   icon: LayoutGrid,  label: "Board"   },
+          { id: "list",    icon: List,         label: "List"    },
+          { id: "grouped", icon: CheckSquare,  label: "Grouped" },
+        ] as const).map(({ id, icon: Icon, label }) => {
+          const active =
+            id === "board"   ? localView === "grid" && layout === "flat" :
+            id === "list"    ? localView === "list" && layout === "flat" :
+            layout === "grouped";
+          return (
             <button
-              onClick={() => setLocalView("grid")}
+              key={id}
+              onClick={() => {
+                if (id === "board")   { setLocalView("grid");  setLayout("flat"); }
+                if (id === "list")    { setLocalView("list");  setLayout("flat"); }
+                if (id === "grouped") { setLayout("grouped"); }
+              }}
               className={cn(
-                "p-1.5 transition-fast border-l border-border",
-                localView === "grid"
-                  ? "bg-accent text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
+                "inline-flex items-center gap-1.5 px-3 py-3 text-[13px] font-medium",
+                "border-b-2 -mb-px transition-colors",
+                active
+                  ? "border-foreground text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground hover:border-border",
               )}
-              title="Grid view"
             >
-              <LayoutGrid size={13} />
+              <Icon size={13} />
+              {label}
             </button>
-            <button
-              onClick={() => setLocalView("list")}
-              className={cn(
-                "p-1.5 transition-fast border-l border-border",
-                localView === "list"
-                  ? "bg-accent text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-              title="List view"
-            >
-              <List size={13} />
-            </button>
-          </div>
-
-          <PrimaryButton onClick={() => openQuickAdd()}>
-            <Plus size={13} />
-            New task
-          </PrimaryButton>
-        </div>
+          );
+        })}
       </div>
 
       {/* ── KPI strip ────────────────────────────────────── */}
-      <div className="grid grid-cols-4 gap-2.5 px-5 pb-3 shrink-0">
+      <div className="grid grid-cols-4 gap-3 px-6 py-4 shrink-0">
         <KpiCard label="Total"       value={tasks.length}    total={tasks.length}  accent="bg-foreground/30" />
         <KpiCard label="In Progress" value={inProgressCount} total={tasks.length}  accent="bg-blue-500" />
         <KpiCard label="Completed"   value={doneCount}       total={tasks.length}  accent="bg-emerald-500" />
@@ -439,7 +373,7 @@ export function TasksModule() {
       />
 
       {/* ── Content ──────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto px-5 py-3">
+      <div className="flex-1 overflow-y-auto px-6 py-5">
         {tasks.length === 0 ? (
           <EmptyState
             title={
@@ -459,7 +393,7 @@ export function TasksModule() {
             action={{ label: "New task", onClick: () => openQuickAdd() }}
           />
         ) : layout === "grouped" ? (
-          <div className="flex flex-col gap-0.5">
+          <div className="flex flex-col">
             {grouped.map(({ group, tasks: groupTasks }) => (
               <TaskGroup
                 key={group.id}
@@ -471,7 +405,7 @@ export function TasksModule() {
             ))}
           </div>
         ) : localView === "grid" ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {tasks.map((t) => (
               <TaskCard key={t.id} task={t} view="grid" />
             ))}
