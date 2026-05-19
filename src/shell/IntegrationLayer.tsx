@@ -15,6 +15,7 @@ import { useJournalStore } from "@/modules/journal/store";
 import { useFocusStore } from "@/modules/focus/store";
 import { useTimeStore } from "@/modules/time-tracking/store";
 import { useShellStore } from "@/shell/store";
+import { databaseManifest } from "@/modules/database"
 
 export function IntegrationLayer() {
   useEffect(() => {
