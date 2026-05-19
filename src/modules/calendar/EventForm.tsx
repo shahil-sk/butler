@@ -1,9 +1,26 @@
 // ============================================================
 // CALENDAR — EventForm  (improved)
-// Tabbed modal: Details | Links
-// Details: dates, all-day, calendar, color, recurrence,
-//          time-block toggle, description
-// Links: search + checkbox-select tasks + notes
+//
+// Guard: if the event being edited is a task shadow event
+// (editingId starts with 'task:'), renders TaskEventPanel
+// instead of the calendar form — you should not edit synthetic
+// calendar_events fields on a task-owned row.
+//
+// WHAT “LINKS” DOES:
+// The Links tab stores two JSON arrays in calendar_events:
+//   linkedTaskIds — IDs of tasks associated with this event
+//   linkedNoteIds — IDs of notes associated with this event
+//
+// These are soft, bidirectional references. They do NOT create
+// calendar events for those tasks (that is handled automatically
+// by task-calendar-sync.ts). The intended use-case is:
+//   • A meeting event → link the meeting notes note
+//   • A deadline event → link the tasks that must be done by then
+//   • A focus block → link the tasks you plan to work on
+//
+// Linked items surface in DayView’s context panel (right sidebar)
+// so when you view your day, you see the event + its related
+// tasks and notes in one place without switching modules.
 // ============================================================
 
 import { useState, useEffect } from "react";
@@ -12,11 +29,11 @@ import { cn } from "@/shared/utils";
 import { useCalendarStore } from "./store";
 import { useTaskStore } from "@/modules/tasks/store";
 import { useNoteStore } from "@/modules/notes/store";
+import { TaskEventPanel } from "./TaskEventPanel";
 
 const PRESET_COLORS = [
   "#3b82f6","#8b5cf6","#ec4899","#f97316","#eab308","#22c55e","#14b8a6","#ef4444",
 ];
-
 const RECURRENCE_OPTIONS = [
   { value: "",         label: "Does not repeat" },
   { value: "daily",   label: "Daily"   },
@@ -68,6 +85,12 @@ export function EventForm() {
   }, [open]);
 
   if (!open) return null;
+
+  // Guard: task shadow events are managed by TaskEventPanel, not here
+  if (editingId?.startsWith("task:")) {
+    const taskId = editingId.replace(/^task:/, "");
+    return <TaskEventPanel taskId={taskId} onClose={closeEventForm} />;
+  }
 
   const submit = async () => {
     if (!title.trim()) return;
@@ -219,6 +242,18 @@ export function EventForm() {
 
           {tab === "links" && (
             <>
+              {/* What Links does — inline explanation */}
+              <div className="rounded-lg bg-muted/40 border border-border/60 px-3 py-2.5 text-[11px] text-muted-foreground leading-relaxed">
+                <p className="font-medium text-foreground mb-1">What does linking do?</p>
+                Linked tasks and notes are <strong>associated</strong> with this calendar event.
+                They appear in the <strong>Day view sidebar</strong> when you view this event,
+                so you can see related context without switching modules.
+                <br /><br />
+                Tasks with a due/scheduled date already appear on the calendar automatically —
+                linking is for <em>manual context</em> (e.g. link meeting notes to a meeting event,
+                or link the tasks you plan to tackle during a focus block).
+              </div>
+
               <div>
                 <div className="flex items-center gap-1.5 mb-2">
                   <CheckSquare size={11} className="text-muted-foreground" />
@@ -226,7 +261,7 @@ export function EventForm() {
                 </div>
                 <div className="relative mb-2">
                   <Search size={10} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
-                  <input value={taskSearch} onChange={(e) => setTaskSearch(e.target.value)} placeholder="Search tasks\u2026" className="w-full text-xs pl-6 pr-2 py-1.5 border border-border rounded-md bg-muted/30 outline-none" />
+                  <input value={taskSearch} onChange={(e) => setTaskSearch(e.target.value)} placeholder="Search tasks…" className="w-full text-xs pl-6 pr-2 py-1.5 border border-border rounded-md bg-muted/30 outline-none" />
                 </div>
                 <div className="space-y-0.5 max-h-36 overflow-y-auto">
                   {filteredTasks.map((t) => {
@@ -254,7 +289,7 @@ export function EventForm() {
                 </div>
                 <div className="relative mb-2">
                   <Search size={10} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
-                  <input value={noteSearch} onChange={(e) => setNoteSearch(e.target.value)} placeholder="Search notes\u2026" className="w-full text-xs pl-6 pr-2 py-1.5 border border-border rounded-md bg-muted/30 outline-none" />
+                  <input value={noteSearch} onChange={(e) => setNoteSearch(e.target.value)} placeholder="Search notes…" className="w-full text-xs pl-6 pr-2 py-1.5 border border-border rounded-md bg-muted/30 outline-none" />
                 </div>
                 <div className="space-y-0.5 max-h-36 overflow-y-auto">
                   {filteredNotes.map((n) => {
