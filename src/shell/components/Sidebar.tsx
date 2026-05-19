@@ -25,9 +25,9 @@ const NAV_SECTIONS = [
   {
     label: "Content",
     items: [
-      { id: "notes",   label: "Notes",    icon: FileText,   path: "/notes" },
-      { id: "journal", label: "Journal",  icon: BookOpen,   path: "/journal" },
-      { id: "pdf",     label: "Research", icon: FileSearch, path: "/pdf" },
+      { id: "notes",    label: "Notes",    icon: FileText,   path: "/notes" },
+      { id: "journal",  label: "Journal",  icon: BookOpen,   path: "/journal" },
+      { id: "research", label: "Research", icon: FileSearch, path: "/research" },
     ],
   },
   {
