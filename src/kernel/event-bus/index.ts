@@ -15,21 +15,32 @@ import type {
   JournalEntry,
   SearchResult,
   Database,
+  ResearchSource,
+  ResearchDocument,
+  ResearchChunk,
+  ResearchHighlight,
+  ResearchAnnotation,
+  ResearchCitation,
+  ResearchEntity,
+  ResearchThread,
+  ResearchInsight,
+  ResearchQuestion,
+  ResearchAiJob,
 } from "@/shared/types";
 
-// ── Event map ────────────────────────────────────────────────
+// ── Event map ────────────────────────────────────────────
 
 export interface ButlerEventMap {
-  // ── Navigation ────────────────────────────────────────────
+  // ── Navigation ──────────────────────────────────────────
   "navigate:to":               { path: string; replace?: boolean };
   "navigate:back":             void;
 
-  // ── Command palette ───────────────────────────────────────
+  // ── Command palette ───────────────────────────────────
   "command-palette:open":      void;
   "command-palette:close":     void;
   "command-palette:execute":   { commandId: string };
 
-  // ── Task events ───────────────────────────────────────────
+  // ── Task events ───────────────────────────────────────
   "task:created":              { task: Task };
   "task:updated":              { task: Task; changed: Partial<Task> };
   "task:deleted":              { taskId: ID };
@@ -41,32 +52,32 @@ export interface ButlerEventMap {
   /** Cross-module: any surface can request "schedule this task in Planner" */
   "task:schedule-in-planner":  { task: Task; date?: string; startTime?: string };
 
-  // ── Project events ────────────────────────────────────────
+  // ── Project events ─────────────────────────────────────
   "project:created":           { project: Project };
   "project:updated":           { project: Project; changed: Partial<Project> };
   "project:deleted":           { projectId: ID };
   "project:open":              { projectId: ID };
 
-  // ── Note events ───────────────────────────────────────────
+  // ── Note events ───────────────────────────────────────
   "note:created":              { note: Note };
   "note:updated":              { note: Note };
   "note:deleted":              { noteId: ID };
   "note:open":                 { noteId: ID };
   "note:link-to-task":         { noteId: ID; taskId: ID };
 
-  // ── Calendar events ───────────────────────────────────────
+  // ── Calendar events ──────────────────────────────────
   "calendar:event-created":    { event: CalendarEvent };
   "calendar:event-updated":    { event: CalendarEvent };
   "calendar:event-deleted":    { eventId: ID };
   "calendar:time-block-created":{ event: CalendarEvent; taskId?: ID };
 
-  // ── Planner events ────────────────────────────────────────
+  // ── Planner events ───────────────────────────────────
   /** Emitted when a planner block is manually linked to a task (from BlockEditModal) */
   "planner:block-linked-task": { blockId: ID; taskId: ID; date: string };
   /** Emitted when a planner block is unlinked from a task */
   "planner:block-unlinked-task": { blockId: ID; previousTaskId: ID };
 
-  // ── Focus events ──────────────────────────────────────────
+  // ── Focus events ─────────────────────────────────────
   "focus:start-requested":     { taskId?: ID };
   "focus:session-started":     { session: FocusSession };
   "focus:session-paused":      { sessionId: ID };
@@ -75,39 +86,64 @@ export interface ButlerEventMap {
   "focus:session-cancelled":   { sessionId: ID };
   "focus:tick":                { sessionId: ID; remainingSeconds: number };
 
-  // ── Time tracking events ──────────────────────────────────
+  // ── Time tracking events ─────────────────────────────
   "time:entry-created":        { entry: TimeEntry };
   "time:entry-updated":        { entry: TimeEntry };
   "time:entry-deleted":        { entryId: ID };
   "time:timer-started":        { entryId: ID };
   "time:timer-stopped":        { entryId: ID };
 
-  // ── Journal events ────────────────────────────────────────
+  // ── Journal events ───────────────────────────────────
   "journal:entry-created":     { entry: JournalEntry };
   "journal:entry-updated":     { entry: JournalEntry };
   "journal:open-date":         { date: string };
 
-  // ── Database events ───────────────────────────────────────
+  // ── Database events ──────────────────────────────────
   "database:created":       { database: Database };
   "database:updated":       { database: Database };
   "database:deleted":       { databaseId: string };
   "database:row:created":   { databaseId: string; rowId: string };
   "database:row:deleted":   { databaseId: string; rowId: string };
 
-  // ── Search events ─────────────────────────────────────────
+  // ── Research events ──────────────────────────────────
+  "research:source-imported":      { source: ResearchSource };
+  "research:document-processed":   { document: ResearchDocument; sourceId: ID };
+  "research:chunk-created":        { chunk: ResearchChunk };
+  "research:embedding-created":    { chunkId: ID; embeddingId: string };
+  "research:entity-detected":      { entity: ResearchEntity; documentId: ID };
+  "research:highlight-created":    { highlight: ResearchHighlight };
+  "research:highlight-deleted":    { highlightId: ID };
+  "research:annotation-created":   { annotation: ResearchAnnotation };
+  "research:annotation-updated":   { annotation: ResearchAnnotation };
+  "research:annotation-deleted":   { annotationId: ID };
+  "research:citation-created":     { citation: ResearchCitation };
+  "research:thread-created":       { thread: ResearchThread };
+  "research:thread-updated":       { thread: ResearchThread };
+  "research:thread-deleted":       { threadId: ID };
+  "research:insight-created":      { insight: ResearchInsight };
+  "research:question-generated":   { question: ResearchQuestion };
+  "research:linked-to-task":       { researchEntityType: string; researchEntityId: ID; taskId: ID };
+  "research:linked-to-note":       { researchEntityType: string; researchEntityId: ID; noteId: ID };
+  "research:index-invalidated":    { entityType: string; id: ID };
+  "research:ai-analysis-completed": { job: ResearchAiJob };
+  "research:open-document":        { documentId: ID };
+  "research:open-source":          { sourceId: ID };
+  "research:open-thread":          { threadId: ID };
+
+  // ── Search events ─────────────────────────────────────
   "search:open":               { query?: string };
   "search:close":              void;
   "search:result-selected":    { result: SearchResult };
   "search:index-invalidated":  { entityType: string; id: ID };
 
-  // ── UI / Shell events ─────────────────────────────────────
+  // ── UI / Shell events ─────────────────────────────────
   "ui:sidebar-toggle":         void;
   "ui:theme-changed":          { theme: "light" | "dark" | "system" };
   "ui:panel-open":             { panelId: string; props?: Record<string, unknown> };
   "ui:panel-close":            { panelId: string };
   "ui:notification":           { id: ID; type: "info" | "success" | "warning" | "error"; message: string; durationMs?: number };
 
-  // ── Workspace events ──────────────────────────────────────
+  // ── Workspace events ─────────────────────────────────
   /** Fired when the active layout is switched */
   "workspace:layout-changed":  { layoutId: ID };
   /** Fired when a new panel is opened (primary or split) */
@@ -121,11 +157,11 @@ export interface ButlerEventMap {
   /** Fired when user's keyboard/mouse focus moves to a module */
   "workspace:module-focused":  { moduleId: string };
 
-  // ── Sync / Persistence ────────────────────────────────────
+  // ── Sync / Persistence ─────────────────────────────────
   "sync:autosave":             void;
   "sync:conflict":             { entityType: string; entityId: ID };
 
-  // ── AI hooks ─────────────────────────────────────────────
+  // ── AI hooks ─────────────────────────────────────────
   "ai:context-update":         { context: Record<string, unknown> };
   "ai:suggestion":             { type: string; payload: unknown };
 
@@ -197,7 +233,7 @@ class EventBus {
 
 export const bus = new EventBus();
 
-// ── React hook ───────────────────────────────────────────────
+// ── React hook ─────────────────────────────────────────────
 
 import { useEffect } from "react";
 
