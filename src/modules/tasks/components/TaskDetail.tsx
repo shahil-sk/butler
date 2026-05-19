@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import {
   X, Flag, Calendar, Clock, Plus, Trash2,
   CheckSquare, Circle, ChevronDown, FolderKanban,
-  FileText, ExternalLink,
+  FileText, ExternalLink, CalendarClock,
 } from "lucide-react";
 import { cn, formatDate, PRIORITY_COLORS, PRIORITY_LABELS, today, now } from "@/shared/utils";
 import { Modal, Popover, PopoverItem, PopoverDivider, ProjectDot, SectionLabel } from "@/shared/ui";
@@ -52,9 +52,15 @@ export function TaskDetail() {
   const [estimateMins,  setEstimateMins]  = useState<number | "">("");
   const [newCheckItem,  setNewCheckItem]   = useState("");
   const [checklistItems, setChecklistItems] = useState<{ id: string; text: string; checked: boolean }[]>([]);
+
+  // Schedule popover — shared between create & view mode
   const [scheduleOpen,  setScheduleOpen]   = useState(false);
   const [scheduleDate,  setScheduleDate]   = useState(today());
   const [scheduleTime,  setScheduleTime]   = useState("09:00");
+  // Tracks whether user has picked a schedule (create mode only)
+  const [scheduledDate, setScheduledDate]  = useState<string | undefined>(undefined);
+  const [scheduledTime, setScheduledTime]  = useState<string | undefined>(undefined);
+
   const [linkNoteOpen,  setLinkNoteOpen]   = useState(false);
   const [noteSearch,    setNoteSearch]     = useState("");
 
@@ -82,6 +88,10 @@ export function TaskDetail() {
       setNewCheckItem("");
       setLinkNoteOpen(false);
       setNoteSearch("");
+      setScheduledDate(undefined);
+      setScheduledTime(undefined);
+      setScheduleDate(today());
+      setScheduleTime("09:00");
       setTimeout(() => titleRef.current?.focus(), 40);
     }
   }, [isCreating, quickAddOpen]);
@@ -95,6 +105,13 @@ export function TaskDetail() {
       setProjectId(task.projectId ?? "");
       setStatus(task.status);
       setEstimateMins(task.estimateMinutes ?? "");
+      // Pre-fill schedule panel from existing scheduledDate if any
+      if (task.scheduledDate) {
+        setScheduleDate(task.scheduledDate);
+      } else {
+        setScheduleDate(today());
+        setScheduleTime("09:00");
+      }
     }
   }, [task?.id]);
 
@@ -127,8 +144,60 @@ export function TaskDetail() {
       status,
       estimateMinutes: estimateMins !== "" ? Number(estimateMins) : undefined,
       checklistItems: checklistItems.map((item, i) => ({ ...item, order: i })),
+      // Include scheduled date+time if user picked them
+      scheduledDate:  scheduledDate || undefined,
+      scheduledTime:  scheduledTime || undefined,
     });
+
+    // If user pre-scheduled: also create a calendar event immediately
+    if (scheduledDate) {
+      const time = scheduledTime ?? "09:00";
+      const startAt = `${scheduledDate}T${time}:00`;
+      const durationMins = estimateMins ? Number(estimateMins) : 60;
+      const [h, m] = time.split(":").map(Number);
+      const totalEnd = h * 60 + m + durationMins;
+      const endAt = `${scheduledDate}T${String(Math.floor(totalEnd / 60)).padStart(2, "0")}:${String(totalEnd % 60).padStart(2, "0")}:00`;
+      await useCalendarStore.getState().createEvent({
+        title: title.trim(),
+        startAt,
+        endAt,
+        linkedTaskIds: [], // task id not known yet at create time — acceptable
+      });
+    }
+
     closeQuickAdd();
+  };
+
+  /**
+   * VIEW MODE: schedule task → calendar.
+   * Saves scheduledDate on the task AND creates a calendar event.
+   */
+  const handleScheduleToCalendar = async () => {
+    if (!task) return;
+    const startAt    = `${scheduleDate}T${scheduleTime}:00`;
+    const endMinutes = task.estimateMinutes ?? 60;
+    const [h, m]     = scheduleTime.split(":").map(Number);
+    const totalEnd   = h * 60 + m + endMinutes;
+    const endAt      = `${scheduleDate}T${String(Math.floor(totalEnd / 60)).padStart(2, "0")}:${String(totalEnd % 60).padStart(2, "0")}:00`;
+    await useCalendarStore.getState().createEvent({
+      title: task.title, startAt, endAt, linkedTaskIds: [task.id],
+    });
+    save({ scheduledDate: scheduleDate });
+    setScheduleOpen(false);
+    bus.emit("ui:notification", {
+      id: task.id + "-sched", type: "success",
+      message: `"${task.title}" added to calendar`, durationMs: 2500,
+    });
+  };
+
+  /**
+   * CREATE MODE: user confirms schedule selection.
+   * Does NOT create the calendar event yet — that happens in handleCreate.
+   */
+  const handleConfirmCreateSchedule = () => {
+    setScheduledDate(scheduleDate);
+    setScheduledTime(scheduleTime);
+    setScheduleOpen(false);
   };
 
   const handleClose = isCreating ? closeQuickAdd : closeTask;
@@ -160,23 +229,80 @@ export function TaskDetail() {
     setLinkNoteOpen(false);
   };
 
-  const handleScheduleToCalendar = async () => {
-    if (!task) return;
-    const startAt    = `${scheduleDate}T${scheduleTime}:00`;
-    const endMinutes = task.estimateMinutes ?? 60;
-    const [h, m]     = scheduleTime.split(":").map(Number);
-    const totalEnd   = h * 60 + m + endMinutes;
-    const endAt      = `${scheduleDate}T${String(Math.floor(totalEnd / 60)).padStart(2, "0")}:${String(totalEnd % 60).padStart(2, "0")}:00`;
-    await useCalendarStore.getState().createEvent({
-      title: task.title, startAt, endAt, linkedTaskIds: [task.id],
-    });
-    save({ scheduledDate: scheduleDate });
-    setScheduleOpen(false);
-    bus.emit("ui:notification", {
-      id: task.id + "-sched", type: "success",
-      message: `"${task.title}" added to calendar`, durationMs: 2500,
-    });
-  };
+  // ── Schedule popover (shared) ─────────────────────────────
+  const SchedulePanel = (
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40" onClick={() => setScheduleOpen(false)} />
+      <div className="relative z-10 bg-popover border border-border rounded-2xl shadow-xl p-5 w-72 animate-fade-in">
+        <p className="text-sm font-semibold mb-3">
+          {isCreating ? "Schedule for" : "Schedule to calendar"}
+        </p>
+
+        {/* Show existing scheduled date badge in view mode */}
+        {!isCreating && task?.scheduledDate && (
+          <div className="flex items-center gap-2 mb-3 px-2 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-medium">
+            <CalendarClock size={12} />
+            Currently: {task.scheduledDate}
+            <button
+              className="ml-auto text-muted-foreground hover:text-red-500 transition-fast"
+              onClick={() => { save({ scheduledDate: undefined }); setScheduleOpen(false); }}
+              title="Remove schedule"
+            >
+              <X size={11} />
+            </button>
+          </div>
+        )}
+
+        {/* Show selected badge in create mode */}
+        {isCreating && scheduledDate && (
+          <div className="flex items-center gap-2 mb-3 px-2 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-medium">
+            <CalendarClock size={12} />
+            Scheduled: {scheduledDate} at {scheduledTime ?? "09:00"}
+            <button
+              className="ml-auto text-muted-foreground hover:text-red-500 transition-fast"
+              onClick={() => { setScheduledDate(undefined); setScheduledTime(undefined); }}
+              title="Clear"
+            >
+              <X size={11} />
+            </button>
+          </div>
+        )}
+
+        <label className="block text-xs text-muted-foreground mb-1">Date</label>
+        <input
+          type="date"
+          value={scheduleDate}
+          onChange={(e) => setScheduleDate(e.target.value)}
+          className="w-full text-sm bg-muted/50 rounded-lg px-3 py-2 outline-none border border-border focus:border-primary/50 mb-3"
+        />
+        <label className="block text-xs text-muted-foreground mb-1">Time</label>
+        <input
+          type="time"
+          value={scheduleTime}
+          onChange={(e) => setScheduleTime(e.target.value)}
+          className="w-full text-sm bg-muted/50 rounded-lg px-3 py-2 outline-none border border-border focus:border-primary/50 mb-4"
+        />
+        <div className="flex gap-2">
+          <button
+            onClick={() => setScheduleOpen(false)}
+            className="flex-1 px-3 py-2 rounded-lg text-xs border border-border text-muted-foreground hover:bg-accent transition-fast"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() =>
+              isCreating
+                ? handleConfirmCreateSchedule()
+                : void handleScheduleToCalendar()
+            }
+            className="flex-1 px-3 py-2 rounded-lg text-xs bg-primary text-primary-foreground hover:bg-primary/90 transition-fast font-medium"
+          >
+            {isCreating ? "Set schedule" : "Add to calendar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <>
@@ -305,6 +431,63 @@ export function TaskDetail() {
                 }}
                 className="text-sm bg-transparent outline-none text-foreground"
               />
+            </MetaRow>
+
+            {/* Scheduled — shown in both modes */}
+            <MetaRow label="Scheduled" icon={<CalendarClock size={13} />}>
+              {isCreating ? (
+                scheduledDate ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-primary font-medium">
+                      {scheduledDate}{scheduledTime ? ` · ${scheduledTime}` : ""}
+                    </span>
+                    <button
+                      onClick={() => setScheduleOpen(true)}
+                      className="text-xs text-muted-foreground hover:text-foreground transition-fast underline underline-offset-2"
+                    >
+                      change
+                    </button>
+                    <button
+                      onClick={() => { setScheduledDate(undefined); setScheduledTime(undefined); }}
+                      className="text-muted-foreground/40 hover:text-red-500 transition-fast"
+                    >
+                      <X size={11} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setScheduleOpen(true)}
+                    className="text-xs text-muted-foreground/60 hover:text-foreground transition-fast"
+                  >
+                    — pick date &amp; time
+                  </button>
+                )
+              ) : (
+                task?.scheduledDate ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-primary font-medium">{task.scheduledDate}</span>
+                    <button
+                      onClick={() => setScheduleOpen(true)}
+                      className="text-xs text-muted-foreground hover:text-foreground transition-fast underline underline-offset-2"
+                    >
+                      reschedule
+                    </button>
+                    <button
+                      onClick={() => save({ scheduledDate: undefined })}
+                      className="text-muted-foreground/40 hover:text-red-500 transition-fast"
+                    >
+                      <X size={11} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setScheduleOpen(true)}
+                    className="text-xs text-muted-foreground/60 hover:text-foreground transition-fast"
+                  >
+                    — not scheduled
+                  </button>
+                )
+              )}
             </MetaRow>
 
             {/* Estimate */}
@@ -464,7 +647,14 @@ export function TaskDetail() {
           {isCreating ? (
             // Create mode footer
             <>
-              <span className="text-[11px] text-muted-foreground/30 hidden sm:flex items-center gap-1.5">
+              {/* Schedule badge in footer if set */}
+              {scheduledDate && (
+                <span className="flex items-center gap-1.5 text-[11px] text-primary font-medium">
+                  <CalendarClock size={11} />
+                  {scheduledDate} · {scheduledTime ?? "09:00"}
+                </span>
+              )}
+              <span className="text-[11px] text-muted-foreground/30 hidden sm:flex items-center gap-1.5 ml-auto">
                 <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono">Enter</kbd>
                 to save
                 <span className="mx-0.5">·</span>
@@ -487,7 +677,7 @@ export function TaskDetail() {
                     "disabled:opacity-40 disabled:cursor-not-allowed"
                   )}
                 >
-                  Add Task
+                  {scheduledDate ? "Add & Schedule" : "Add Task"}
                 </button>
               </div>
             </>
@@ -502,40 +692,25 @@ export function TaskDetail() {
               </button>
               <button
                 onClick={() => setScheduleOpen((v) => !v)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-accent border border-transparent hover:border-border/60 transition-fast"
+                className={cn(
+                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border transition-fast",
+                  task?.scheduledDate
+                    ? "text-primary border-primary/30 bg-primary/8 hover:bg-primary/15"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent border-transparent hover:border-border/60"
+                )}
               >
-                <Calendar size={12} /> Schedule
+                <CalendarClock size={12} />
+                {task?.scheduledDate ? `Scheduled · ${task.scheduledDate}` : "Schedule"}
               </button>
-              {scheduleOpen && (
-                <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
-                  <div className="absolute inset-0 bg-black/40" onClick={() => setScheduleOpen(false)} />
-                  <div className="relative z-10 bg-popover border border-border rounded-2xl shadow-xl p-5 w-72 animate-fade-in">
-                    <p className="text-sm font-semibold mb-3">Schedule to calendar</p>
-                    <label className="block text-xs text-muted-foreground mb-1">Date</label>
-                    <input type="date" value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)}
-                      className="w-full text-sm bg-muted/50 rounded-lg px-3 py-2 outline-none border border-border focus:border-primary/50 mb-3" />
-                    <label className="block text-xs text-muted-foreground mb-1">Time</label>
-                    <input type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)}
-                      className="w-full text-sm bg-muted/50 rounded-lg px-3 py-2 outline-none border border-border focus:border-primary/50 mb-4" />
-                    <div className="flex gap-2">
-                      <button onClick={() => setScheduleOpen(false)}
-                        className="flex-1 px-3 py-2 rounded-lg text-xs border border-border text-muted-foreground hover:bg-accent transition-fast">
-                        Cancel
-                      </button>
-                      <button onClick={() => void handleScheduleToCalendar()}
-                        className="flex-1 px-3 py-2 rounded-lg text-xs bg-primary text-primary-foreground hover:bg-primary/90 transition-fast font-medium">
-                        Add to calendar
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
               <div className="flex-1" />
               <span className="text-[10px] text-muted-foreground/40">ID: {task?.id.slice(0, 8)}</span>
             </>
           )}
         </div>
       </Modal>
+
+      {/* Schedule panel — rendered outside Modal to avoid z-index stacking */}
+      {scheduleOpen && SchedulePanel}
 
       {/* Status popover */}
       <Popover anchor={statusAnchor} open={statusOpen} onClose={() => setStatusOpen(false)} className="w-44">
