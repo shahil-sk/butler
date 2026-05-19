@@ -1,21 +1,19 @@
 /* ============================================================
    TIPTAP — globals.css additions
-   Add these rules inside your existing @layer base or at root.
-   They fix: task list checkboxes, placeholder visibility,
-   code block horizontal scroll, cursor in editor.
+   Import this in globals.css as: @import './tiptap.css';
    ============================================================ */
 
-/* Placeholder text */
+/* ── Placeholder ───────────────────────────────────────────── */
 .tiptap p.is-editor-empty:first-child::before,
 .tiptap .is-empty::before {
   content: attr(data-placeholder);
   float: left;
-  color: hsl(var(--muted-foreground) / 0.5);
+  color: hsl(var(--muted-foreground) / 0.4);
   pointer-events: none;
   height: 0;
 }
 
-/* Task list checkboxes */
+/* ── Task list ──────────────────────────────────────────────── */
 .tiptap ul[data-type="taskList"] {
   list-style: none;
   padding-left: 0;
@@ -25,12 +23,14 @@
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;
+  padding: 0.1rem 0;
 }
 
 .tiptap ul[data-type="taskList"] li > label {
   flex-shrink: 0;
-  margin-top: 0.2rem;
+  margin-top: 0.25rem;
   cursor: pointer;
+  user-select: none;
 }
 
 .tiptap ul[data-type="taskList"] li > label input[type="checkbox"] {
@@ -38,6 +38,7 @@
   height: 14px;
   accent-color: hsl(var(--primary));
   cursor: pointer;
+  border-radius: 3px;
 }
 
 .tiptap ul[data-type="taskList"] li > div {
@@ -48,20 +49,135 @@
 .tiptap ul[data-type="taskList"] li[data-checked="true"] > div > p {
   text-decoration: line-through;
   color: hsl(var(--muted-foreground));
+  opacity: 0.7;
 }
 
-/* Code block scroll */
+/* ── Code blocks ────────────────────────────────────────────── */
 .tiptap pre {
+  position: relative;
   overflow-x: auto;
   white-space: pre;
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 0.8em;
+  line-height: 1.6;
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius-lg);
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+  margin: 1rem 0;
 }
 
-/* Editor cursor */
-.tiptap {
-  caret-color: hsl(var(--primary));
+.tiptap pre code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+  color: inherit;
 }
 
-/* Remove focus ring on editor div */
-.tiptap:focus {
-  outline: none;
+/* language label badge */
+.tiptap pre::before {
+  content: attr(data-language);
+  position: absolute;
+  top: 0.5rem;
+  right: 0.75rem;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: hsl(var(--muted-foreground) / 0.5);
+  font-family: inherit;
+  pointer-events: none;
 }
+
+/* ── Lowlight syntax tokens ─────────────────────────────────── */
+.tiptap .hljs-comment,
+.tiptap .hljs-quote           { color: hsl(var(--muted-foreground)); font-style: italic; }
+.tiptap .hljs-keyword,
+.tiptap .hljs-selector-tag,
+.tiptap .hljs-tag              { color: hsl(221 80% 60%); }
+.tiptap .hljs-string,
+.tiptap .hljs-attr,
+.tiptap .hljs-attribute       { color: hsl(142 60% 45%); }
+.tiptap .hljs-number,
+.tiptap .hljs-literal,
+.tiptap .hljs-meta             { color: hsl(38 80% 50%); }
+.tiptap .hljs-built_in,
+.tiptap .hljs-class .hljs-title,
+.tiptap .hljs-title            { color: hsl(259 65% 65%); }
+.tiptap .hljs-variable,
+.tiptap .hljs-template-variable { color: hsl(0 70% 60%); }
+.tiptap .hljs-type,
+.tiptap .hljs-params           { color: hsl(186 60% 50%); }
+.tiptap .hljs-function         { color: hsl(221 72% 65%); }
+.tiptap .hljs-regexp           { color: hsl(0 65% 58%); }
+.tiptap .hljs-symbol           { color: hsl(280 60% 60%); }
+
+.dark .tiptap .hljs-keyword,
+.dark .tiptap .hljs-selector-tag,
+.dark .tiptap .hljs-tag        { color: hsl(221 82% 70%); }
+.dark .tiptap .hljs-string,
+.dark .tiptap .hljs-attr       { color: hsl(142 55% 58%); }
+.dark .tiptap .hljs-number,
+.dark .tiptap .hljs-literal    { color: hsl(38 86% 62%); }
+.dark .tiptap .hljs-built_in,
+.dark .tiptap .hljs-title      { color: hsl(259 70% 72%); }
+
+/* ── Blockquote ─────────────────────────────────────────────── */
+.tiptap blockquote {
+  border-left: 3px solid hsl(var(--primary) / 0.35);
+  margin-left: 0;
+  padding-left: 1rem;
+  color: hsl(var(--muted-foreground));
+  font-style: normal;
+}
+
+/* ── HR ─────────────────────────────────────────────────────── */
+.tiptap hr {
+  border: none;
+  border-top: 1px solid hsl(var(--border));
+  margin: 1.5rem 0;
+}
+
+/* ── Link ───────────────────────────────────────────────────── */
+.tiptap a {
+  color: hsl(var(--primary));
+  text-decoration: none;
+  cursor: pointer;
+}
+.tiptap a:hover { text-decoration: underline; }
+
+/* ── Highlight ──────────────────────────────────────────────── */
+.tiptap mark {
+  background: hsl(38 92% 56% / 0.3);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+.dark .tiptap mark {
+  background: hsl(38 86% 62% / 0.22);
+}
+
+/* ── Cursor ─────────────────────────────────────────────────── */
+.tiptap { caret-color: hsl(var(--primary)); }
+.tiptap:focus { outline: none; }
+
+/* ── Selection ──────────────────────────────────────────────── */
+.tiptap ::selection { background: hsl(var(--primary) / 0.2); }
+
+/* ── List spacing ───────────────────────────────────────────── */
+.tiptap ul,
+.tiptap ol { padding-left: 1.4rem; }
+.tiptap li + li { margin-top: 0.15rem; }
+
+/* ── Heading spacing ────────────────────────────────────────── */
+.tiptap h1 { font-size: 1.5rem; margin-top: 1.5rem; margin-bottom: 0.5rem; }
+.tiptap h2 { font-size: 1.25rem; margin-top: 1.25rem; margin-bottom: 0.4rem; }
+.tiptap h3 { font-size: 1.1rem; margin-top: 1rem; margin-bottom: 0.3rem; }
+
+.tiptap h1:first-child,
+.tiptap h2:first-child,
+.tiptap h3:first-child { margin-top: 0; }
+
+/* ── Paragraph spacing ──────────────────────────────────────── */
+.tiptap p { margin-top: 0; margin-bottom: 0.6rem; line-height: 1.7; }
+.tiptap p:last-child { margin-bottom: 0; }
