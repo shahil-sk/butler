@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 import { db } from "@/kernel/db";
 import { bus } from "@/kernel/event-bus";
-import { nanoid } from "nanoid";
+import { generateId } from "@/shared/utils";
 import type {
   DatabaseTable,
   DatabaseColumn,
@@ -13,10 +13,10 @@ import type {
   DatabaseColumnType,
 } from "@/shared/types";
 
-// ─── Row cell map ─────────────────────────────────────────────────────────────
+// ─── Row cell map ──────────────────────────────────────────────────────────────────────────
 export type CellMap = Record<string, Record<string, unknown>>; // rowId → colId → value
 
-// ─── Store state ──────────────────────────────────────────────────────────────
+// ─── Store state ──────────────────────────────────────────────────────────────────────
 interface DatabaseState {
   tables:  DatabaseTable[];
   columns: Record<string, DatabaseColumn[]>;  // tableId → columns
@@ -32,7 +32,6 @@ interface DatabaseState {
 
   isLoading: boolean;
 
-  // Actions
   loadTables: () => Promise<void>;
   loadTable:  (tableId: string) => Promise<void>;
 
@@ -44,18 +43,18 @@ interface DatabaseState {
   updateColumn: (columnId: string, patch: Partial<Pick<DatabaseColumn, "name" | "type" | "options" | "position">>) => Promise<void>;
   deleteColumn: (columnId: string) => Promise<void>;
 
-  addRow:    (tableId: string) => Promise<string>;
-  deleteRow: (tableId: string, rowId: string) => Promise<void>;
+  addRow:       (tableId: string) => Promise<string>;
+  deleteRow:    (tableId: string, rowId: string) => Promise<void>;
   setCellValue: (tableId: string, rowId: string, columnId: string, value: unknown) => Promise<void>;
 
   addView:    (payload: Omit<DatabaseView, "id" | "createdAt">) => Promise<string>;
   updateView: (viewId: string, patch: Partial<Pick<DatabaseView, "name" | "type" | "config">>) => Promise<void>;
   deleteView: (viewId: string) => Promise<void>;
 
-  setFilter: (viewId: string, filter: Omit<DatabaseFilter, "id">) => Promise<void>;
+  setFilter:    (viewId: string, filter: Omit<DatabaseFilter, "id">) => Promise<void>;
   removeFilter: (filterId: string) => Promise<void>;
 
-  setSort: (viewId: string, sort: Omit<DatabaseSort, "id">) => Promise<void>;
+  setSort:    (viewId: string, sort: Omit<DatabaseSort, "id">) => Promise<void>;
   removeSort: (sortId: string) => Promise<void>;
 
   setActiveTable: (tableId: string | null) => void;
@@ -78,9 +77,7 @@ export const useDatabaseStore = create<DatabaseState>()(immer((set, get) => ({
   openRowId:     null,
   isLoading:     false,
 
-  // ─────────────────────────────────────────────────────────
-  // LOAD
-  // ─────────────────────────────────────────────────────────
+  // ─── LOAD ─────────────────────────────────────────────────────────────────
 
   loadTables: async () => {
     set((s) => { s.isLoading = true; });
@@ -100,7 +97,6 @@ export const useDatabaseStore = create<DatabaseState>()(immer((set, get) => ({
       ),
     ]);
     const rowIds = rows.map((r) => r.id);
-    // Load cells for all rows
     let cellRows: Array<{ id: string; row_id: string; column_id: string; value: string }> = [];
     if (rowIds.length > 0) {
       const placeholders = rowIds.map(() => "?").join(",");
@@ -109,7 +105,6 @@ export const useDatabaseStore = create<DatabaseState>()(immer((set, get) => ({
         rowIds,
       );
     }
-    // Load views
     const views = await db.select<DatabaseView>(
       "SELECT * FROM db_views WHERE table_id = ? ORDER BY position ASC",
       [tableId],
@@ -122,14 +117,12 @@ export const useDatabaseStore = create<DatabaseState>()(immer((set, get) => ({
       filters = await db.select(`SELECT * FROM db_filters WHERE view_id IN (${vp}) ORDER BY position ASC`, viewIds);
       sorts   = await db.select(`SELECT * FROM db_sorts   WHERE view_id IN (${vp}) ORDER BY position ASC`, viewIds);
     }
-    // Build cell map
     const cellMap: CellMap = {};
     for (const cell of cellRows) {
       if (!cellMap[cell.row_id]) cellMap[cell.row_id] = {};
       try { cellMap[cell.row_id][cell.column_id] = JSON.parse(cell.value); }
       catch { cellMap[cell.row_id][cell.column_id] = cell.value; }
     }
-    // Build filter/sort maps
     const filterMap: Record<string, DatabaseFilter[]> = {};
     for (const f of filters) {
       if (!filterMap[f.viewId]) filterMap[f.viewId] = [];
@@ -150,12 +143,10 @@ export const useDatabaseStore = create<DatabaseState>()(immer((set, get) => ({
     });
   },
 
-  // ─────────────────────────────────────────────────────────
-  // TABLE CRUD
-  // ─────────────────────────────────────────────────────────
+  // ─── TABLE CRUD ──────────────────────────────────────────────────────────
 
   createTable: async ({ name, icon, description }) => {
-    const id = nanoid();
+    const id = generateId();
     const ts = now();
     await db.execute(
       "INSERT INTO db_tables (id, name, icon, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -163,7 +154,6 @@ export const useDatabaseStore = create<DatabaseState>()(immer((set, get) => ({
     );
     const table: DatabaseTable = { id, name, icon, description, createdAt: ts, updatedAt: ts };
     set((s) => { s.tables.push(table); });
-    // Add default primary column "Name"
     await get().addColumn({
       tableId:   id,
       name:      "Name",
@@ -205,12 +195,10 @@ export const useDatabaseStore = create<DatabaseState>()(immer((set, get) => ({
     bus.emit("database:deleted", { tableId });
   },
 
-  // ─────────────────────────────────────────────────────────
-  // COLUMN CRUD
-  // ─────────────────────────────────────────────────────────
+  // ─── COLUMN CRUD ─────────────────────────────────────────────────────────
 
   addColumn: async ({ tableId, name, type, options, position, isPrimary }) => {
-    const id = nanoid();
+    const id = generateId();
     const ts = now();
     await db.execute(
       "INSERT INTO db_columns (id, table_id, name, type, options, position, is_primary, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -248,12 +236,10 @@ export const useDatabaseStore = create<DatabaseState>()(immer((set, get) => ({
     });
   },
 
-  // ─────────────────────────────────────────────────────────
-  // ROW CRUD
-  // ─────────────────────────────────────────────────────────
+  // ─── ROW CRUD ─────────────────────────────────────────────────────────────
 
   addRow: async (tableId) => {
-    const id = nanoid();
+    const id = generateId();
     const ts = now();
     const existing = get().rows[tableId] ?? [];
     const position = existing.length;
@@ -283,7 +269,7 @@ export const useDatabaseStore = create<DatabaseState>()(immer((set, get) => ({
   },
 
   setCellValue: async (tableId, rowId, columnId, value) => {
-    const cellId = nanoid();
+    const cellId = generateId();
     const serialised = JSON.stringify(value);
     await db.execute(
       "INSERT INTO db_cells (id, row_id, column_id, value) VALUES (?, ?, ?, ?) ON CONFLICT(row_id, column_id) DO UPDATE SET value = excluded.value",
@@ -298,12 +284,10 @@ export const useDatabaseStore = create<DatabaseState>()(immer((set, get) => ({
     });
   },
 
-  // ─────────────────────────────────────────────────────────
-  // VIEW CRUD
-  // ─────────────────────────────────────────────────────────
+  // ─── VIEW CRUD ─────────────────────────────────────────────────────────────
 
   addView: async ({ tableId, name, type, config, position }) => {
-    const id = nanoid();
+    const id = generateId();
     const ts = now();
     await db.execute(
       "INSERT INTO db_views (id, table_id, name, type, config, position, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -344,12 +328,10 @@ export const useDatabaseStore = create<DatabaseState>()(immer((set, get) => ({
     });
   },
 
-  // ─────────────────────────────────────────────────────────
-  // FILTER / SORT
-  // ─────────────────────────────────────────────────────────
+  // ─── FILTER / SORT ────────────────────────────────────────────────────────
 
   setFilter: async (viewId, { columnId, operator, value, position }) => {
-    const id = nanoid();
+    const id = generateId();
     await db.execute(
       "INSERT INTO db_filters (id, view_id, column_id, operator, value, position) VALUES (?, ?, ?, ?, ?, ?)",
       [id, viewId, columnId, operator, JSON.stringify(value), position ?? 0],
@@ -371,7 +353,7 @@ export const useDatabaseStore = create<DatabaseState>()(immer((set, get) => ({
   },
 
   setSort: async (viewId, { columnId, direction, position }) => {
-    const id = nanoid();
+    const id = generateId();
     await db.execute(
       "INSERT INTO db_sorts (id, view_id, column_id, direction, position) VALUES (?, ?, ?, ?, ?)",
       [id, viewId, columnId, direction ?? "asc", position ?? 0],
@@ -392,9 +374,7 @@ export const useDatabaseStore = create<DatabaseState>()(immer((set, get) => ({
     });
   },
 
-  // ─────────────────────────────────────────────────────────
-  // UI state
-  // ─────────────────────────────────────────────────────────
+  // ─── UI state ─────────────────────────────────────────────────────────────
 
   setActiveTable: (tableId) => set((s) => { s.activeTableId = tableId; }),
   setActiveView:  (viewId)  => set((s) => { s.activeViewId  = viewId; }),
