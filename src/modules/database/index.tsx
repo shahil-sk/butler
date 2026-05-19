@@ -1,57 +1,37 @@
-/**
- * index.tsx — Module entry + manifest export.
- * Follows Butler module architecture pattern exactly.
- */
-import React, { lazy } from 'react';
-import type { ModuleManifest } from '@/shared/types/module';
+// ============================================================
+// DATABASE MODULE — Root component
+// ============================================================
 
-const DatabasePage = lazy(() =>
-  import('./ui/DatabasePage').then(m => ({ default: m.DatabasePage }))
-);
+import { useEffect, useRef } from "react";
+import { Routes, Route, useNavigate } from "react-router-dom";
+import { registry } from "@/kernel/router";
+import { databaseManifest } from "./manifest";
+import { setupDatabaseEventListeners } from "./events";
+import { useDatabaseStore } from "./store";
+import { TableList } from "./components/TableList";
+import { TableView } from "./components/TableView";
 
-// Database list / home screen
-const DatabaseListPage = lazy(() =>
-  import('./ui/DatabaseListPage').then(m => ({ default: m.DatabaseListPage }))
-);
+registry.register(databaseManifest);
 
-export const databaseManifest: ModuleManifest = {
-  id: 'database',
-  name: 'Database',
-  icon: 'Table2',
-  routes: [
-    {
-      path: '/database',
-      element: <DatabaseListPage />,
-    },
-    {
-      path: '/database/:id',
-      element: <DatabasePage db_id="" />, // db_id injected by router via useParams inside component
-    },
-  ],
-  commands: [
-    {
-      id: 'database.new',
-      label: 'New Database',
-      icon: 'Plus',
-      shortcut: [],
-      action: () => {
-        // Handled by DatabaseListPage's create flow
-        window.dispatchEvent(new CustomEvent('butler:database:new'));
-      },
-    },
-    {
-      id: 'database.open',
-      label: 'Open Databases',
-      icon: 'Table2',
-      shortcut: [],
-      action: () => {
-        window.location.hash = '/database';
-      },
-    },
-  ],
-  shortcuts: [],
-};
+export default function DatabaseModule() {
+  const registered = useRef(false);
+  const loadTables = useDatabaseStore((s) => s.loadTables);
 
-export { DatabasePage } from './ui/DatabasePage';
-export { DATABASE_MIGRATIONS } from './db';
-export * from './types';
+  useEffect(() => {
+    void loadTables();
+  }, [loadTables]);
+
+  useEffect(() => {
+    if (registered.current) return;
+    registered.current = true;
+    const teardown = setupDatabaseEventListeners();
+    return teardown;
+  }, []);
+
+  return (
+    <Routes>
+      <Route index element={<TableList />} />
+      <Route path=":tableId" element={<TableView />} />
+    </Routes>
+  );
+}
