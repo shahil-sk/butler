@@ -1,6 +1,8 @@
 <div align="center">
 
-# Butler
+<h1>BUTLER</h1>
+<img src="https://github.com/shahil-sk/butler/blob/main/src-tauri/icons/32x32.png" width="100" alt="butler logo" />
+
 
 **Butler** is an offline-first personal productivity desktop app — tasks, notes, journal, calendar, projects, focus timer, and time tracking, all in one place.
 
