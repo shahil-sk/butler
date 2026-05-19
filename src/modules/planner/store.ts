@@ -266,12 +266,12 @@ export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get
     const nextTaskId = updated.taskId;
 
     if (prevTaskId && prevTaskId !== nextTaskId) {
-      bus.emit("planner:block-unlinked-task", { previousTaskId: prevTaskId });
+      bus.emit("planner:block-unlinked-task", { blockId: id, previousTaskId: prevTaskId });
     }
     if (nextTaskId && nextTaskId !== prevTaskId) {
-      bus.emit("planner:block-linked-task", { taskId: nextTaskId, date: updated.date });
+      bus.emit("planner:block-linked-task", { blockId: id, taskId: nextTaskId, date: updated.date });
     } else if (nextTaskId && updated.date !== existing.date) {
-      bus.emit("planner:block-linked-task", { taskId: nextTaskId, date: updated.date });
+      bus.emit("planner:block-linked-task", { blockId: id, taskId: nextTaskId, date: updated.date });
     }
   },
 
@@ -281,7 +281,7 @@ export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get
     set((s) => ({ blocks: s.blocks.filter((b) => b.id !== id) }));
 
     if (existing?.taskId) {
-      bus.emit("planner:block-unlinked-task", { previousTaskId: existing.taskId });
+      bus.emit("planner:block-unlinked-task", { blockId: id, previousTaskId: existing.taskId });
     }
   },
 

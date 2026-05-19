@@ -138,7 +138,8 @@ export const useWorkspaceStore = create<WorkspaceState & WorkspaceActions>()((se
 
   openPanel: (config) => {
     const id = generateId();
-    const panel: ActivePanel = { id, isSplit: false, ...config };
+    // config may contain isSplit; spread config after id so config.isSplit wins
+    const panel: ActivePanel = { ...config, id };
     set((s) => {
       const history = new Map(s.panelHistory);
       history.set(id, [config.routePath]);

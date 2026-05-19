@@ -151,17 +151,17 @@ function rowToSession(row: Record<string, unknown>): FocusSession {
 
 export async function dbLoadSessions(): Promise<FocusSession[]> {
   const rows = await db.select<Record<string, unknown>[]>(SELECT_RECENT_SQL);
-  return rows.map(rowToSession);
+  return rows.map((row) => rowToSession(row));
 }
 
 export async function dbLoadTodaySessions(): Promise<FocusSession[]> {
-  const rows = await db.select<Record<string, unknown>>(SELECT_TODAY_SQL);
-  return rows.map(rowToSession);
+  const rows = await db.select<Record<string, unknown>[]>(SELECT_TODAY_SQL);
+  return rows.map((row) => rowToSession(row));
 }
 
 export async function dbLoadSessionsInRange(from: string, to: string): Promise<FocusSession[]> {
-  const rows = await db.select<Record<string, unknown>>(SELECT_RANGE_SQL, [from, to]);
-  return rows.map(rowToSession);
+  const rows = await db.select<Record<string, unknown>[]>(SELECT_RANGE_SQL, [from, to]);
+  return rows.map((row) => rowToSession(row));
 }
 
 export async function dbInsertSession(s: FocusSession): Promise<void> {
