@@ -10,6 +10,7 @@ import type { Migration } from "@/kernel/db";
 export const RESEARCH_MIGRATIONS: Migration[] = [
   {
     version: 110,
+    module: "research",
     up: `
       -- ── research_sources ─────────────────────────────────────────
       CREATE TABLE IF NOT EXISTS research_sources (
