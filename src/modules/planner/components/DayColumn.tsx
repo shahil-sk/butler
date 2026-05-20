@@ -154,6 +154,10 @@ function BlockCard({
   const [title, setTitle]     = useState(task?.title ?? block.title);
   const { updateBlock }       = usePlannerStore();
 
+  // Check if linked task is done, cancelled, or archived
+  const isTaskCompleted = task && (task.status === "done" || task.status === "cancelled" || task.status === "archived");
+  const isTaskCancelled = task && (task.status === "cancelled" || task.status === "archived");
+
   const commitTitle = () => {
     setEditing(false);
     if (title.trim() && title !== block.title) {
@@ -166,13 +170,14 @@ function BlockCard({
       className={cn(
         "absolute left-11 right-1 rounded-md px-2 py-1 overflow-hidden",
         "border-l-[3px] group transition-fast z-10",
-        "hover:shadow-md hover:z-20"
+        "hover:shadow-md hover:z-20",
+        isTaskCompleted && "opacity-50"
       )}
       style={{
         top,
         height,
-        backgroundColor: `${color}18`,
-        borderLeftColor: color,
+        backgroundColor: isTaskCompleted ? `#6b728018` : `${color}18`,
+        borderLeftColor: isTaskCompleted ? "#6b7280" : color,
         cursor: editing ? "text" : "default",
       }}
       onDoubleClick={onEdit}
@@ -198,16 +203,21 @@ function BlockCard({
                 if (e.key === "Escape") setEditing(false);
               }}
               className="text-xs font-medium bg-transparent outline-none w-full"
-              style={{ color }}
+              style={{ color: isTaskCompleted ? "#6b7280" : color }}
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
             <p
-              className="text-xs font-medium truncate leading-tight"
-              style={{ color }}
+              className={cn(
+                "text-xs font-medium truncate leading-tight",
+                isTaskCancelled && "line-through"
+              )}
+              style={{ color: isTaskCompleted ? "#6b7280" : color }}
               onClick={() => !compact && setEditing(true)}
             >
               {task?.title ?? block.title}
+              {isTaskCancelled && <span className="ml-1 text-[10px] text-muted-foreground/60">(cancelled)</span>}
+              {task?.status === "done" && <span className="ml-1 text-[10px] text-muted-foreground/60">(done)</span>}
             </p>
           )}
 

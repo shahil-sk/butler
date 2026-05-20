@@ -52,6 +52,7 @@ export function TaskSidebar({ visibleDates }: TaskSidebarProps) {
     let base = tasks.filter(
       (t) =>
         t.status !== "done" &&
+        t.status !== "cancelled" &&
         t.status !== "archived" &&
         t.parentTaskId == null &&
         !visibleDates.includes(t.scheduledDate ?? "")
@@ -72,7 +73,7 @@ export function TaskSidebar({ visibleDates }: TaskSidebarProps) {
     const result: { date: string; tasks: Task[] }[] = [];
     for (const date of visibleDates) {
       const dayTasks = tasks.filter(
-        (t) => t.scheduledDate === date && t.status !== "done" && t.status !== "archived"
+        (t) => t.scheduledDate === date && t.status !== "done" && t.status !== "cancelled" && t.status !== "archived"
       );
       if (dayTasks.length > 0) result.push({ date, tasks: dayTasks });
     }
