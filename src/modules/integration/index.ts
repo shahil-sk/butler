@@ -102,6 +102,43 @@ export function startIntegration() {
     });
   });
 
+  // ── 4b. Task status changed → update linked calendar event color/title ─
+  bus.on("task:updated", ({ task, changed }) => {
+    if (!changed.status) return;
+
+    void withTaskMutex(task.id + ":calendar-status", async () => {
+      const { useCalendarStore } = await import("@/modules/calendar/store");
+      const { events, updateEvent } = useCalendarStore.getState();
+      const linked = events.filter((e) => e.taskId === task.id && e.isTimeBlock);
+      
+      for (const e of linked) {
+        const patch: Record<string, unknown> = {};
+        
+        if (task.status === "cancelled") {
+          patch.color = "#ef4444"; // red-500
+          patch.title = e.title.replace(/^[✓✗]\s*/, "");
+          if (!patch.title.startsWith("✗ ")) patch.title = `✗ ${patch.title}`;
+        } else if (task.status === "done") {
+          patch.color = "#6b7280"; // gray-500
+          patch.title = e.title.replace(/^[✓✗]\s*/, "");
+          if (!patch.title.startsWith("✓ ")) patch.title = `✓ ${patch.title}`;
+        } else if (task.status === "archived") {
+          patch.color = "#9ca3af"; // gray-400
+          patch.title = e.title.replace(/^[✓✗]\s*/, "");
+        } else {
+          // active/pending — restore original color if it had prefix
+          const cleanTitle = e.title.replace(/^[✓✗]\s*/, "");
+          if (cleanTitle !== e.title) {
+            patch.title = cleanTitle;
+            patch.color = "#3b82f6"; // blue-500 default
+          }
+        }
+        
+        if (Object.keys(patch).length) await updateEvent(e.id, patch);
+      }
+    });
+  });
+
   // ── 5. Calendar event created with taskId → sync task scheduledDate ───
   bus.on("calendar:event-created", ({ event }) => {
     if (!event.taskId) return;

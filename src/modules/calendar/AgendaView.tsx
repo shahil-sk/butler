@@ -64,7 +64,10 @@ function LinkedDropdown({ linkedTaskIds, linkedNoteIds }: LinkedDropdownProps) {
                 : <Circle size={11} className="text-muted-foreground/40 shrink-0" />}
               <span className={cn(
                 "text-[11px] flex-1 truncate transition-fast group-hover:text-foreground",
-                t.status === "done" ? "line-through text-muted-foreground/40" : "text-muted-foreground"
+                t.status === "done" && "line-through text-muted-foreground/40",
+                t.status === "cancelled" && "line-through text-red-400/70",
+                t.status === "archived" && "text-muted-foreground/30",
+                t.status !== "done" && t.status !== "cancelled" && t.status !== "archived" && "text-muted-foreground"
               )}>
                 {t.title}
               </span>
@@ -249,7 +252,10 @@ export function AgendaView() {
                     : <Circle size={12} className="text-muted-foreground/40 shrink-0" />}
                   <span className={cn(
                     "text-xs flex-1 truncate transition-fast group-hover:text-foreground",
-                    t.status === "done" ? "line-through text-muted-foreground/50" : "text-muted-foreground"
+                    t.status === "done" && "line-through text-muted-foreground/50",
+                    t.status === "cancelled" && "line-through text-red-400/80",
+                    t.status === "archived" && "text-muted-foreground/30",
+                    t.status !== "done" && t.status !== "cancelled" && t.status !== "archived" && "text-muted-foreground"
                   )}>
                     {t.title}
                   </span>
