@@ -1,8 +1,5 @@
 // ============================================================
-// CALENDAR — Module root  (improved)
-// - Correct hook placement (no hooks inside callbacks)
-// - Bus listeners: tasks/notes auto-reload context
-// - WeekView / DayView / AgendaView wired in
+// CALENDAR — Module root
 // ============================================================
 
 import { useEffect } from "react";
@@ -24,10 +21,12 @@ import { useNoteStore } from "@/modules/notes/store";
 
 const VIEW_LABELS = { month: "Month", week: "Week", day: "Day", agenda: "Agenda" } as const;
 
+const DAY_HEADERS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
 export function CalendarModule() {
   const {
     view, activeDate,
-    loadCalendars, loadEvents,
+    loadCalendars, scheduledLoadEvents,
     setView, goNext, goPrev, goToday,
     openEventForm,
   } = useCalendarStore();
@@ -35,18 +34,18 @@ export function CalendarModule() {
   const loadTasks = useTaskStore((s) => s.loadTasks);
   const loadNotes = useNoteStore((s) => s.loadNotes);
 
-  const anchor = parseISO(activeDate);
-  const from   = startOfMonth(startOfWeek(anchor, { weekStartsOn: 1 }));
-  const to     = endOfMonth(endOfWeek(anchor, { weekStartsOn: 1 }));
-
   useEffect(() => {
     void loadCalendars();
     void (loadTasks as (() => Promise<void>) | undefined)?.();
     void (loadNotes as (() => Promise<void>) | undefined)?.();
   }, []);
 
+  // Compute from/to inside the effect to avoid stale closure on fast navigation
   useEffect(() => {
-    void loadEvents(from.toISOString(), to.toISOString());
+    const anchor = parseISO(activeDate);
+    const from   = startOfMonth(startOfWeek(anchor, { weekStartsOn: 1 }));
+    const to     = endOfMonth(endOfWeek(anchor, { weekStartsOn: 1 }));
+    scheduledLoadEvents(from.toISOString(), to.toISOString());
   }, [activeDate, view]);
 
   useEffect(() => {
@@ -66,6 +65,8 @@ export function CalendarModule() {
     return () => unsubs.forEach((u) => u());
   }, []);
 
+  const anchor = parseISO(activeDate);
+
   const headerLabel = (() => {
     if (view === "month") return format(anchor, "MMMM yyyy");
     if (view === "week") {
@@ -76,6 +77,9 @@ export function CalendarModule() {
     if (view === "day") return format(anchor, "EEEE, MMMM d, yyyy");
     return format(anchor, "MMMM yyyy");
   })();
+
+  // Day-header row shown for both month and week views to prevent layout shift
+  const showDayHeaders = view === "month" || view === "week";
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -118,9 +122,9 @@ export function CalendarModule() {
         </button>
       </div>
 
-      {(view === "month" || view === "week") && (
+      {showDayHeaders && (
         <div className="grid grid-cols-7 border-b border-border shrink-0">
-          {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d) => (
+          {DAY_HEADERS.map((d) => (
             <div key={d} className="py-1.5 text-center text-[11px] font-medium text-muted-foreground">{d}</div>
           ))}
         </div>

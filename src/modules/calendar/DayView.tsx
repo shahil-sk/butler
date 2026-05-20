@@ -1,7 +1,7 @@
 // ============================================================
 // CALENDAR — DayView
 // Single-day timed grid + right context panel:
-//   - Tasks due today (click → opens task detail)
+//   - Tasks due OR scheduled today (click → opens task detail)
 //   - Notes updated today (click → navigates to notes)
 // ============================================================
 
@@ -44,7 +44,13 @@ export function DayView() {
       .flatMap((e) => e.linkedTaskIds!)
   );
 
-  const dueTasks   = tasks.filter((t) => t.dueDate?.startsWith(ds) && !scheduledTaskIds.has(t.id));
+  // Show tasks due OR scheduled today; exclude those already shown as time-block events
+  const dueTasks = tasks.filter(
+    (t) =>
+      !scheduledTaskIds.has(t.id) &&
+      (t.dueDate?.startsWith(ds) || t.scheduledDate?.startsWith(ds))
+  );
+
   const todayNotes = notes.filter((n) => n.updatedAt?.startsWith(ds));
 
   const now  = new Date();
@@ -158,7 +164,7 @@ export function DayView() {
         </div>
 
         <div className="px-3 pt-3 pb-1">
-          <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-2 font-medium">Tasks due</p>
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-2 font-medium">Tasks today</p>
           {dueTasks.length === 0 ? (
             <p className="text-[11px] text-muted-foreground/50 pb-2">None</p>
           ) : (
