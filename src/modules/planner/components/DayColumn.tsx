@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import { X, GripVertical, Pencil, Focus as FocusIcon, Check, Timer } from "lucide-react";
 import { cn, toISODate } from "@/shared/utils";
 import { usePlannerStore, type TimeBlock, snapMinutes, clampTime, blockSpentFraction } from "../store";
@@ -10,11 +10,16 @@ import { useTimeStore } from "@/modules/time-tracking/store";
 import type { ISODate } from "@/shared/types";
 import { BlockEditModal } from "./BlockEditModal";
 
-export const HOUR_HEIGHT = 64; // px per hour
-const START_HOUR   = 6;
-const END_HOUR     = 22;
-const HOURS        = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i);
+// ── Layout constants ──────────────────────────────────────────
+export const HOUR_HEIGHT = 72;       // px per hour — tall enough to place blocks precisely
+const GUTTER_W   = 52;               // px — fixed-width time label gutter
+const START_HOUR = 0;                // show full 24-hour day
+const END_HOUR   = 24;
+const HOURS      = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i);
 const TOTAL_HEIGHT = HOUR_HEIGHT * HOURS.length;
+
+// Which hours get a bold label vs. a lighter one
+const MAJOR_HOURS = new Set([0, 6, 9, 12, 15, 18, 21]);
 
 export function timeToY(time: string): number {
   const [h, m] = time.split(":").map(Number);
@@ -30,23 +35,24 @@ export function yToTime(y: number): string {
   return clampTime(`${String(Math.min(hh, END_HOUR)).padStart(2, "0")}:${String(mm).padStart(2, "0")}`);
 }
 
-function formatHour(h: number): string {
-  if (h === 0 || h === 24) return "12 AM";
+/** "6 AM", "12 PM", "11 PM" — clean 12-h display */
+function formatHourLabel(h: number): string {
+  if (h === 0)  return "12 AM";
   if (h === 12) return "12 PM";
   return h < 12 ? `${h} AM` : `${h - 12} PM`;
 }
 
-// ── Drop preview ghost ─────────────────────────────────────────
+// ── Drop preview ghost ────────────────────────────────────────
 function DropGhost({ y, height }: { y: number; height: number }) {
   return (
     <div
-      className="absolute left-11 right-1 rounded-md border-2 border-primary/50 bg-primary/10 pointer-events-none z-30 transition-[top] duration-75"
-      style={{ top: y, height }}
+      className="absolute rounded-md border-2 border-primary/50 bg-primary/10 pointer-events-none z-30 transition-[top] duration-75"
+      style={{ top: y, height, left: GUTTER_W + 4, right: 4 }}
     />
   );
 }
 
-// ── Single ResizeHandle ────────────────────────────────────────
+// ── ResizeHandle ──────────────────────────────────────────────
 function ResizeHandle({ blockId, startY }: { blockId: string; startY: number }) {
   const { resizeBlock } = usePlannerStore();
   const rafRef = useRef<number | null>(null);
@@ -55,12 +61,9 @@ function ResizeHandle({ blockId, startY }: { blockId: string; startY: number }) 
     (e: React.PointerEvent) => {
       e.stopPropagation();
       e.preventDefault();
-
-      // Walk up to find the nearest .day-col-grid ancestor
       const grid = (e.target as HTMLElement).closest(".day-col-grid") as HTMLElement | null
         ?? document.querySelector(".day-col-grid") as HTMLElement | null;
       if (!grid) return;
-
       const gridRect = grid.getBoundingClientRect();
 
       const onMove = (ev: PointerEvent) => {
@@ -68,11 +71,8 @@ function ResizeHandle({ blockId, startY }: { blockId: string; startY: number }) 
         rafRef.current = requestAnimationFrame(() => {
           const y      = Math.max(startY + HOUR_HEIGHT / 4, ev.clientY - gridRect.top);
           const newEnd = snapMinutes(yToTime(y));
-          // Optimistic in-memory update for smooth feel
           usePlannerStore.setState((s) => ({
-            blocks: s.blocks.map((b) =>
-              b.id === blockId ? { ...b, endTime: newEnd } : b
-            ),
+            blocks: s.blocks.map((b) => b.id === blockId ? { ...b, endTime: newEnd } : b),
           }));
         });
       };
@@ -94,38 +94,36 @@ function ResizeHandle({ blockId, startY }: { blockId: string; startY: number }) 
   return (
     <div
       onPointerDown={onPointerDown}
-      className="absolute bottom-0 left-0 right-0 h-2.5 cursor-ns-resize flex items-center justify-center opacity-0 group-hover:opacity-100 transition-fast touch-none"
+      className="absolute bottom-0 left-0 right-0 h-3 cursor-ns-resize flex items-center justify-center opacity-0 group-hover:opacity-100 transition-fast touch-none"
     >
       <div className="w-8 h-0.5 rounded-full bg-current opacity-30" />
     </div>
   );
 }
 
-// ── CalendarEventStrip — read-only overlay from calendar module ──
+// ── CalendarEventStrip ────────────────────────────────────────
 function CalendarEventStrip({ event }: { event: { id: string; title: string; startAt: string; endAt: string; color?: string } }) {
-  const startTime = event.startAt.slice(11, 16); // "HH:MM" from ISO
+  const startTime = event.startAt.slice(11, 16);
   const endTime   = event.endAt.slice(11, 16);
   const top       = timeToY(clampTime(startTime));
   const bottom    = timeToY(clampTime(endTime));
-  const height    = Math.max(bottom - top, 16);
+  const height    = Math.max(bottom - top, 18);
   const color     = event.color ?? "#06b6d4";
 
   return (
     <div
-      className="absolute left-1 w-9 rounded-sm overflow-hidden pointer-events-none z-5"
+      className="absolute rounded-sm overflow-hidden pointer-events-none z-5"
       style={{
-        top,
-        height,
+        top, height,
+        left: GUTTER_W + 2,
+        width: 36,
         backgroundColor: `${color}22`,
         borderLeft: `2px solid ${color}99`,
       }}
       title={event.title}
     >
-      {height > 20 && (
-        <p
-          className="text-[8px] font-medium px-0.5 pt-0.5 leading-tight truncate"
-          style={{ color }}
-        >
+      {height > 22 && (
+        <p className="text-[8px] font-medium px-1 pt-0.5 leading-tight truncate" style={{ color }}>
           {event.title}
         </p>
       )}
@@ -133,13 +131,13 @@ function CalendarEventStrip({ event }: { event: { id: string; title: string; sta
   );
 }
 
-// Priority → block color mapping when no explicit block/project color
+// Priority → block color
 const PRIORITY_BLOCK_COLOR: Record<string, string> = {
-  urgent: "#ef4444",  // red
-  high:   "#f97316",  // orange
-  medium: "#eab308",  // yellow
-  low:    "#0ea5e9",  // sky
-  none:   "#6b7280",  // gray
+  urgent: "#ef4444",
+  high:   "#f97316",
+  medium: "#eab308",
+  low:    "#0ea5e9",
+  none:   "#6b7280",
 };
 
 function getBlockDurationMinutes(block: TimeBlock): number {
@@ -148,7 +146,7 @@ function getBlockDurationMinutes(block: TimeBlock): number {
   return (eh * 60 + em) - (sh * 60 + sm);
 }
 
-// ── BlockCard ──────────────────────────────────────────────────
+// ── BlockCard ─────────────────────────────────────────────────
 function BlockCard({
   block, tasks, projects, compact, onDelete, onEdit, onPointerDownGrip,
 }: {
@@ -179,14 +177,12 @@ function BlockCard({
 
   const blockDuration = Math.max(0, getBlockDurationMinutes(block));
 
-  // Focus minutes for this task
   const focusedMinutes = task
     ? sessions
         .filter((s) => s.taskId === task.id && s.type === "focus" && s.completedAt && (s.actualMinutes ?? 0) > 0)
         .reduce((a, s) => a + (s.actualMinutes ?? 0), 0)
     : 0;
 
-  // Time-tracking minutes for this task
   const trackedMinutes = task
     ? timeEntries
         .filter((e) => e.taskId === task.id && e.endAt && e.durationMinutes)
@@ -202,15 +198,11 @@ function BlockCard({
   const now = new Date();
   const blockEnd = new Date(`${block.date}T${block.endTime}:00`);
   const isPast = blockEnd < now;
-
-  const hasEnoughFocus = focusPct >= 0.9; // treat 90%+ as done for time
+  const hasEnoughFocus = focusPct >= 0.9;
 
   const isActiveFocus = Boolean(
-    activeSession &&
-    activeSession.type === "focus" &&
-    activeSession.taskId &&
-    task &&
-    activeSession.taskId === task.id
+    activeSession && activeSession.type === "focus" &&
+    activeSession.taskId && task && activeSession.taskId === task.id
   );
 
   const isMissed = !isTaskCompleted && isPast && !hasEnoughFocus && !isActiveFocus;
@@ -239,10 +231,18 @@ function BlockCard({
 
   const spentFraction = blockSpentFraction(block, totalSpentMinutes);
 
+  // Format "9:00 AM – 10:30 AM" style
+  function fmt12(t: string) {
+    const [h, m] = t.split(":").map(Number);
+    const suffix = h < 12 ? "AM" : "PM";
+    const hh = h === 0 ? 12 : h > 12 ? h - 12 : h;
+    return `${hh}:${String(m).padStart(2, "0")} ${suffix}`;
+  }
+
   return (
     <div
       className={cn(
-        "absolute left-11 right-1 rounded-md px-2 py-1 overflow-hidden",
+        "absolute rounded-lg px-2.5 py-1.5 overflow-hidden",
         "border-l-[3px] group transition-fast z-10",
         "hover:shadow-md hover:z-20",
         isTaskCompleted && "opacity-50",
@@ -252,22 +252,25 @@ function BlockCard({
       style={{
         top,
         height,
+        left: GUTTER_W + 4,
+        right: 4,
         backgroundColor: isTaskCompleted ? `#6b728018` : `${baseColor}18`,
         borderLeftColor: isTaskCompleted ? "#6b7280" : baseColor,
         cursor: editing ? "text" : "default",
       }}
       onDoubleClick={onEdit}
     >
-      <div className="flex items-start gap-1 h-full">
-        {/* Grip — pointer drag handle */}
+      <div className="flex items-start gap-1.5 h-full">
+        {/* Grip */}
         <div
           className="shrink-0 mt-0.5 cursor-grab active:cursor-grabbing touch-none"
           onPointerDown={onPointerDownGrip}
         >
-          <GripVertical size={10} className="text-muted-foreground/40" />
+          <GripVertical size={11} className="text-muted-foreground/40" />
         </div>
 
         <div className="flex-1 min-w-0 flex flex-col justify-between h-full pb-3">
+          {/* Title */}
           {editing ? (
             <input
               autoFocus
@@ -278,16 +281,13 @@ function BlockCard({
                 if (e.key === "Enter") commitTitle();
                 if (e.key === "Escape") setEditing(false);
               }}
-              className="text-xs font-medium bg-transparent outline-none w-full"
+              className="text-xs font-semibold bg-transparent outline-none w-full leading-snug"
               style={{ color: isTaskCompleted ? "#6b7280" : baseColor }}
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
             <p
-              className={cn(
-                "text-xs font-medium truncate leading-tight",
-                isTaskCancelled && "line-through"
-              )}
+              className={cn("text-xs font-semibold truncate leading-snug", isTaskCancelled && "line-through")}
               style={{ color: isTaskCompleted ? "#6b7280" : baseColor }}
             >
               {task?.title ?? block.title}
@@ -299,13 +299,21 @@ function BlockCard({
             </p>
           )}
 
-          {!compact && height > 44 && (
-            <div className="mt-0.5 space-y-0.5">
-              <p className="text-[10px] text-muted-foreground/60 tabular-nums flex items-center justify-between gap-1">
-                <span>
-                  {block.startTime} – {block.endTime}
-                  {task && <span className="ml-1 opacity-50">· {task.estimateMinutes ?? blockDuration}m</span>}
+          {!compact && height > 40 && (
+            <div className="mt-0.5 space-y-1">
+              {/* Time + duration row */}
+              <p className="text-[10px] text-muted-foreground/70 tabular-nums flex items-center justify-between gap-1">
+                <span className="font-medium">
+                  {fmt12(block.startTime)} – {fmt12(block.endTime)}
+                  {blockDuration > 0 && (
+                    <span className="ml-1 opacity-50">
+                      {blockDuration >= 60
+                        ? `${Math.floor(blockDuration / 60)}h${blockDuration % 60 > 0 ? ` ${blockDuration % 60}m` : ""}`
+                        : `${blockDuration}m`}
+                    </span>
+                  )}
                 </span>
+                {/* Action buttons */}
                 <span className="inline-flex items-center gap-1">
                   {task && (
                     <button
@@ -331,14 +339,12 @@ function BlockCard({
                 </span>
               </p>
 
+              {/* Progress bar */}
               {task && totalSpentMinutes > 0 && (
-                <div className="flex items-center gap-1">
-                  <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                <div className="flex items-center gap-1.5">
+                  <div className="flex-1 h-1 rounded-full bg-muted overflow-hidden">
                     <div
-                      className={cn(
-                        "h-1.5 rounded-full transition-all",
-                        hasEnoughFocus ? "bg-emerald-500" : "bg-primary"
-                      )}
+                      className={cn("h-1 rounded-full transition-all", hasEnoughFocus ? "bg-emerald-500" : "bg-primary")}
                       style={{ width: `${focusPct * 100}%` }}
                     />
                   </div>
@@ -349,12 +355,9 @@ function BlockCard({
               )}
 
               {!task && spentFraction > 0 && (
-                <div className="flex items-center gap-1">
-                  <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                    <div
-                      className="h-1.5 rounded-full bg-primary transition-all"
-                      style={{ width: `${spentFraction * 100}%` }}
-                    />
+                <div className="flex items-center gap-1.5">
+                  <div className="flex-1 h-1 rounded-full bg-muted overflow-hidden">
+                    <div className="h-1 rounded-full bg-primary transition-all" style={{ width: `${spentFraction * 100}%` }} />
                   </div>
                   <span className="text-[9px] text-muted-foreground/70 tabular-nums whitespace-nowrap">
                     {Math.round(spentFraction * 100)}%
@@ -365,6 +368,7 @@ function BlockCard({
           )}
         </div>
 
+        {/* Hover actions */}
         <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0 transition-fast">
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(); }}
@@ -386,17 +390,19 @@ function BlockCard({
   );
 }
 
-// ── DayColumn ─────────────────────────────────────────────────-
+// ── DayColumn ──────────────────────────────────────────────────
 export function DayColumn({ date, compact = false }: { date: ISODate; compact?: boolean }) {
   const {
     getBlocksForDate, createBlock, deleteBlock,
     dragTaskId, setDragTaskId, scheduleTask,
     rescheduleBlock, editingBlockId, setEditingBlockId,
   } = usePlannerStore();
-  const tasks    = useTaskStore((s) => s.tasks);
-  const projects = useProjectStore((s) => s.projects);
+
+  const tasks     = useTaskStore((s) => s.tasks);
+  const projects  = useProjectStore((s) => s.projects);
   const calEvents = useCalendarStore((s) => s.getEventsForDay(date));
-  const gridRef  = useRef<HTMLDivElement>(null);
+  const gridRef   = useRef<HTMLDivElement>(null);
+  const wrapRef   = useRef<HTMLDivElement>(null);
 
   const [ghost, setGhost] = useState<{ y: number; height: number } | null>(null);
   const dragMoveRef = useRef<{ blockId: string; offsetY: number; durationPx: number } | null>(null);
@@ -407,13 +413,22 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
   const isToday = date === toISODate(nowObj);
   const nowY    = isToday ? timeToY(nowTime) : null;
 
+  // ── Auto-scroll to current time (or 8 AM on non-today) on mount ──
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const targetY = nowY !== null ? Math.max(0, nowY - 120) : timeToY("08:00") - 60;
+    el.scrollTop = targetY;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date]);
+
   const getGridY = useCallback((clientY: number): number => {
     const rect = gridRef.current?.getBoundingClientRect();
     if (!rect) return 0;
     return Math.max(0, Math.min(clientY - rect.top, TOTAL_HEIGHT));
   }, []);
 
-  // ── Task drag-over / drop ─────────────────────────────────────-
+  // ── Task drag-over / drop ─────────────────────────────────────
   const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
@@ -470,10 +485,11 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
         const y        = getGridY(ev.clientY) - ref.offsetY;
         const newStart = snapMinutes(yToTime(Math.max(0, y)));
         const [sh, sm] = newStart.split(":").map(Number);
-        const [eh, em] = block.endTime.split(":").map(Number);
-        const dur      = (eh * 60 + em) - (block.startTime.split(":").map(Number)[0] * 60 + block.startTime.split(":").map(Number)[1]);
-        const em2      = sh * 60 + sm + dur;
-        const newEnd   = clampTime(`${String(Math.floor(em2 / 60)).padStart(2, "0")}:${String(em2 % 60).padStart(2, "0")}`);
+        const dur      =
+          (parseInt(block.endTime.split(":")[0]) * 60 + parseInt(block.endTime.split(":")[1])) -
+          (parseInt(block.startTime.split(":")[0]) * 60 + parseInt(block.startTime.split(":")[1]));
+        const em2  = sh * 60 + sm + dur;
+        const newEnd = clampTime(`${String(Math.floor(em2 / 60)).padStart(2, "0")}:${String(em2 % 60).padStart(2, "0")}`);
         await rescheduleBlock(blockId, newStart, newEnd);
         window.removeEventListener("pointermove", onMove);
         window.removeEventListener("pointerup", onUp);
@@ -486,48 +502,91 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
   );
 
   return (
-    <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-      {/* Grid */}
+    <div ref={wrapRef} className="flex flex-col flex-1 min-w-0 overflow-y-auto overflow-x-hidden">
+      {/* Grid canvas */}
       <div
         ref={gridRef}
-        className="day-col-grid relative flex-1 overflow-y-auto"
+        className="day-col-grid relative shrink-0"
         style={{ height: TOTAL_HEIGHT }}
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
       >
-        {/* Hour lines */}
-        {HOURS.map((h) => (
-          <div
-            key={h}
-            className="absolute left-0 right-0 border-t border-border/30"
-            style={{ top: timeToY(`${String(h).padStart(2, "0")}:00`) }}
-          >
-            <span className="absolute left-1 -top-2.5 text-[9px] text-muted-foreground/50 tabular-nums select-none">
-              {formatHour(h)}
-            </span>
-          </div>
-        ))}
+        {/* ── Gutter background ──────────────────────────── */}
+        <div
+          className="absolute top-0 bottom-0 left-0 bg-muted/20 border-r border-border/40 pointer-events-none z-0"
+          style={{ width: GUTTER_W }}
+        />
 
-        {/* Now indicator */}
+        {/* ── Hour rows (full-hour lines + labels) ──────── */}
+        {HOURS.map((h) => {
+          const y       = timeToY(`${String(h).padStart(2, "0")}:00`);
+          const isMajor = MAJOR_HOURS.has(h);
+          return (
+            <div key={h} className="absolute left-0 right-0 pointer-events-none" style={{ top: y }}>
+              {/* Full-width grid line */}
+              <div
+                className={cn(
+                  "absolute right-0 border-t",
+                  isMajor ? "border-border/50" : "border-border/20"
+                )}
+                style={{ left: GUTTER_W }}
+              />
+              {/* Time label — right-aligned inside gutter */}
+              <span
+                className={cn(
+                  "absolute right-0 -translate-y-1/2 pr-2 tabular-nums select-none leading-none",
+                  isMajor
+                    ? "text-[11px] font-semibold text-muted-foreground/80"
+                    : "text-[10px] font-normal text-muted-foreground/45"
+                )}
+                style={{ width: GUTTER_W }}
+              >
+                {formatHourLabel(h)}
+              </span>
+            </div>
+          );
+        })}
+
+        {/* ── Half-hour tick marks ───────────────────────── */}
+        {HOURS.map((h) => {
+          const y = timeToY(`${String(h).padStart(2, "0")}:30`);
+          return (
+            <div
+              key={`${h}:30`}
+              className="absolute right-0 border-t border-border/15 pointer-events-none"
+              style={{ top: y, left: GUTTER_W }}
+            />
+          );
+        })}
+
+        {/* ── Now indicator ─────────────────────────────── */}
         {nowY !== null && (
           <div
             className="absolute left-0 right-0 z-20 pointer-events-none"
             style={{ top: nowY }}
           >
             <div className="relative flex items-center">
-              <div className="w-2 h-2 rounded-full bg-primary ml-9 shrink-0" />
-              <div className="flex-1 h-px bg-primary" />
+              {/* Time bubble */}
+              <span
+                className="absolute text-[9px] font-bold tabular-nums text-primary bg-primary/10 px-1 py-0.5 rounded-full leading-none z-10 -translate-y-1/2"
+                style={{ width: GUTTER_W, textAlign: "center", top: "50%" }}
+              >
+                {nowTime}
+              </span>
+              {/* Dot + line */}
+              <div className="w-2 h-2 rounded-full bg-primary shrink-0 z-10" style={{ marginLeft: GUTTER_W - 4 }} />
+              <div className="flex-1 h-px bg-primary/70" />
             </div>
           </div>
         )}
 
-        {/* Calendar event strips — read-only, behind blocks */}
+        {/* ── Calendar event strips (behind blocks) ─────── */}
         {calEvents.map((ev) => (
           <CalendarEventStrip key={ev.id} event={ev} />
         ))}
 
-        {/* Planner blocks */}
+        {/* ── Planner blocks ─────────────────────────────── */}
         {blocks.map((block) => (
           <BlockCard
             key={block.id}
@@ -541,7 +600,7 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
           />
         ))}
 
-        {/* Drop ghost */}
+        {/* ── Drop ghost ─────────────────────────────────── */}
         {ghost && <DropGhost y={ghost.y} height={ghost.height} />}
       </div>
 
