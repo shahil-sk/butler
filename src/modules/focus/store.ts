@@ -1,15 +1,11 @@
 // ============================================================
-// FOCUS — STORE
-// Timer state machine. Persists every state change to SQLite.
-// Emits bus events matching ButlerEventMap exactly.
+// FOCUS — STORE  (v2 — task integration patch)
 //
-// Gap fixes:
-//   1. startFocus() persists config back to shell settings
-//   2. completedFocusCount persisted to sessionStorage
-//   3. extendSession(extraMinutes) — adds time to running session
-//   4. pendingTaskId / pendingProjectId stashed in startBreak
-//   5. cancel() saves state as 'cancelled' (not 'idle')
-//   6. pause() no longer increments interruptCount
+// Changes on top of the timer/session gap fix:
+//   Gap 3: startFocus() calls setTaskScheduledToday(taskId)
+//   Gap 4: reads butler:pendingFocusTaskId from sessionStorage
+//          on load, clears it after consuming
+// All 6 timer gaps from the previous commit are preserved.
 // ============================================================
 
 import { create } from "zustand";
@@ -22,8 +18,9 @@ import {
   dbUpdateSession,
   newSession,
 } from "./db";
+import { setTaskScheduledToday } from "./taskIntegration";
 
-// ── Config ───────────────────────────────────────────────────────
+// ── Config ────────────────────────────────────────────────────
 
 interface TimerConfig {
   focusMinutes:            number;
@@ -39,26 +36,30 @@ const DEFAULT_CONFIG: TimerConfig = {
   sessionsBeforeLongBreak: 4,
 };
 
-// ── Gap 2: persist completedFocusCount across page reloads ────────
-// sessionStorage survives refresh but not tab close — right semantics
-// for a daily Pomodoro counter.
+// ── Gap 2 (timer): persist completedFocusCount ───────────────
 
 const FOCUS_COUNT_KEY = "butler:completedFocusCount";
 
 function loadPersistedFocusCount(): number {
-  try {
-    const v = sessionStorage.getItem(FOCUS_COUNT_KEY);
-    return v !== null ? parseInt(v, 10) : 0;
-  } catch {
-    return 0;
-  }
+  try { const v = sessionStorage.getItem(FOCUS_COUNT_KEY); return v !== null ? parseInt(v, 10) : 0; } catch { return 0; }
 }
-
 function savePersistedFocusCount(count: number) {
   try { sessionStorage.setItem(FOCUS_COUNT_KEY, String(count)); } catch { /* sandboxed */ }
 }
 
-// ── Stats ─────────────────────────────────────────────────────
+// ── Gap 4 (task): pending task from planner navigation ───────
+
+const PENDING_TASK_KEY = "butler:pendingFocusTaskId";
+
+function consumePendingTaskId(): string | undefined {
+  try {
+    const v = sessionStorage.getItem(PENDING_TASK_KEY) ?? undefined;
+    sessionStorage.removeItem(PENDING_TASK_KEY);
+    return v;
+  } catch { return undefined; }
+}
+
+// ── Stats ────────────────────────────────────────────────────
 
 export interface FocusStats {
   todayMinutes:  number;
@@ -106,7 +107,7 @@ function computeStats(sessions: FocusSession[]): FocusStats {
   };
 }
 
-// ── State ─────────────────────────────────────────────────────
+// ── State ────────────────────────────────────────────────────
 
 interface FocusStore {
   sessions:             FocusSession[];
@@ -116,7 +117,6 @@ interface FocusStore {
   isLoaded:             boolean;
   stats:                FocusStats;
   pendingGoal:          string;
-  // Gap 4: task/project carried forward through break
   pendingTaskId:        string | undefined;
   pendingProjectId:     string | undefined;
   lastCompletedSession: FocusSession | null;
@@ -124,10 +124,10 @@ interface FocusStore {
 
   load:               () => Promise<void>;
   startFocus:         (opts?: { taskId?: string; projectId?: string; config?: Partial<TimerConfig> }) => Promise<void>;
-  pause:              () => void;              // Gap 6: no interruptCount increment
+  pause:              () => void;
   resume:             () => void;
-  cancel:             () => Promise<void>;     // Gap 5: state = 'cancelled'
-  extendSession:      (extraMinutes: number) => void; // Gap 3
+  cancel:             () => Promise<void>;
+  extendSession:      (extraMinutes: number) => void;
   startBreak:         (type: "short_break" | "long_break", minutes: number) => void;
   skipBreak:          () => void;
   setTaskId:          (taskId: string | undefined) => void;
@@ -135,7 +135,7 @@ interface FocusStore {
   setGoal:            (goal: string) => void;
   setSessionNotes:    (notes: string) => void;
   setSessionMood:     (sessionId: string, mood: 1|2|3|4|5) => Promise<void>;
-  incrementInterrupt: () => void;              // Gap 6: explicit only
+  incrementInterrupt: () => void;
   clearLastCompleted: () => void;
 
   _tick:           () => void;
@@ -144,17 +144,17 @@ interface FocusStore {
   _recomputeStats: () => void;
 }
 
-// ── Store ─────────────────────────────────────────────────────
+// ── Store ────────────────────────────────────────────────────
 
 export const useFocusStore = create<FocusStore>((set, get) => ({
   sessions:             [],
   activeSession:        null,
   secondsLeft:          0,
-  completedFocusCount:  loadPersistedFocusCount(), // Gap 2
+  completedFocusCount:  loadPersistedFocusCount(),
   isLoaded:             false,
   stats:                { todayMinutes: 0, todaySessions: 0, weekMinutes: 0, currentStreak: 0, totalMinutes: 0, totalSessions: 0 },
   pendingGoal:          "",
-  pendingTaskId:        undefined,
+  pendingTaskId:        consumePendingTaskId(), // Gap 4: pre-loaded from sessionStorage
   pendingProjectId:     undefined,
   lastCompletedSession: null,
   _tickInterval:        null,
@@ -179,7 +179,7 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
 
     const cfg = { ...DEFAULT_CONFIG, ...config };
 
-    // Gap 1: persist config changes to shell settings so they survive restarts
+    // Gap 1 (timer): persist config to shell settings
     try {
       const { useShellStore } = await import("@/shell/store");
       const ss = useShellStore.getState();
@@ -192,6 +192,9 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
         });
       }
     } catch { /* shell store may not expose updateSettings */ }
+
+    // Gap 3 (task): mark task as scheduled for today
+    if (taskId) void setTaskScheduledToday(taskId);
 
     const session = newSession({
       taskId,
@@ -222,7 +225,6 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     bus.emit("search:index-invalidated", { entityType: "focus_session", id: session.id });
   },
 
-  // Gap 6: intentional pause — does NOT count as an interruption
   pause: () => {
     const { activeSession } = get();
     if (!activeSession || activeSession.state !== "focusing") return;
@@ -245,7 +247,6 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     bus.emit("focus:session-resumed", { sessionId: updated.id });
   },
 
-  // Gap 5: saves state as 'cancelled' so history can distinguish from completed
   cancel: async () => {
     const { activeSession, secondsLeft } = get();
     if (!activeSession) return;
@@ -267,7 +268,6 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     bus.emit("focus:session-cancelled", { sessionId: updated.id });
   },
 
-  // Gap 3: add time to the running focus session
   extendSession: (extraMinutes: number) => {
     const { activeSession, secondsLeft } = get();
     if (!activeSession || activeSession.state !== "focusing") return;
@@ -277,14 +277,11 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     _patchList(set, updated);
   },
 
-  // Gap 4: stash taskId/projectId so next focus session can pre-fill them
   startBreak: (type, minutes) => {
     const { activeSession } = get();
     get()._clearTimer();
-
     const prevTaskId    = activeSession?.taskId;
     const prevProjectId = activeSession?.projectId;
-
     const session = newSession({
       taskId:         prevTaskId,
       projectId:      prevProjectId,
@@ -294,17 +291,15 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
       startedAt:      now(),
     });
     void dbInsertSession(session);
-
     const interval = setInterval(() => get()._tick(), 1000);
     set((s) => ({
       activeSession:    session,
       secondsLeft:      minutes * 60,
       sessions:         [session, ...s.sessions],
       _tickInterval:    interval,
-      pendingTaskId:    prevTaskId,    // Gap 4
-      pendingProjectId: prevProjectId, // Gap 4
+      pendingTaskId:    prevTaskId,
+      pendingProjectId: prevProjectId,
     }));
-
     bus.emit("focus:session-started", { session });
   },
 
@@ -312,12 +307,7 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     const { activeSession } = get();
     if (!activeSession) return;
     get()._clearTimer();
-    const updated: FocusSession = {
-      ...activeSession,
-      state:         "idle",
-      completedAt:   now(),
-      actualMinutes: 0,
-    };
+    const updated: FocusSession = { ...activeSession, state: "idle", completedAt: now(), actualMinutes: 0 };
     void dbUpdateSession(updated);
     set((s) => ({
       activeSession: null,
@@ -327,7 +317,8 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     bus.emit("focus:session-cancelled", { sessionId: updated.id });
   },
 
-  setGoal: (goal) => set({ pendingGoal: goal }),
+  setGoal:         (goal)  => set({ pendingGoal: goal }),
+  clearLastCompleted: ()   => set({ lastCompletedSession: null }),
 
   setSessionNotes: (notes) => {
     const { activeSession } = get();
@@ -349,20 +340,14 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     }));
   },
 
-  // Gap 6: only called on explicit user action, never on ordinary pause
   incrementInterrupt: () => {
     const { activeSession } = get();
     if (!activeSession) return;
-    const updated = {
-      ...activeSession,
-      interruptCount: (activeSession.interruptCount ?? 0) + 1,
-    };
+    const updated = { ...activeSession, interruptCount: (activeSession.interruptCount ?? 0) + 1 };
     void dbUpdateSession(updated);
     set({ activeSession: updated });
     _patchList(set, updated);
   },
-
-  clearLastCompleted: () => set({ lastCompletedSession: null }),
 
   setTaskId: (taskId) => {
     const { activeSession } = get();
@@ -386,7 +371,6 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     const { activeSession, completedFocusCount } = get();
     if (!activeSession) return;
     get()._clearTimer();
-
     const updated: FocusSession = {
       ...activeSession,
       state:         "idle",
@@ -394,13 +378,9 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
       actualMinutes: activeSession.plannedMinutes,
     };
     await dbUpdateSession(updated);
-
     const isFocusSession = activeSession.type === "focus";
     const newCount       = isFocusSession ? completedFocusCount + 1 : completedFocusCount;
-
-    // Gap 2: persist so counter survives page reload
     if (isFocusSession) savePersistedFocusCount(newCount);
-
     set((s) => ({
       activeSession:        null,
       secondsLeft:          0,
@@ -408,12 +388,8 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
       sessions:             s.sessions.map((x) => (x.id === updated.id ? updated : x)),
       lastCompletedSession: isFocusSession ? updated : s.lastCompletedSession,
     }));
-
     get()._recomputeStats();
-
-    if (isFocusSession) {
-      bus.emit("focus:session-completed", { session: updated });
-    }
+    if (isFocusSession) bus.emit("focus:session-completed", { session: updated });
   },
 
   _tick: () => {
@@ -421,32 +397,19 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     if (!activeSession) return;
     const next = secondsLeft - 1;
     bus.emit("focus:tick", { sessionId: activeSession.id, remainingSeconds: next });
-    if (next <= 0) {
-      void get()._completeActive();
-      return;
-    }
+    if (next <= 0) { void get()._completeActive(); return; }
     set({ secondsLeft: next });
   },
 
   _clearTimer: () => {
     const { _tickInterval } = get();
-    if (_tickInterval) {
-      clearInterval(_tickInterval);
-      set({ _tickInterval: null });
-    }
+    if (_tickInterval) { clearInterval(_tickInterval); set({ _tickInterval: null }); }
   },
 
-  _recomputeStats: () => {
-    set((s) => ({ stats: computeStats(s.sessions) }));
-  },
+  _recomputeStats: () => set((s) => ({ stats: computeStats(s.sessions) })),
 }));
 
-// ── Helpers ───────────────────────────────────────────────────
-
 type SetFn = (fn: (s: FocusStore) => Partial<FocusStore>) => void;
-
 function _patchList(set: SetFn, updated: FocusSession) {
-  set((s) => ({
-    sessions: s.sessions.map((x) => (x.id === updated.id ? updated : x)),
-  }));
+  set((s) => ({ sessions: s.sessions.map((x) => (x.id === updated.id ? updated : x)) }));
 }
