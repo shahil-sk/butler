@@ -1,13 +1,14 @@
 // ============================================================
 // CALENDAR — AgendaView
 // Month-scoped flat list grouped by date.
-// Shows calendar events + tasks due + notes updated that day.
-// Empty state with CTA.
+// Shows calendar events + tasks due/scheduled + notes updated that day.
+// Time-block events show their linked task inline; those tasks are
+// excluded from the standalone task list to avoid duplication.
 // ============================================================
 
 import { useMemo } from "react";
 import { format, parseISO, startOfMonth, endOfMonth } from "date-fns";
-import { CheckCircle2, Circle, Clock, StickyNote } from "lucide-react";
+import { CheckCircle2, Circle, Clock, StickyNote, Link2 } from "lucide-react";
 import { cn } from "@/shared/utils";
 import { useCalendarStore } from "./store";
 import { useTaskStore } from "@/modules/tasks/store";
@@ -39,12 +40,16 @@ export function AgendaView() {
     return map;
   }, [events]);
 
+  // Build a task lookup map once
+  const taskById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
+
   const taskDates = useMemo(() => {
     const s = new Set<string>();
     const fromD = from.slice(0, 10);
     const toD   = to.slice(0, 10);
     for (const t of tasks) {
-      if (t.dueDate && t.dueDate >= fromD && t.dueDate <= toD) s.add(t.dueDate);
+      if (t.dueDate       && t.dueDate       >= fromD && t.dueDate       <= toD) s.add(t.dueDate);
+      if (t.scheduledDate && t.scheduledDate >= fromD && t.scheduledDate <= toD) s.add(t.scheduledDate);
     }
     return s;
   }, [tasks, from, to]);
@@ -70,10 +75,24 @@ export function AgendaView() {
     <div className="flex-1 overflow-y-auto px-6 py-4">
       {allDates.map((ds) => {
         const dayEvts  = grouped.get(ds) ?? [];
-        const dayTasks = tasks.filter((t) => t.dueDate?.startsWith(ds));
-        const dayNotes = notes.filter((n) => n.updatedAt?.startsWith(ds));
-        const date     = parseISO(ds);
         const isToday  = ds === new Date().toISOString().slice(0, 10);
+        const date     = parseISO(ds);
+
+        // IDs of tasks already represented by a time-block event on this day
+        const timeBlockTaskIds = new Set(
+          dayEvts
+            .filter((e) => e.isTimeBlock && e.linkedTaskIds?.length)
+            .flatMap((e) => e.linkedTaskIds!)
+        );
+
+        // Standalone tasks: due OR scheduled today, not already shown via a time-block
+        const dayTasks = tasks.filter(
+          (t) =>
+            !timeBlockTaskIds.has(t.id) &&
+            (t.dueDate?.startsWith(ds) || t.scheduledDate?.startsWith(ds))
+        );
+
+        const dayNotes = notes.filter((n) => n.updatedAt?.startsWith(ds));
 
         return (
           <div key={ds} className="mb-6">
@@ -96,25 +115,51 @@ export function AgendaView() {
               {dayEvts.map((evt) => {
                 const cal   = calendars.find((c) => c.id === evt.calendarId);
                 const color = evt.color ?? cal?.color ?? "#3b82f6";
+                // Linked tasks for time-block events shown inline
+                const linkedTasks = evt.isTimeBlock
+                  ? (evt.linkedTaskIds ?? []).map((id) => taskById.get(id)).filter(Boolean)
+                  : [];
+
                 return (
-                  <div
-                    key={evt.id}
-                    onClick={() => openEventForm(evt, evt.id)}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-border hover:border-primary/30 cursor-pointer transition-fast"
-                    style={{ borderLeftColor: color, borderLeftWidth: 3 }}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium truncate text-foreground">{evt.title}</p>
-                      <p className="text-[10px] text-muted-foreground tabular-nums mt-0.5">
-                        {evt.allDay ? "All day" : `${evt.startAt.slice(11,16)}\u2013${evt.endAt.slice(11,16)}`}
-                        {evt.description && ` \u00b7 ${evt.description.slice(0, 40)}`}
-                      </p>
+                  <div key={evt.id} className="space-y-1">
+                    <div
+                      onClick={() => openEventForm(evt, evt.id)}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-border hover:border-primary/30 cursor-pointer transition-fast"
+                      style={{ borderLeftColor: color, borderLeftWidth: 3 }}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate text-foreground">{evt.title}</p>
+                        <p className="text-[10px] text-muted-foreground tabular-nums mt-0.5">
+                          {evt.allDay ? "All day" : `${evt.startAt.slice(11,16)}\u2013${evt.endAt.slice(11,16)}`}
+                          {evt.description && ` \u00b7 ${evt.description.slice(0, 40)}`}
+                        </p>
+                      </div>
+                      {evt.isTimeBlock && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium shrink-0">
+                          time block
+                        </span>
+                      )}
                     </div>
-                    {evt.isTimeBlock && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium shrink-0">
-                        time block
-                      </span>
-                    )}
+
+                    {/* Linked tasks shown indented below the time-block event */}
+                    {linkedTasks.map((t) => t && (
+                      <button
+                        key={t.id}
+                        onClick={() => (useTaskStore.getState() as any).openTask?.(t.id)}
+                        className="w-full flex items-center gap-2 pl-5 pr-3 py-1.5 rounded-md hover:bg-accent/50 transition-fast group text-left"
+                      >
+                        <Link2 size={9} className="text-muted-foreground/40 shrink-0" />
+                        {t.status === "done"
+                          ? <CheckCircle2 size={11} className="text-green-500 shrink-0" />
+                          : <Circle size={11} className="text-muted-foreground/40 shrink-0" />}
+                        <span className={cn(
+                          "text-[11px] flex-1 truncate transition-fast group-hover:text-foreground",
+                          t.status === "done" ? "line-through text-muted-foreground/40" : "text-muted-foreground"
+                        )}>
+                          {t.title}
+                        </span>
+                      </button>
+                    ))}
                   </div>
                 );
               })}
@@ -134,7 +179,9 @@ export function AgendaView() {
                   )}>
                     {t.title}
                   </span>
-                  <span className="text-[9px] text-muted-foreground/40 shrink-0">task due</span>
+                  <span className="text-[9px] text-muted-foreground/40 shrink-0">
+                    {t.dueDate?.startsWith(ds) ? "due" : "scheduled"}
+                  </span>
                 </button>
               ))}
 
