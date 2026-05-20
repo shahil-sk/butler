@@ -139,6 +139,49 @@ export function startIntegration() {
     });
   });
 
+  // ── 4c. Task status / title changed → update linked planner blocks ─────
+  bus.on("task:updated", ({ task, changed }) => {
+    if (!changed.status && !changed.title) return;
+
+    void withTaskMutex(task.id + ":planner-status", async () => {
+      const { usePlannerStore } = await import("@/modules/planner/store");
+      const { blocks, updateBlock } = usePlannerStore.getState();
+      const linked = blocks.filter((b) => b.taskId === task.id);
+      
+      for (const b of linked) {
+        const patch: Record<string, unknown> = {};
+        
+        if (changed.title) {
+          const cleanTitle = b.title.replace(/^[✓✗]\s*/, "");
+          patch.title = task.title;
+        }
+        
+        if (changed.status) {
+          if (task.status === "cancelled") {
+            patch.color = "#ef4444"; // red-500
+            const cleanTitle = (patch.title as string | undefined) ?? b.title.replace(/^[✓✗]\s*/, "");
+            patch.title = `✗ ${cleanTitle}`;
+          } else if (task.status === "done") {
+            patch.color = "#6b7280"; // gray-500
+            const cleanTitle = (patch.title as string | undefined) ?? b.title.replace(/^[✓✗]\s*/, "");
+            patch.title = `✓ ${cleanTitle}`;
+          } else if (task.status === "archived") {
+            patch.color = "#9ca3af"; // gray-400
+            const cleanTitle = (patch.title as string | undefined) ?? b.title.replace(/^[✓✗]\s*/, "");
+            patch.title = cleanTitle;
+          } else {
+            // active/pending — restore
+            const cleanTitle = (patch.title as string | undefined) ?? b.title.replace(/^[✓✗]\s*/, "");
+            patch.title = cleanTitle;
+            patch.color = "#3b82f6"; // blue-500 default
+          }
+        }
+        
+        if (Object.keys(patch).length) await updateBlock(b.id, patch);
+      }
+    });
+  });
+
   // ── 5. Calendar event created with taskId → sync task scheduledDate ───
   bus.on("calendar:event-created", ({ event }) => {
     if (!event.taskId) return;

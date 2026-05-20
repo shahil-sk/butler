@@ -323,6 +323,13 @@ export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get
   },
 
   carryForward: async (taskId, fromDate, toDate) => {
+    const { useTaskStore } = await import("@/modules/tasks/store");
+    const task = useTaskStore.getState().tasks.find((t) => t.id === taskId);
+    
+    if (!task || task.status === "done" || task.status === "cancelled" || task.status === "archived") {
+      return;
+    }
+
     const id = generateId();
     await db.execute(
       `INSERT INTO planner_carry_forward (id, task_id, from_date, to_date, created_at) VALUES (?,?,?,?,?)`,
@@ -410,16 +417,33 @@ export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get
 
   getBlocksForDate: (date) => get().blocks.filter((b) => b.date === date),
 
-  getDayStats: (date) => {
+  getDayStats: async (date) => {
     const blocks = get().blocks.filter((b) => b.date === date);
     let focus = 0, brk = 0;
     for (const b of blocks) {
       const dur = toMin(b.endTime) - toMin(b.startTime);
       if (b.isBreak) brk += dur; else focus += dur;
     }
-    // taskCount = distinct scheduled tasks for the date
-    const taskIds = new Set(blocks.filter((b) => b.taskId).map((b) => b.taskId!));
-    return { totalBlocks: blocks.length, focusMinutes: focus, breakMinutes: brk, taskCount: taskIds.size };
+    
+    const { useTaskStore } = await import("@/modules/tasks/store");
+    const allTasks = useTaskStore.getState().tasks;
+    
+    const activeTaskIds = new Set(
+      blocks
+        .filter((b) => {
+          if (!b.taskId) return false;
+          const task = allTasks.find((t) => t.id === b.taskId);
+          return task && task.status !== "done" && task.status !== "cancelled" && task.status !== "archived";
+        })
+        .map((b) => b.taskId!)
+    );
+    
+    return { 
+      totalBlocks: blocks.length, 
+      focusMinutes: focus, 
+      breakMinutes: brk, 
+      taskCount: activeTaskIds.size 
+    };
   },
 
   goToday:    () => set({ activeDate: today() }),
