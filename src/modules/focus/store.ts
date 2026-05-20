@@ -25,7 +25,7 @@ import {
   newSession,
 } from "./db";
 
-// ── Config ────────────────────────────────────────────────────────────────────
+// ── Config ───────────────────────────────────────────────────────
 
 interface TimerConfig {
   focusMinutes:            number;
@@ -41,7 +41,7 @@ const DEFAULT_CONFIG: TimerConfig = {
   sessionsBeforeLongBreak: 4,
 };
 
-// ── Stats ─────────────────────────────────────────────────────────────────────
+// ── Stats ─────────────────────────────────────────────────────
 
 export interface FocusStats {
   todayMinutes:    number; // actual focus minutes today
@@ -95,7 +95,7 @@ function computeStats(sessions: FocusSession[]): FocusStats {
   };
 }
 
-// ── State ─────────────────────────────────────────────────────────────────────
+// ── State ─────────────────────────────────────────────────────
 
 interface FocusStore {
   sessions:            FocusSession[];
@@ -131,7 +131,7 @@ interface FocusStore {
   _recomputeStats: () => void;
 }
 
-// ── Store ─────────────────────────────────────────────────────────────────────
+// ── Store ─────────────────────────────────────────────────────
 
 export const useFocusStore = create<FocusStore>((set, get) => ({
   sessions:             [],
@@ -144,7 +144,7 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
   lastCompletedSession: null,
   _tickInterval:        null,
 
-  // ── load ─────────────────────────────────────────────────────────────────────
+  // ── load ─────────────────────────────────────────────────────
 
   load: async () => {
     if (get().isLoaded) return;
@@ -152,10 +152,19 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     set({ sessions, isLoaded: true, stats: computeStats(sessions) });
   },
 
-  // ── startFocus ───────────────────────────────────────────────────────────────
+  // ── startFocus ────────────────────────────────────────────────
 
   startFocus: async ({ taskId, projectId, config = {} } = {}) => {
     if (get().activeSession) await get().cancel();
+
+    if (taskId) {
+      const { useTaskStore } = await import("@/modules/tasks/store");
+      const task = useTaskStore.getState().tasks.find((t) => t.id === taskId);
+      if (task && (task.status === "cancelled" || task.status === "archived")) {
+        bus.emit("notify", { message: "Cannot start focus on a cancelled or archived task", type: "error" } as never);
+        return;
+      }
+    }
 
     const cfg = { ...DEFAULT_CONFIG, ...config };
     const session = newSession({
@@ -185,7 +194,7 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     bus.emit("search:index-invalidated", { entityType: "focus_session", id: session.id });
   },
 
-  // ── pause ─────────────────────────────────────────────────────────────────────
+  // ── pause ─────────────────────────────────────────────────────
 
   pause: () => {
     const { activeSession } = get();
@@ -202,7 +211,7 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     bus.emit("focus:session-paused", { sessionId: updated.id });
   },
 
-  // ── resume ───────────────────────────────────────────────────────────────────
+  // ── resume ────────────────────────────────────────────────────
 
   resume: () => {
     const { activeSession } = get();
@@ -215,7 +224,7 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     bus.emit("focus:session-resumed", { sessionId: updated.id });
   },
 
-  // ── cancel ────────────────────────────────────────────────────────────────────
+  // ── cancel ────────────────────────────────────────────────────
 
   cancel: async () => {
     const { activeSession, secondsLeft } = get();
@@ -238,7 +247,7 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     bus.emit("focus:session-cancelled", { sessionId: updated.id });
   },
 
-  // ── startBreak ────────────────────────────────────────────────────────────────
+  // ── startBreak ────────────────────────────────────────────────
 
   startBreak: (type, minutes) => {
     const { activeSession } = get();
@@ -265,7 +274,7 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     bus.emit("focus:session-started", { session });
   },
 
-  // ── skipBreak ─────────────────────────────────────────────────────────────────
+  // ── skipBreak ─────────────────────────────────────────────────
 
   skipBreak: () => {
     const { activeSession } = get();
@@ -286,13 +295,13 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     bus.emit("focus:session-cancelled", { sessionId: updated.id });
   },
 
-  // ── setGoal ───────────────────────────────────────────────────────────────────
+  // ── setGoal ───────────────────────────────────────────────────
 
   setGoal: (goal) => {
     set({ pendingGoal: goal });
   },
 
-  // ── setSessionNotes ───────────────────────────────────────────────────────────
+  // ── setSessionNotes ─────────────────────────────────────────────
 
   setSessionNotes: (notes) => {
     const { activeSession } = get();
@@ -303,7 +312,7 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     _patchList(set, updated);
   },
 
-  // ── setSessionMood ────────────────────────────────────────────────────────────
+  // ── setSessionMood ────────────────────────────────────────────
 
   setSessionMood: async (sessionId, mood) => {
     const session = get().sessions.find((s) => s.id === sessionId);
@@ -316,7 +325,7 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     }));
   },
 
-  // ── incrementInterrupt ────────────────────────────────────────────────────────
+  // ── incrementInterrupt ────────────────────────────────────────
 
   incrementInterrupt: () => {
     const { activeSession } = get();
@@ -330,11 +339,11 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     _patchList(set, updated);
   },
 
-  // ── clearLastCompleted ────────────────────────────────────────────────────────
+  // ── clearLastCompleted ────────────────────────────────────────
 
   clearLastCompleted: () => set({ lastCompletedSession: null }),
 
-  // ── setTaskId / setProjectId ──────────────────────────────────────────────────
+  // ── setTaskId / setProjectId ─────────────────────────────────────
 
   setTaskId: (taskId) => {
     const { activeSession } = get();
@@ -354,7 +363,7 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     _patchList(set, updated);
   },
 
-  // ── _completeActive ───────────────────────────────────────────────────────────
+  // ── _completeActive ────────────────────────────────────────────
 
   _completeActive: async () => {
     const { activeSession, completedFocusCount } = get();
@@ -387,7 +396,7 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     }
   },
 
-  // ── _tick ─────────────────────────────────────────────────────────────────────
+  // ── _tick ─────────────────────────────────────────────────────
 
   _tick: () => {
     const { activeSession, secondsLeft } = get();
@@ -401,7 +410,7 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     set({ secondsLeft: next });
   },
 
-  // ── _clearTimer ───────────────────────────────────────────────────────────────
+  // ── _clearTimer ───────────────────────────────────────────────
 
   _clearTimer: () => {
     const { _tickInterval } = get();
@@ -411,14 +420,14 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     }
   },
 
-  // ── _recomputeStats ───────────────────────────────────────────────────────────
+  // ── _recomputeStats ─────────────────────────────────────────
 
   _recomputeStats: () => {
     set((s) => ({ stats: computeStats(s.sessions) }));
   },
 }));
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────
 
 type SetFn = (fn: (s: FocusStore) => Partial<FocusStore>) => void;
 
