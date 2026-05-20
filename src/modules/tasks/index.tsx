@@ -86,10 +86,10 @@ const FILTER_TABS: FilterTab[] = [
 ];
 
 // ─── KPI card ─────────────────────────────────────────────────
-function KpiCard({ label, value, total, accent, warn = false }: {
-  label: string; value: number; total: number; accent: string; warn?: boolean;
+function KpiCard({ label, value, total, accent, warn = false, barValue }: {
+  label: string; value: number; total: number; accent: string; warn?: boolean; barValue?: number;
 }) {
-  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
+  const pct = total > 0 ? Math.round(((barValue ?? value) / total) * 100) : 0;
   return (
     <div className="rounded-xl border border-border bg-card px-4 pt-3 pb-3 flex flex-col gap-2">
       <div className="flex items-center justify-between">
@@ -111,7 +111,14 @@ function TaskGroupSection({ group, tasks, view, openQuickAdd }: {
   group: TaskGroup; tasks: Task[]; view: "grid" | "list"; openQuickAdd: () => void;
 }) {
   const [open, setOpen] = useState(group.defaultOpen);
-  const dotColor = group.colorClass.replace("text-", "bg-");
+  const dotColorMap: Record<GroupId, string> = {
+    overdue:     "bg-red-500",
+    today:       "bg-amber-500",
+    in_progress: "bg-blue-500",
+    todo:        "bg-muted-foreground/40",
+    done:        "bg-emerald-500",
+  };
+  const dotColor = dotColorMap[group.id];
   return (
     <div className="mb-8">
       <div className="flex items-center gap-2.5 mb-3">
@@ -192,7 +199,7 @@ function KanbanBoard({ tasks }: { tasks: Task[] }) {
   };
 
   return (
-    <div className="flex gap-3 h-full pb-4 overflow-x-auto">
+    <div className="flex gap-3 h-full pb-4 overflow-x-auto min-h-0">
       {KANBAN_COLS.map((col) => {
         const colTasks = tasks.filter((t) => t.status === col.status);
         const isOver   = dragOverCol === col.status;
@@ -226,11 +233,6 @@ function KanbanBoard({ tasks }: { tasks: Task[] }) {
                 </button>
               )}
             </div>
-
-            {/* Drop zone hint */}
-            {isOver && (
-              <div className="mx-3 mb-2 h-0.5 rounded-full bg-primary/40" />
-            )}
 
             {/* Cards */}
             <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-2">
@@ -346,6 +348,7 @@ export function TasksModule() {
             onClick={() => {
               setLayout(id);
               if (id === "list") setLocalView("list");
+              if (id === "grouped") setLocalView("grid");
             }}
             className={cn(
               "inline-flex items-center gap-1.5 px-3 py-3 text-[13px] font-medium border-b-2 -mb-px transition-colors",
@@ -357,12 +360,32 @@ export function TasksModule() {
             <Icon size={13} />{label}
           </button>
         ))}
+        {/* Grid/list sub-toggle — only in grouped mode */}
+        {layout === "grouped" && (
+          <div className="ml-auto flex items-center gap-1 pr-1">
+            <button
+              onClick={() => setLocalView("grid")}
+              className={cn("p-1.5 rounded transition-colors", localView === "grid" ? "text-foreground" : "text-muted-foreground/40 hover:text-foreground")}
+              title="Grid view"
+            >
+              <LayoutGrid size={13} />
+            </button>
+            <button
+              onClick={() => setLocalView("list")}
+              className={cn("p-1.5 rounded transition-colors", localView === "list" ? "text-foreground" : "text-muted-foreground/40 hover:text-foreground")}
+              title="List view"
+            >
+              <List size={13} />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── KPI strip (hidden in kanban) ──────────────────── */}
       {layout !== "kanban" && (
         <div className="grid grid-cols-4 gap-3 px-6 py-4 shrink-0">
-          <KpiCard label="Total"       value={tasks.length}    total={tasks.length} accent="bg-foreground/30" />
+          <KpiCard label="Total"       value={tasks.length}    total={tasks.length > 0 ? tasks.length : 1} accent="bg-foreground/30" barValue={doneCount} />
+          {/* ↑ bar width = doneCount/total gives completion signal */}
           <KpiCard label="In Progress" value={inProgressCount} total={tasks.length} accent="bg-blue-500" />
           <KpiCard label="Completed"   value={doneCount}       total={tasks.length} accent="bg-emerald-500" />
           <KpiCard label="Overdue"     value={overdueCount}    total={tasks.length} accent="bg-red-500" warn />

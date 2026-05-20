@@ -90,7 +90,7 @@ export function NotesModule() {
           {/* New note — ghost style */}
           <button
             onClick={() => void handleNewNote()}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
           >
             <Plus size={13} />
             New note

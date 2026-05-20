@@ -114,7 +114,7 @@ function MoodPicker({ value, onChange }: {
           title={m.label}
           onClick={() => onChange(m.value)}
           className={cn(
-            "flex flex-col items-center gap-0.5 rounded-lg px-3 py-2 transition-all duration-150 ring-1 ring-transparent",
+            "flex flex-col items-center gap-0.5 rounded-lg px-1.5 transition-all duration-150 ring-1 ring-transparent",
             value === m.value
               ? cn(m.bg, m.text, m.ring, "ring-1 scale-110")
               : "text-muted-foreground/50 hover:bg-muted/70 hover:text-foreground hover:scale-105"
@@ -338,8 +338,13 @@ function EntryEditor({ entry, onSave, onDelete }: {
       <div className="shrink-0 px-8 pt-8 pb-0">
         <div className="flex items-start justify-between gap-4">
           <h1 className="text-[26px] font-bold leading-tight tracking-tight text-foreground">
-            {formatDate(entry.date)}
+          {formatDate(entry.date)}
+          <span className="flex items-center gap-1 text-[11px] text-muted-foreground/50 mr-1">
+          <Clock size={10} />
+          {new Date(entry.updatedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+          </span>
           </h1>
+
           {/* Right: meta + actions */}
           <div className="flex items-center gap-1.5 mt-1.5 shrink-0">
             {words > 0 && (
@@ -347,10 +352,15 @@ function EntryEditor({ entry, onSave, onDelete }: {
                 <AlignLeft size={10} />{words}w
               </span>
             )}
-            <span className="flex items-center gap-1 text-[11px] text-muted-foreground/50 mr-1">
-              <Clock size={10} />
-              {new Date(entry.updatedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
-            </span>
+
+
+            {/* ── Mood row ── */}
+            <div className="shrink-0 flex items-center gap-3 px-8 py-2">
+            {/*}<span className="text-[11px] text-muted-foreground/50 font-medium shrink-0">Mood</span>*/}
+            <MoodPicker value={mood} onChange={handleMoodChange} />
+            </div>
+
+
             <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded ring-1 capitalize", typeStyle.pill)}>
               {typeInfo.icon} {entry.type}
             </span>
@@ -369,6 +379,7 @@ function EntryEditor({ entry, onSave, onDelete }: {
                 <Trash2 size={13} />
               </button>
             )}
+
           </div>
         </div>
 
@@ -377,12 +388,6 @@ function EntryEditor({ entry, onSave, onDelete }: {
           <Tag size={11} className="text-muted-foreground/40 shrink-0" />
           <TagInput tags={tags} onChange={handleTagsChange} />
         </div>
-      </div>
-
-      {/* ── Mood row ── */}
-      <div className="shrink-0 flex items-center gap-3 px-8 py-2 border-b border-border/40">
-        <span className="text-[11px] text-muted-foreground/50 font-medium shrink-0">Mood</span>
-        <MoodPicker value={mood} onChange={handleMoodChange} />
       </div>
 
       {/* ── Rich editor ── */}
@@ -496,7 +501,7 @@ export default function JournalModule() {
         </div>
         <button
           onClick={() => setShowNewModal(true)}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-[12px] font-semibold hover:bg-primary/90 transition-colors"
+         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
         >
           <Plus size={13} />
           New entry
@@ -533,8 +538,10 @@ export default function JournalModule() {
             <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/60">
               Entries
             </span>
+
+            {/*
             <div className="flex items-center gap-1">
-              <button
+            <button
                 onClick={() => searchRef.current?.focus()}
                 className="p-1 rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-muted/60 transition-colors"
                 title="Search"
@@ -549,6 +556,8 @@ export default function JournalModule() {
                 <Plus size={13} />
               </button>
             </div>
+            */}
+
           </div>
 
           {/* Search bar */}
