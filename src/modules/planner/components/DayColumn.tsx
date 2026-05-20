@@ -1,10 +1,11 @@
 import { useRef, useState, useCallback } from "react";
-import { X, GripVertical, Pencil } from "lucide-react";
+import { X, GripVertical, Pencil, Focus as FocusIcon, Check } from "lucide-react";
 import { cn, toISODate } from "@/shared/utils";
 import { usePlannerStore, type TimeBlock, snapMinutes, clampTime } from "../store";
 import { useTaskStore } from "@/modules/tasks/store";
 import { useProjectStore } from "@/modules/projects/store";
 import { useCalendarStore } from "@/modules/calendar/store";
+import { useFocusStore } from "@/modules/focus/store";
 import type { ISODate } from "@/shared/types";
 import { BlockEditModal } from "./BlockEditModal";
 
@@ -140,6 +141,12 @@ const PRIORITY_BLOCK_COLOR: Record<string, string> = {
   none:   "#6b7280",  // gray
 };
 
+function getBlockDurationMinutes(block: TimeBlock): number {
+  const [sh, sm] = block.startTime.split(":").map(Number);
+  const [eh, em] = block.endTime.split(":").map(Number);
+  return (eh * 60 + em) - (sh * 60 + sm);
+}
+
 // ── BlockCard ──────────────────────────────────────────────────
 function BlockCard({
   block, tasks, projects, compact, onDelete, onEdit, onPointerDownGrip,
@@ -165,9 +172,38 @@ function BlockCard({
   const [title, setTitle]     = useState(task?.title ?? block.title);
   const { updateBlock }       = usePlannerStore();
 
-  // Check if linked task is done, cancelled, or archived
+  const activeSession = useFocusStore((s) => s.activeSession);
+  const sessions      = useFocusStore((s) => s.sessions);
+
+  const blockDuration = Math.max(0, getBlockDurationMinutes(block));
+
+  // Focus minutes for this task
+  const focusedMinutes = task
+    ? sessions
+        .filter((s) => s.taskId === task.id && s.type === "focus" && s.completedAt && (s.actualMinutes ?? 0) > 0)
+        .reduce((a, s) => a + (s.actualMinutes ?? 0), 0)
+    : 0;
+
+  const focusPct = blockDuration > 0 ? Math.min(1, focusedMinutes / blockDuration) : 0;
+
   const isTaskCompleted = task && (task.status === "done" || task.status === "cancelled" || task.status === "archived");
   const isTaskCancelled = task && (task.status === "cancelled" || task.status === "archived");
+
+  const now = new Date();
+  const blockEnd = new Date(`${block.date}T${block.endTime}:00`);
+  const isPast = blockEnd < now;
+
+  const hasEnoughFocus = focusPct >= 0.9; // treat 90%+ as done for time
+
+  const isActiveFocus = Boolean(
+    activeSession &&
+    activeSession.type === "focus" &&
+    activeSession.taskId &&
+    task &&
+    activeSession.taskId === task.id
+  );
+
+  const isMissed = !isTaskCompleted && isPast && !hasEnoughFocus && !isActiveFocus;
 
   const commitTitle = () => {
     setEditing(false);
@@ -176,13 +212,21 @@ function BlockCard({
     }
   };
 
+  const handleStartFocus = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!task) return;
+    await useFocusStore.getState().startFocus({ taskId: task.id, projectId: task.projectId });
+  };
+
   return (
     <div
       className={cn(
         "absolute left-11 right-1 rounded-md px-2 py-1 overflow-hidden",
         "border-l-[3px] group transition-fast z-10",
         "hover:shadow-md hover:z-20",
-        isTaskCompleted && "opacity-50"
+        isTaskCompleted && "opacity-50",
+        isActiveFocus && "ring-2 ring-primary/70 ring-offset-1 ring-offset-background",
+        isMissed && "border border-rose-400/60 bg-rose-500/5"
       )}
       style={{
         top,
@@ -224,19 +268,56 @@ function BlockCard({
                 isTaskCancelled && "line-through"
               )}
               style={{ color: isTaskCompleted ? "#6b7280" : baseColor }}
-              onClick={() => !compact && setEditing(true)}
             >
               {task?.title ?? block.title}
               {isTaskCancelled && <span className="ml-1 text-[10px] text-muted-foreground/60">(cancelled)</span>}
               {task?.status === "done" && <span className="ml-1 text-[10px] text-muted-foreground/60">(done)</span>}
+              {isMissed && !isTaskCompleted && (
+                <span className="ml-1 text-[10px] text-rose-500 font-medium">Missed</span>
+              )}
             </p>
           )}
 
           {!compact && height > 44 && (
-            <p className="text-[10px] text-muted-foreground/60 tabular-nums">
-              {block.startTime} – {block.endTime}
-              {task && <span className="ml-1 opacity-50">· {task.estimateMinutes ?? 0}m</span>}
-            </p>
+            <div className="mt-0.5 space-y-0.5">
+              <p className="text-[10px] text-muted-foreground/60 tabular-nums flex items-center justify-between">
+                <span>
+                  {block.startTime} – {block.endTime}
+                  {task && <span className="ml-1 opacity-50">· {task.estimateMinutes ?? blockDuration}m</span>}
+                </span>
+                {task && (
+                  <button
+                    onClick={handleStartFocus}
+                    className={cn(
+                      "ml-1 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border text-[9px] font-medium transition-fast",
+                      isActiveFocus
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-border/60 text-muted-foreground/70 hover:bg-primary/5 hover:border-primary/60"
+                    )}
+                  >
+                    {isActiveFocus ? <Check size={8} /> : <FocusIcon size={8} />}
+                    {isActiveFocus ? "Focusing" : "Focus"}
+                  </button>
+                )}
+              </p>
+
+              {task && focusedMinutes > 0 && (
+                <div className="flex items-center gap-1">
+                  <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={cn(
+                        "h-1.5 rounded-full transition-all",
+                        hasEnoughFocus ? "bg-emerald-500" : "bg-primary"
+                      )}
+                      style={{ width: `${focusPct * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-[9px] text-muted-foreground/70 tabular-nums whitespace-nowrap">
+                    {focusedMinutes}m
+                  </span>
+                </div>
+              )}
+            </div>
           )}
         </div>
 
