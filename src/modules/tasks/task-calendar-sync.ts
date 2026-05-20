@@ -74,9 +74,9 @@ async function resolveDefaultCalendarId(): Promise<string> {
   const ts = now();
   await db.execute(
     `INSERT OR IGNORE INTO calendars
-       (id, name, color, is_default, is_visible, source, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ["default", "Personal", "#3b82f6", 1, 1, "local", ts],
+       (id, name, color, is_default, is_visible, source, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    ["default", "Personal", "#3b82f6", 1, 1, "local", ts, ts],
   );
   return "default";
 }
