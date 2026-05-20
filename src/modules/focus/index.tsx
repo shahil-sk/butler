@@ -1,6 +1,7 @@
 // ============================================================
-// FOCUS + TIME TRACKING — COMBINED MODULE  (redesign v3)
-// Fixes: session notes access, full history, tracked-time bar in planner
+// FOCUS + TIME TRACKING — COMBINED MODULE  (redesign v4)
+// Fixes: session history search/filter, streak heatmap,
+//        window.confirm → in-app modal, reports date-range picker
 // ============================================================
 
 import { useEffect, useState, useRef, useCallback } from "react";
@@ -8,7 +9,7 @@ import {
   Timer, Square, Plus, Trash2, Edit2, Check,
   BarChart2, Clock, DollarSign, Tag, Play, Pause,
   Zap, Target, ChevronDown, ChevronUp, Moon, ChevronRight,
-  FileText, Smile, AlertCircle,
+  FileText, Smile, AlertCircle, Search, Filter, Calendar,
 } from "lucide-react";
 
 import { registry } from "@/kernel/router";
@@ -17,6 +18,7 @@ import { RichEditor } from "@/shared/RichEditor";
 import { focusManifest } from "@/modules/focus/manifest";
 import { useFocusStore } from "@/modules/focus/store";
 import { useFocusEventListeners } from "@/modules/focus/events";
+import { dbLoadSessionsInRange } from "@/modules/focus/db";
 
 import { TIME_MANIFEST } from "@/modules/time-tracking/manifest";
 import { useTimeStore } from "@/modules/time-tracking/store";
@@ -74,9 +76,12 @@ function dateLabel(d: string) {
 function sessionLabel(type: FocusSession["type"]) {
   return type === "focus" ? "Focus" : type === "long_break" ? "Long Break" : "Short Break";
 }
-// Strip html tags for snippet
 function stripHtml(html: string) {
   return html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
+}
+// ISO date string for N days ago
+function daysAgo(n: number) {
+  return new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
 }
 
 const MOOD = { 1: "😩", 2: "😕", 3: "😐", 4: "🙂", 5: "😄" } as Record<number, string>;
@@ -170,28 +175,85 @@ function ActiveTimerBanner({ onJump }: { onJump: () => void }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FOCUS HISTORY SIDEBAR  (expandable session notes + full history)
+// STREAK HEATMAP  (14-day chain)  — Gap #2
+// ─────────────────────────────────────────────────────────────────────────────
+
+function StreakHeatmap({ sessions, currentStreak }: { sessions: FocusSession[]; currentStreak: number }) {
+  // Build a set of ISO dates that have at least one completed focus session
+  const activeDays = new Set(
+    sessions
+      .filter((s) => s.type === "focus" && s.completedAt)
+      .map((s) => (s.startedAt ?? s.createdAt).slice(0, 10))
+  );
+
+  // Last 14 days, oldest first
+  const days = Array.from({ length: 14 }, (_, i) => daysAgo(13 - i));
+
+  return (
+    <div className="flex flex-col items-center gap-1.5">
+      {/* Chain cells */}
+      <div className="flex items-center gap-[3px]">
+        {days.map((d, i) => {
+          const hasSession = activeDays.has(d);
+          const isToday = d === new Date().toISOString().slice(0, 10);
+          return (
+            <div
+              key={d}
+              title={`${dateLabel(d)}${hasSession ? " · focus day" : ""}`}
+              className="relative group"
+            >
+              <div
+                className={cn(
+                  "w-4 h-4 rounded-sm transition-all",
+                  hasSession
+                    ? "bg-primary"
+                    : "bg-border",
+                  isToday && "ring-1 ring-primary ring-offset-1 ring-offset-background"
+                )}
+                style={hasSession ? { opacity: 0.6 + 0.4 * ((i + 1) / 14) } : { opacity: 0.3 }}
+              />
+              {/* Connector line between cells */}
+              {i < 13 && hasSession && activeDays.has(days[i + 1]) && (
+                <div
+                  className="absolute top-1/2 -translate-y-1/2 h-0.5 bg-primary"
+                  style={{ left: "100%", width: 3, opacity: 0.5 }}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {/* Streak label */}
+      <div className="flex items-center gap-1">
+        <span className={cn(
+          "text-base font-semibold tabular-nums",
+          currentStreak >= 3 ? "text-primary" : "text-muted-foreground"
+        )}>{currentStreak}d</span>
+        <span className="text-xs text-muted-foreground">streak</span>
+        {currentStreak >= 3 && <span className="text-xs">🔥</span>}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FOCUS HISTORY SIDEBAR  — Gap #1: search + filter
 // ─────────────────────────────────────────────────────────────────────────────
 
 function SessionDetail({ session }: { session: FocusSession }) {
   const setMood = useFocusStore((s) => s.setSessionMood);
   return (
     <div className="mt-1.5 flex flex-col gap-2 pb-2">
-      {/* Start time + duration */}
       <div className="flex items-center justify-between text-[10px] text-muted-foreground/70">
         <span>{session.startedAt ? fmtDateShort(session.startedAt) : "—"}</span>
         <span className="tabular-nums">{session.actualMinutes != null ? fmtDuration(session.actualMinutes) : "—"}</span>
       </div>
-
-      {/* Interrupts */}
       {(session.interruptCount ?? 0) > 0 && (
         <div className="flex items-center gap-1 text-[10px] text-amber-500">
           <AlertCircle size={9} />
           {session.interruptCount} interruption{(session.interruptCount ?? 0) > 1 ? "s" : ""}
         </div>
       )}
-
-      {/* Notes */}
       {session.notes && stripHtml(session.notes) && (
         <div className="rounded-md p-2 text-[11px]" style={{ background: "hsl(var(--muted) / 0.5)" }}>
           <div className="flex items-center gap-1 mb-1 text-muted-foreground">
@@ -203,8 +265,6 @@ function SessionDetail({ session }: { session: FocusSession }) {
           />
         </div>
       )}
-
-      {/* Mood rating (editable inline) */}
       {session.type === "focus" && session.completedAt && (
         <div>
           <p className="text-[10px] text-muted-foreground mb-1">Rate session:</p>
@@ -228,25 +288,119 @@ function SessionDetail({ session }: { session: FocusSession }) {
   );
 }
 
-function FocusHistorySidebar({ sessions }: { sessions: FocusSession[] }) {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [showAll,    setShowAll]    = useState(false);
+type SessionTypeFilter = "all" | "focus" | "short_break" | "long_break";
 
-  const grouped = groupSessionsByDate(sessions);
+function FocusHistorySidebar({ sessions }: { sessions: FocusSession[] }) {
+  const projects = useProjectStore((s) => s.projects);
+
+  const [expandedId,   setExpandedId]   = useState<string | null>(null);
+  const [showAll,      setShowAll]      = useState(false);
+  const [searchQuery,  setSearchQuery]  = useState("");
+  const [typeFilter,   setTypeFilter]   = useState<SessionTypeFilter>("all");
+  const [projectFilter,setProjectFilter]= useState("");
+  const [showFilters,  setShowFilters]  = useState(false);
+
+  // Apply filters
+  const filtered = sessions.filter((s) => {
+    if (typeFilter !== "all" && s.type !== typeFilter) return false;
+    if (projectFilter && s.projectId !== projectFilter) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const goal = (s.goal ?? "").toLowerCase();
+      const notes = stripHtml(s.notes ?? "").toLowerCase();
+      if (!goal.includes(q) && !notes.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const grouped = groupSessionsByDate(filtered);
   const visibleGroups = showAll ? grouped : grouped.slice(0, 7);
   const hasMore = grouped.length > 7;
 
+  const activeProjects = [...new Set(sessions.map((s) => s.projectId).filter(Boolean))];
+
   return (
     <div className="flex flex-col h-full overflow-hidden border-r" style={{ width: 230, borderColor: "hsl(var(--border))" }}>
-      <div className="px-3 py-3 border-b shrink-0" style={{ borderColor: "hsl(var(--border))" }}>
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Session History</p>
+      {/* Header */}
+      <div className="px-3 py-2.5 border-b shrink-0" style={{ borderColor: "hsl(var(--border))" }}>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">History</p>
+          <button
+            onClick={() => setShowFilters((v) => !v)}
+            className={cn(
+              "p-1 rounded transition-colors text-muted-foreground hover:text-foreground",
+              (typeFilter !== "all" || projectFilter) && "text-primary"
+            )}
+            title="Filters"
+          >
+            <Filter size={12} />
+          </button>
+        </div>
+        {/* Search */}
+        <div className="relative">
+          <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50 pointer-events-none" />
+          <input
+            value={searchQuery}
+            onChange={(e) => { setSearchQuery(e.target.value); setShowAll(true); }}
+            placeholder="Search goals…"
+            className="w-full pl-7 pr-2 py-1.5 rounded-md border border-border bg-background text-[11px] placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring/40"
+          />
+        </div>
+        {/* Filter panel */}
+        {showFilters && (
+          <div className="mt-2 flex flex-col gap-1.5">
+            {/* Type filter */}
+            <div className="flex flex-wrap gap-1">
+              {(["all", "focus", "short_break", "long_break"] as SessionTypeFilter[]).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setTypeFilter(t)}
+                  className={cn(
+                    "px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors",
+                    typeFilter === t
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {t === "all" ? "All" : t === "focus" ? "Focus" : t === "short_break" ? "Short" : "Long"}
+                </button>
+              ))}
+            </div>
+            {/* Project filter */}
+            {activeProjects.length > 0 && (
+              <select
+                value={projectFilter}
+                onChange={(e) => setProjectFilter(e.target.value)}
+                className="w-full bg-background border border-border rounded-md px-2 py-1 text-[11px] focus:outline-none"
+              >
+                <option value="">All projects</option>
+                {activeProjects.map((pid) => {
+                  const p = projects.find((x) => x.id === pid);
+                  return p ? <option key={pid} value={pid}>{p.name}</option> : null;
+                })}
+              </select>
+            )}
+            {/* Clear filters */}
+            {(typeFilter !== "all" || projectFilter || searchQuery) && (
+              <button
+                onClick={() => { setTypeFilter("all"); setProjectFilter(""); setSearchQuery(""); }}
+                className="text-[10px] text-muted-foreground hover:text-foreground text-left transition-colors"
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
+      {/* Session list */}
       <div className="flex-1 overflow-y-auto">
-        {grouped.length === 0 ? (
+        {filtered.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-10 text-center px-3">
             <Target size={22} className="text-muted-foreground/30" />
-            <p className="text-xs text-muted-foreground">No sessions yet</p>
+            <p className="text-xs text-muted-foreground">
+              {sessions.length === 0 ? "No sessions yet" : "No results"}
+            </p>
           </div>
         ) : (
           <>
@@ -292,7 +446,6 @@ function FocusHistorySidebar({ sessions }: { sessions: FocusSession[] }) {
                           )}
                         </div>
                       </button>
-                      {/* Expanded detail */}
                       {isOpen && (
                         <div className="px-3 pb-1">
                           <SessionDetail session={s} />
@@ -322,7 +475,7 @@ function FocusHistorySidebar({ sessions }: { sessions: FocusSession[] }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MOOD CARD  (post-break / session rating)
+// MOOD CARD
 // ─────────────────────────────────────────────────────────────────────────────
 
 function MoodCard({ sessionId, mood }: { sessionId: string; mood?: number }) {
@@ -523,20 +676,21 @@ function FocusTab() {
       {/* Right: main timer area */}
       <div className="flex-1 flex flex-col items-center justify-start overflow-y-auto py-8 px-6 gap-5">
 
-        {/* Stats chips row */}
-        <div className="flex items-center gap-4 flex-wrap justify-center">
+        {/* Stats row — streak replaced with heatmap */}
+        <div className="flex items-center gap-5 flex-wrap justify-center">
           {[
             { label: "Today",    value: `${stats.todayMinutes}m`,                  chip: stats.todaySessions > 0 ? `${stats.todaySessions} sessions` : undefined },
             { label: "Week",     value: `${stats.weekMinutes}m`,                   chip: undefined },
-            { label: "Streak",   value: `${stats.currentStreak}d`,                chip: undefined, accent: stats.currentStreak >= 3 },
             { label: "All time", value: `${Math.round(stats.totalMinutes / 60)}h`, chip: undefined },
-          ].map(({ label, value, chip, accent }) => (
+          ].map(({ label, value, chip }) => (
             <div key={label} className="flex items-baseline gap-1.5">
-              <span className={cn("text-base font-semibold tabular-nums", accent && "text-primary")}>{value}</span>
+              <span className="text-base font-semibold tabular-nums">{value}</span>
               <span className="text-xs text-muted-foreground">{label}</span>
               {chip && <span className="text-[10px] text-muted-foreground/60">({chip})</span>}
             </div>
           ))}
+          {/* Streak heatmap inline */}
+          <StreakHeatmap sessions={sessions} currentStreak={stats.currentStreak} />
         </div>
 
         {/* Ring timer */}
@@ -792,7 +946,7 @@ function EntryRow({ entry, onEdit, onDelete, onResume }: {
   const project  = entry.projectId ? projects.find((p) => p.id === entry.projectId) : null;
   const isRunning = !entry.endAt;
   const liveDur   = useLiveDuration(entry.startAt, !isRunning);
-  
+
   const isCancelledTask = task && (task.status === "cancelled" || task.status === "archived");
 
   return (
@@ -886,7 +1040,6 @@ function TrackerTab() {
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
-      {/* Quick-start bar */}
       <div className="flex items-center gap-2 px-4 py-2.5 border-b shrink-0" style={{ borderColor: "hsl(var(--border))" }}>
         <input
           value={quickDesc} onChange={(e) => setQuickDesc(e.target.value)}
@@ -925,7 +1078,6 @@ function TrackerTab() {
         </button>
       </div>
 
-      {/* Manual entry form */}
       {showForm && !editingId && (
         <EntryForm
           onSave={(data) => { void addEntry({ startAt: data.startAt!, ...data }); setShowForm(false); }}
@@ -933,7 +1085,6 @@ function TrackerTab() {
         />
       )}
 
-      {/* Running entry row (always visible when active) */}
       {activeEntry && (
         <EntryRow
           entry={activeEntry}
@@ -943,7 +1094,6 @@ function TrackerTab() {
         />
       )}
 
-      {/* Filter pills + day total */}
       <div className="flex items-center gap-1.5 px-4 py-2 border-b shrink-0" style={{ borderColor: "hsl(var(--border))" }}>
         <div className="flex items-center gap-1 rounded-lg p-0.5" style={{ background: "hsl(var(--muted))" }}>
           <button onClick={() => setTodayOnly(true)}
@@ -964,7 +1114,6 @@ function TrackerTab() {
         )}
       </div>
 
-      {/* Entry list */}
       <div className="flex-1 overflow-y-auto">
         {editingId && (
           <EntryForm
@@ -1003,26 +1152,102 @@ function TrackerTab() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// REPORTS TAB
+// REPORTS TAB — Gap #4: date range picker
 // ─────────────────────────────────────────────────────────────────────────────
 
+type RangePreset = "7d" | "30d" | "90d" | "custom";
+
+const RANGE_PRESETS: { id: RangePreset; label: string }[] = [
+  { id: "7d",  label: "7 days" },
+  { id: "30d", label: "30 days" },
+  { id: "90d", label: "90 days" },
+  { id: "custom", label: "Custom" },
+];
+
+function presetToDates(preset: RangePreset): { from: string; to: string } {
+  const to = new Date().toISOString().slice(0, 10);
+  const days = preset === "7d" ? 7 : preset === "30d" ? 30 : 90;
+  const from = daysAgo(days - 1);
+  return { from, to };
+}
+
 function ReportsTab() {
-  const entries  = useTimeStore((s) => s.entries);
-  const projects = useProjectStore((s) => s.projects);
-  const tasks    = useTaskStore((s) => s.tasks);
+  const storeEntries = useTimeStore((s) => s.entries);
+  const projects     = useProjectStore((s) => s.projects);
+  const tasks        = useTaskStore((s) => s.tasks);
 
-  const completed = entries.filter((e) => e.endAt && e.durationMinutes);
+  // ── Date range state ──
+  const [preset,     setPreset]     = useState<RangePreset>("7d");
+  const [customFrom, setCustomFrom] = useState(daysAgo(29));
+  const [customTo,   setCustomTo]   = useState(new Date().toISOString().slice(0, 10));
 
-  // Last 7 days bar chart data
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
-    const mins = completed.filter((e) => e.startAt.startsWith(d)).reduce((a, e) => a + (e.durationMinutes ?? 0), 0);
-    return { date: d, label: dateLabel(d).split(",")[0], mins };
-  }).reverse();
+  // ── Range-filtered focus sessions (from DB) ──
+  const [rangeSessions, setRangeSessions] = useState<FocusSession[]>([]);
+  const [loadingRange,  setLoadingRange]  = useState(false);
 
-  const maxMins = Math.max(...days.map((d) => d.mins), 60);
+  const activeFrom = preset === "custom" ? customFrom : presetToDates(preset).from;
+  const activeTo   = preset === "custom" ? customTo   : presetToDates(preset).to;
 
-  // By project
+  useEffect(() => {
+    setLoadingRange(true);
+    dbLoadSessionsInRange(activeFrom, activeTo)
+      .then(setRangeSessions)
+      .catch(console.error)
+      .finally(() => setLoadingRange(false));
+  }, [activeFrom, activeTo]);
+
+  // ── Filter time entries by active range ──
+  const completed = storeEntries.filter(
+    (e) => e.endAt && e.durationMinutes &&
+    e.startAt.slice(0, 10) >= activeFrom &&
+    e.startAt.slice(0, 10) <= activeTo
+  );
+
+  // Bar chart: bucket by day across active range
+  const dayCount = Math.round(
+    (new Date(activeTo).getTime() - new Date(activeFrom).getTime()) / 86400000
+  ) + 1;
+
+  // For ranges > 14 days, bucket into weeks
+  const useWeekly = dayCount > 14;
+
+  const chartBuckets = (() => {
+    if (!useWeekly) {
+      return Array.from({ length: dayCount }, (_, i) => {
+        const d = new Date(new Date(activeFrom).getTime() + i * 86400000).toISOString().slice(0, 10);
+        const mins = completed.filter((e) => e.startAt.slice(0, 10) === d).reduce((a, e) => a + (e.durationMinutes ?? 0), 0);
+        const focusMins = rangeSessions
+          .filter((s) => s.type === "focus" && (s.startedAt ?? s.createdAt).slice(0, 10) === d)
+          .reduce((a, s) => a + (s.actualMinutes ?? 0), 0);
+        return { label: new Date(d).toLocaleDateString(undefined, { month: "short", day: "numeric" }), mins, focusMins };
+      });
+    }
+    // Weekly bucketing
+    const weeks: { label: string; mins: number; focusMins: number }[] = [];
+    let cursor = new Date(activeFrom);
+    const end  = new Date(activeTo);
+    while (cursor <= end) {
+      const weekStart = cursor.toISOString().slice(0, 10);
+      const weekEnd   = new Date(Math.min(cursor.getTime() + 6 * 86400000, end.getTime())).toISOString().slice(0, 10);
+      const mins = completed
+        .filter((e) => e.startAt.slice(0, 10) >= weekStart && e.startAt.slice(0, 10) <= weekEnd)
+        .reduce((a, e) => a + (e.durationMinutes ?? 0), 0);
+      const focusMins = rangeSessions
+        .filter((s) => s.type === "focus" && (s.startedAt ?? s.createdAt).slice(0, 10) >= weekStart && (s.startedAt ?? s.createdAt).slice(0, 10) <= weekEnd)
+        .reduce((a, s) => a + (s.actualMinutes ?? 0), 0);
+      weeks.push({
+        label: new Date(weekStart).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+        mins,
+        focusMins,
+      });
+      cursor = new Date(cursor.getTime() + 7 * 86400000);
+    }
+    return weeks;
+  })();
+
+  const maxMins = Math.max(...chartBuckets.map((b) => b.mins), 60);
+
+  // By project (range-filtered)
   const byProject = projects
     .map((p) => {
       const mins = completed.filter((e) => e.projectId === p.id).reduce((a, e) => a + (e.durationMinutes ?? 0), 0);
@@ -1031,17 +1256,67 @@ function ReportsTab() {
     .filter((p) => p.mins > 0)
     .sort((a, b) => b.mins - a.mins);
 
-  const totalTracked = completed.reduce((a, e) => a + (e.durationMinutes ?? 0), 0);
-  const billable     = completed.filter((e) => e.isBillable).reduce((a, e) => a + (e.durationMinutes ?? 0), 0);
+  const totalTracked  = completed.reduce((a, e) => a + (e.durationMinutes ?? 0), 0);
+  const billable      = completed.filter((e) => e.isBillable).reduce((a, e) => a + (e.durationMinutes ?? 0), 0);
+  const totalFocusMins = rangeSessions
+    .filter((s) => s.type === "focus" && s.completedAt)
+    .reduce((a, s) => a + (s.actualMinutes ?? 0), 0);
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6">
-      {/* KPI row */}
+    <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-5">
+
+      {/* ── Date range picker ── */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {RANGE_PRESETS.map(({ id, label }) => (
+            <button
+              key={id}
+              onClick={() => setPreset(id)}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                preset === id
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {label}
+            </button>
+          ))}
+          <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">
+            {new Date(activeFrom).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+            {" – "}
+            {new Date(activeTo).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+          </span>
+        </div>
+        {/* Custom date inputs */}
+        {preset === "custom" && (
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={customFrom}
+              max={customTo}
+              onChange={(e) => setCustomFrom(e.target.value)}
+              className="bg-background border border-border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40"
+            />
+            <span className="text-xs text-muted-foreground">to</span>
+            <input
+              type="date"
+              value={customTo}
+              min={customFrom}
+              max={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => setCustomTo(e.target.value)}
+              className="bg-background border border-border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* ── KPI row ── */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: "Total tracked", value: fmtDuration(totalTracked) },
-          { label: "Billable",      value: fmtDuration(billable) },
-          { label: "Entries",       value: String(completed.length) },
+          { label: "Tracked",     value: fmtDuration(totalTracked) },
+          { label: "Focus time",  value: fmtDuration(totalFocusMins) },
+          { label: "Billable",    value: fmtDuration(billable) },
         ].map(({ label, value }) => (
           <div key={label} className="flex flex-col gap-1 p-4 rounded-xl border"
             style={{ background: "hsl(var(--card))", borderColor: "hsl(var(--border))" }}>
@@ -1051,27 +1326,49 @@ function ReportsTab() {
         ))}
       </div>
 
-      {/* 7-day bar chart */}
+      {/* ── Bar chart ── */}
       <div className="rounded-xl border p-4" style={{ background: "hsl(var(--card))", borderColor: "hsl(var(--border))" }}>
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">Last 7 days</p>
-        <div className="flex items-end gap-2 h-24">
-          {days.map(({ date, label, mins }) => (
-            <div key={date} className="flex-1 flex flex-col items-center gap-1">
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            {useWeekly ? "Weekly" : "Daily"} tracked time
+          </p>
+          {loadingRange && (
+            <span className="text-[10px] text-muted-foreground animate-pulse">Loading…</span>
+          )}
+        </div>
+        <div className="flex items-end gap-1.5 h-24 overflow-x-auto">
+          {chartBuckets.map(({ label, mins, focusMins }) => (
+            <div key={label} className="flex-1 min-w-[20px] flex flex-col items-center gap-1">
               <span className="text-[9px] text-muted-foreground tabular-nums">{mins > 0 ? fmtDuration(mins) : ""}</span>
-              <div className="w-full rounded-sm transition-all"
-                style={{
-                  height: `${Math.max((mins / maxMins) * 80, mins > 0 ? 4 : 0)}px`,
-                  background: "hsl(var(--primary))",
-                  opacity: mins > 0 ? 1 : 0.15,
-                  minHeight: mins > 0 ? 4 : 0,
-                }} />
+              <div className="w-full flex flex-col items-stretch rounded-sm overflow-hidden" style={{ height: `${Math.max((mins / maxMins) * 80, mins > 0 ? 4 : 0)}px`, minHeight: mins > 0 ? 4 : 0 }}>
+                {/* Focus minutes portion (stacked on top in primary color) */}
+                {focusMins > 0 && mins > 0 && (
+                  <div style={{ flex: focusMins, background: "hsl(var(--primary))" }} />
+                )}
+                {/* Remaining tracked time */}
+                {(mins - focusMins) > 0 && (
+                  <div style={{ flex: Math.max(mins - focusMins, 0), background: "hsl(var(--primary) / 0.3)" }} />
+                )}
+                {focusMins === 0 && mins > 0 && (
+                  <div style={{ flex: 1, background: "hsl(var(--primary) / 0.3)" }} />
+                )}
+              </div>
               <span className="text-[9px] text-muted-foreground">{label}</span>
             </div>
           ))}
         </div>
+        {/* Legend */}
+        <div className="flex items-center gap-3 mt-3">
+          <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+            <span className="w-2 h-2 rounded-sm inline-block" style={{ background: "hsl(var(--primary))" }} /> Focus
+          </span>
+          <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+            <span className="w-2 h-2 rounded-sm inline-block" style={{ background: "hsl(var(--primary) / 0.3)" }} /> Tracked
+          </span>
+        </div>
       </div>
 
-      {/* By project */}
+      {/* ── By project ── */}
       {byProject.length > 0 && (
         <div className="rounded-xl border p-4" style={{ background: "hsl(var(--card))", borderColor: "hsl(var(--border))" }}>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">By project</p>
@@ -1094,7 +1391,7 @@ function ReportsTab() {
       )}
 
       {completed.length === 0 && (
-        <EmptyState icon={<BarChart2 size={26} />} title="No data yet" description="Track time to see your reports here." />
+        <EmptyState icon={<BarChart2 size={26} />} title="No data for this period" description="Track time or complete focus sessions to see reports here." />
       )}
     </div>
   );
@@ -1109,16 +1406,11 @@ export default function FocusModule() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Active timer banner (cross-tab) */}
       <ActiveTimerBanner onJump={() => setTab("tracker")} />
-
-      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b shrink-0"
         style={{ borderColor: "hsl(var(--border))" }}>
         <SegmentControl active={tab} onChange={setTab} />
       </div>
-
-      {/* Tab content */}
       {tab === "focus"   && <FocusTab />}
       {tab === "tracker" && <TrackerTab />}
       {tab === "reports" && <ReportsTab />}
