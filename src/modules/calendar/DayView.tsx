@@ -38,7 +38,13 @@ export function DayView() {
   const timedEvts  = events.filter((e) => !e.allDay);
   const allDayEvts = events.filter((e) =>  e.allDay);
 
-  const dueTasks   = tasks.filter((t) => t.dueDate?.startsWith(ds));
+  const scheduledTaskIds = new Set(
+    timedEvts
+      .filter((e) => e.isTimeBlock && e.linkedTaskIds?.length)
+      .flatMap((e) => e.linkedTaskIds!)
+  );
+
+  const dueTasks   = tasks.filter((t) => t.dueDate?.startsWith(ds) && !scheduledTaskIds.has(t.id));
   const todayNotes = notes.filter((n) => n.updatedAt?.startsWith(ds));
 
   const now  = new Date();
