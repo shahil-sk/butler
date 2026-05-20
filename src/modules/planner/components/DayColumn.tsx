@@ -11,15 +11,15 @@ import type { ISODate } from "@/shared/types";
 import { BlockEditModal } from "./BlockEditModal";
 
 // ── Layout constants ──────────────────────────────────────────
-export const HOUR_HEIGHT = 72;       // px per hour — tall enough to place blocks precisely
-const GUTTER_W   = 52;               // px — fixed-width time label gutter
-const START_HOUR = 0;                // show full 24-hour day
-const END_HOUR   = 24;
-const HOURS      = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i);
+export const HOUR_HEIGHT = 72;
+const GUTTER_W    = 52;
+const START_HOUR  = 0;
+const END_HOUR    = 24;
+const HOURS       = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i);
 const TOTAL_HEIGHT = HOUR_HEIGHT * HOURS.length;
-
-// Which hours get a bold label vs. a lighter one
 const MAJOR_HOURS = new Set([0, 6, 9, 12, 15, 18, 21]);
+// Minimum block height in px to keep the resize handle reachable
+const MIN_BLOCK_HEIGHT_PX = HOUR_HEIGHT / 4; // 15 min
 
 export function timeToY(time: string): number {
   const [h, m] = time.split(":").map(Number);
@@ -35,41 +35,58 @@ export function yToTime(y: number): string {
   return clampTime(`${String(Math.min(hh, END_HOUR)).padStart(2, "0")}:${String(mm).padStart(2, "0")}`);
 }
 
-/** "6 AM", "12 PM", "11 PM" — clean 12-h display */
 function formatHourLabel(h: number): string {
   if (h === 0)  return "12 AM";
   if (h === 12) return "12 PM";
   return h < 12 ? `${h} AM` : `${h - 12} PM`;
 }
 
-// ── Drop preview ghost ────────────────────────────────────────
+function fmt12(t: string): string {
+  const [h, m] = t.split(":").map(Number);
+  const suffix = h < 12 ? "AM" : "PM";
+  const hh = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${hh}:${String(m).padStart(2, "0")} ${suffix}`;
+}
+
+// ── Drop ghost ────────────────────────────────────────────────
 function DropGhost({ y, height }: { y: number; height: number }) {
   return (
     <div
-      className="absolute rounded-md border-2 border-primary/50 bg-primary/10 pointer-events-none z-30 transition-[top] duration-75"
+      className="absolute rounded-md border-2 border-primary/50 bg-primary/10 pointer-events-none z-30"
       style={{ top: y, height, left: GUTTER_W + 4, right: 4 }}
     />
   );
 }
 
 // ── ResizeHandle ──────────────────────────────────────────────
+// FIX 1: Use setPointerCapture so the resize keeps working even if the pointer
+// leaves the element or moves fast. Without capture, pointerup on a different
+// element silently drops the listener and the resize gets stuck.
 function ResizeHandle({ blockId, startY }: { blockId: string; startY: number }) {
   const { resizeBlock } = usePlannerStore();
-  const rafRef = useRef<number | null>(null);
+  const rafRef   = useRef<number | null>(null);
+  // FIX 2: Keep a ref to gridRect so we don't re-query the DOM on every move.
+  // Re-querying inside the rAF callback causes layout thrashing and drops frames.
+  const rectRef  = useRef<DOMRect | null>(null);
 
   const onPointerDown = useCallback(
-    (e: React.PointerEvent) => {
+    (e: React.PointerEvent<HTMLDivElement>) => {
       e.stopPropagation();
       e.preventDefault();
+      // Capture pointer to this element — moves and up events come here
+      // regardless of where the pointer physically is on the screen.
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+
       const grid = (e.target as HTMLElement).closest(".day-col-grid") as HTMLElement | null
         ?? document.querySelector(".day-col-grid") as HTMLElement | null;
-      if (!grid) return;
-      const gridRect = grid.getBoundingClientRect();
+      rectRef.current = grid?.getBoundingClientRect() ?? null;
 
       const onMove = (ev: PointerEvent) => {
+        if (!rectRef.current) return;
         if (rafRef.current) cancelAnimationFrame(rafRef.current);
         rafRef.current = requestAnimationFrame(() => {
-          const y      = Math.max(startY + HOUR_HEIGHT / 4, ev.clientY - gridRect.top);
+          if (!rectRef.current) return;
+          const y      = Math.max(startY + MIN_BLOCK_HEIGHT_PX, ev.clientY - rectRef.current.top);
           const newEnd = snapMinutes(yToTime(y));
           usePlannerStore.setState((s) => ({
             blocks: s.blocks.map((b) => b.id === blockId ? { ...b, endTime: newEnd } : b),
@@ -79,14 +96,15 @@ function ResizeHandle({ blockId, startY }: { blockId: string; startY: number }) 
 
       const onUp = async () => {
         if (rafRef.current) cancelAnimationFrame(rafRef.current);
+        rectRef.current = null;
         const b = usePlannerStore.getState().blocks.find((x) => x.id === blockId);
         if (b) await resizeBlock(blockId, b.endTime);
         window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointerup",   onUp);
       };
 
       window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointerup",   onUp);
     },
     [blockId, startY, resizeBlock]
   );
@@ -96,7 +114,7 @@ function ResizeHandle({ blockId, startY }: { blockId: string; startY: number }) 
       onPointerDown={onPointerDown}
       className="absolute bottom-0 left-0 right-0 h-3 cursor-ns-resize flex items-center justify-center opacity-0 group-hover:opacity-100 transition-fast touch-none"
     >
-      <div className="w-8 h-0.5 rounded-full bg-current opacity-30" />
+      <div className="w-8 h-0.5 rounded-full bg-current opacity-40" />
     </div>
   );
 }
@@ -105,21 +123,16 @@ function ResizeHandle({ blockId, startY }: { blockId: string; startY: number }) 
 function CalendarEventStrip({ event }: { event: { id: string; title: string; startAt: string; endAt: string; color?: string } }) {
   const startTime = event.startAt.slice(11, 16);
   const endTime   = event.endAt.slice(11, 16);
-  const top       = timeToY(clampTime(startTime));
-  const bottom    = timeToY(clampTime(endTime));
-  const height    = Math.max(bottom - top, 18);
-  const color     = event.color ?? "#06b6d4";
+  const top    = timeToY(clampTime(startTime));
+  const bottom = timeToY(clampTime(endTime));
+  const height = Math.max(bottom - top, 18);
+  const color  = event.color ?? "#06b6d4";
 
   return (
     <div
       className="absolute rounded-sm overflow-hidden pointer-events-none z-5"
-      style={{
-        top, height,
-        left: GUTTER_W + 2,
-        width: 36,
-        backgroundColor: `${color}22`,
-        borderLeft: `2px solid ${color}99`,
-      }}
+      style={{ top, height, left: GUTTER_W + 2, width: 36,
+        backgroundColor: `${color}22`, borderLeft: `2px solid ${color}99` }}
       title={event.title}
     >
       {height > 22 && (
@@ -131,13 +144,8 @@ function CalendarEventStrip({ event }: { event: { id: string; title: string; sta
   );
 }
 
-// Priority → block color
 const PRIORITY_BLOCK_COLOR: Record<string, string> = {
-  urgent: "#ef4444",
-  high:   "#f97316",
-  medium: "#eab308",
-  low:    "#0ea5e9",
-  none:   "#6b7280",
+  urgent: "#ef4444", high: "#f97316", medium: "#eab308", low: "#0ea5e9", none: "#6b7280",
 };
 
 function getBlockDurationMinutes(block: TimeBlock): number {
@@ -171,18 +179,16 @@ function BlockCard({
   const [title, setTitle]     = useState(task?.title ?? block.title);
   const { updateBlock }       = usePlannerStore();
 
-  const activeSession = useFocusStore((s) => s.activeSession);
-  const sessions      = useFocusStore((s) => s.sessions);
-  const timeEntries   = useTimeStore((s) => s.entries);
-
-  const blockDuration = Math.max(0, getBlockDurationMinutes(block));
+  const activeSession  = useFocusStore((s) => s.activeSession);
+  const sessions       = useFocusStore((s) => s.sessions);
+  const timeEntries    = useTimeStore((s) => s.entries);
+  const blockDuration  = Math.max(0, getBlockDurationMinutes(block));
 
   const focusedMinutes = task
     ? sessions
         .filter((s) => s.taskId === task.id && s.type === "focus" && s.completedAt && (s.actualMinutes ?? 0) > 0)
         .reduce((a, s) => a + (s.actualMinutes ?? 0), 0)
     : 0;
-
   const trackedMinutes = task
     ? timeEntries
         .filter((e) => e.taskId === task.id && e.endAt && e.durationMinutes)
@@ -194,50 +200,33 @@ function BlockCard({
 
   const isTaskCompleted = task && (task.status === "done" || task.status === "cancelled" || task.status === "archived");
   const isTaskCancelled = task && (task.status === "cancelled" || task.status === "archived");
-
-  const now = new Date();
+  const now      = new Date();
   const blockEnd = new Date(`${block.date}T${block.endTime}:00`);
-  const isPast = blockEnd < now;
+  const isPast   = blockEnd < now;
   const hasEnoughFocus = focusPct >= 0.9;
-
-  const isActiveFocus = Boolean(
+  const isActiveFocus  = Boolean(
     activeSession && activeSession.type === "focus" &&
     activeSession.taskId && task && activeSession.taskId === task.id
   );
-
   const isMissed = !isTaskCompleted && isPast && !hasEnoughFocus && !isActiveFocus;
 
   const commitTitle = () => {
     setEditing(false);
-    if (title.trim() && title !== block.title) {
-      void updateBlock(block.id, { title: title.trim() });
-    }
+    if (title.trim() && title !== block.title) void updateBlock(block.id, { title: title.trim() });
   };
-
   const handleStartFocus = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!task) return;
     await useFocusStore.getState().startFocus({ taskId: task.id, projectId: task.projectId });
   };
-
   const handleStartTimer = async (e: React.MouseEvent) => {
     e.stopPropagation();
     await useTimeStore.getState().startTimer({
-      taskId: task?.id,
-      projectId: task?.projectId,
+      taskId: task?.id, projectId: task?.projectId,
       description: task?.title ?? block.title,
     });
   };
-
   const spentFraction = blockSpentFraction(block, totalSpentMinutes);
-
-  // Format "9:00 AM – 10:30 AM" style
-  function fmt12(t: string) {
-    const [h, m] = t.split(":").map(Number);
-    const suffix = h < 12 ? "AM" : "PM";
-    const hh = h === 0 ? 12 : h > 12 ? h - 12 : h;
-    return `${hh}:${String(m).padStart(2, "0")} ${suffix}`;
-  }
 
   return (
     <div
@@ -246,14 +235,12 @@ function BlockCard({
         "border-l-[3px] group transition-fast z-10",
         "hover:shadow-md hover:z-20",
         isTaskCompleted && "opacity-50",
-        isActiveFocus && "ring-2 ring-primary/70 ring-offset-1 ring-offset-background",
-        isMissed && "border border-rose-400/60 bg-rose-500/5"
+        isActiveFocus  && "ring-2 ring-primary/70 ring-offset-1 ring-offset-background",
+        isMissed       && "border border-rose-400/60 bg-rose-500/5"
       )}
       style={{
-        top,
-        height,
-        left: GUTTER_W + 4,
-        right: 4,
+        top, height,
+        left: GUTTER_W + 4, right: 4,
         backgroundColor: isTaskCompleted ? `#6b728018` : `${baseColor}18`,
         borderLeftColor: isTaskCompleted ? "#6b7280" : baseColor,
         cursor: editing ? "text" : "default",
@@ -261,7 +248,7 @@ function BlockCard({
       onDoubleClick={onEdit}
     >
       <div className="flex items-start gap-1.5 h-full">
-        {/* Grip */}
+        {/* Grip handle */}
         <div
           className="shrink-0 mt-0.5 cursor-grab active:cursor-grabbing touch-none"
           onPointerDown={onPointerDownGrip}
@@ -270,17 +257,13 @@ function BlockCard({
         </div>
 
         <div className="flex-1 min-w-0 flex flex-col justify-between h-full pb-3">
-          {/* Title */}
           {editing ? (
             <input
               autoFocus
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               onBlur={commitTitle}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") commitTitle();
-                if (e.key === "Escape") setEditing(false);
-              }}
+              onKeyDown={(e) => { if (e.key === "Enter") commitTitle(); if (e.key === "Escape") setEditing(false); }}
               className="text-xs font-semibold bg-transparent outline-none w-full leading-snug"
               style={{ color: isTaskCompleted ? "#6b7280" : baseColor }}
               onClick={(e) => e.stopPropagation()}
@@ -293,15 +276,12 @@ function BlockCard({
               {task?.title ?? block.title}
               {isTaskCancelled && <span className="ml-1 text-[10px] text-muted-foreground/60">(cancelled)</span>}
               {task?.status === "done" && <span className="ml-1 text-[10px] text-muted-foreground/60">(done)</span>}
-              {isMissed && !isTaskCompleted && (
-                <span className="ml-1 text-[10px] text-rose-500 font-medium">Missed</span>
-              )}
+              {isMissed && !isTaskCompleted && <span className="ml-1 text-[10px] text-rose-500 font-medium">Missed</span>}
             </p>
           )}
 
           {!compact && height > 40 && (
             <div className="mt-0.5 space-y-1">
-              {/* Time + duration row */}
               <p className="text-[10px] text-muted-foreground/70 tabular-nums flex items-center justify-between gap-1">
                 <span className="font-medium">
                   {fmt12(block.startTime)} – {fmt12(block.endTime)}
@@ -313,7 +293,6 @@ function BlockCard({
                     </span>
                   )}
                 </span>
-                {/* Action buttons */}
                 <span className="inline-flex items-center gap-1">
                   {task && (
                     <button
@@ -333,13 +312,11 @@ function BlockCard({
                     onClick={handleStartTimer}
                     className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border border-border/60 text-[9px] text-muted-foreground/70 hover:bg-primary/5 hover:border-primary/60 transition-fast"
                   >
-                    <Timer size={8} />
-                    Log
+                    <Timer size={8} /> Log
                   </button>
                 </span>
               </p>
 
-              {/* Progress bar */}
               {task && totalSpentMinutes > 0 && (
                 <div className="flex items-center gap-1.5">
                   <div className="flex-1 h-1 rounded-full bg-muted overflow-hidden">
@@ -348,38 +325,26 @@ function BlockCard({
                       style={{ width: `${focusPct * 100}%` }}
                     />
                   </div>
-                  <span className="text-[9px] text-muted-foreground/70 tabular-nums whitespace-nowrap">
-                    {totalSpentMinutes}m
-                  </span>
+                  <span className="text-[9px] text-muted-foreground/70 tabular-nums whitespace-nowrap">{totalSpentMinutes}m</span>
                 </div>
               )}
-
               {!task && spentFraction > 0 && (
                 <div className="flex items-center gap-1.5">
                   <div className="flex-1 h-1 rounded-full bg-muted overflow-hidden">
                     <div className="h-1 rounded-full bg-primary transition-all" style={{ width: `${spentFraction * 100}%` }} />
                   </div>
-                  <span className="text-[9px] text-muted-foreground/70 tabular-nums whitespace-nowrap">
-                    {Math.round(spentFraction * 100)}%
-                  </span>
+                  <span className="text-[9px] text-muted-foreground/70 tabular-nums whitespace-nowrap">{Math.round(spentFraction * 100)}%</span>
                 </div>
               )}
             </div>
           )}
         </div>
 
-        {/* Hover actions */}
         <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0 transition-fast">
-          <button
-            onClick={(e) => { e.stopPropagation(); onEdit(); }}
-            className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-fast"
-          >
+          <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-fast">
             <Pencil size={9} />
           </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className="p-0.5 rounded text-muted-foreground hover:text-rose-500 transition-fast"
-          >
+          <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-0.5 rounded text-muted-foreground hover:text-rose-500 transition-fast">
             <X size={9} />
           </button>
         </div>
@@ -390,7 +355,7 @@ function BlockCard({
   );
 }
 
-// ── DayColumn ──────────────────────────────────────────────────
+// ── DayColumn ─────────────────────────────────────────────────
 export function DayColumn({ date, compact = false }: { date: ISODate; compact?: boolean }) {
   const {
     getBlocksForDate, createBlock, deleteBlock,
@@ -405,7 +370,21 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
   const wrapRef   = useRef<HTMLDivElement>(null);
 
   const [ghost, setGhost] = useState<{ y: number; height: number } | null>(null);
-  const dragMoveRef = useRef<{ blockId: string; offsetY: number; durationPx: number } | null>(null);
+
+  // FIX 3: Store ALL drag-move state in a single ref — blockId, offsetY, durationPx,
+  // AND a snapshot of gridRect + scrollTop captured at pointerdown time.
+  // The old code called getGridY() (which re-reads getBoundingClientRect) inside
+  // the move handler, but getBoundingClientRect returns values relative to the
+  // current viewport scroll. When the user scrolls the grid mid-drag, the
+  // rect changes and blocks teleport. Snapshotting at pointerdown and adding
+  // the scroll delta on each move event fixes this.
+  const dragMoveRef = useRef<{
+    blockId:    string;
+    offsetY:    number;
+    durationPx: number;
+    gridRect:   DOMRect;
+    scrollAtDown: number;
+  } | null>(null);
 
   const blocks  = getBlocksForDate(date);
   const nowObj  = new Date();
@@ -413,7 +392,7 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
   const isToday = date === toISODate(nowObj);
   const nowY    = isToday ? timeToY(nowTime) : null;
 
-  // ── Auto-scroll to current time (or 8 AM on non-today) on mount ──
+  // Auto-scroll to current time (or 8 AM on non-today) on mount / date change
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
@@ -422,21 +401,26 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
 
-  const getGridY = useCallback((clientY: number): number => {
-    const rect = gridRef.current?.getBoundingClientRect();
+  // FIX 4: getGridY must account for the scroll position of the wrapper.
+  // The old version only subtracted gridRect.top (viewport-relative), but
+  // the grid is inside a scrollable container. Adding wrapRef.current.scrollTop
+  // gives the correct canvas-local Y even when the column is scrolled.
+  const getGridY = useCallback((clientY: number, overrideRect?: DOMRect, overrideScroll?: number): number => {
+    const rect   = overrideRect   ?? gridRef.current?.getBoundingClientRect();
+    const scroll = overrideScroll ?? wrapRef.current?.scrollTop ?? 0;
     if (!rect) return 0;
-    return Math.max(0, Math.min(clientY - rect.top, TOTAL_HEIGHT));
+    return Math.max(0, Math.min(clientY - rect.top + scroll, TOTAL_HEIGHT));
   }, []);
 
-  // ── Task drag-over / drop ─────────────────────────────────────
+  // ── Task drag-over / drop ──────────────────────────────────
   const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
-    const y        = getGridY(e.clientY);
+    const y      = getGridY(e.clientY);
     const snappedY = timeToY(snapMinutes(yToTime(y)));
-    const taskId   = dragTaskId ?? e.dataTransfer.getData("taskId");
-    const task     = tasks.find((t) => t.id === taskId);
-    const durPx    = ((task?.estimateMinutes ?? 60) / 60) * HOUR_HEIGHT;
+    const taskId = dragTaskId ?? e.dataTransfer.getData("taskId");
+    const task   = tasks.find((t) => t.id === taskId);
+    const durPx  = ((task?.estimateMinutes ?? 60) / 60) * HOUR_HEIGHT;
     setGhost({ y: snappedY, height: durPx });
   }, [dragTaskId, tasks, getGridY]);
 
@@ -448,7 +432,6 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
     const y         = getGridY(e.clientY);
     const startTime = snapMinutes(yToTime(y));
     const taskId    = dragTaskId ?? e.dataTransfer.getData("taskId") ?? undefined;
-
     if (taskId) {
       await scheduleTask(taskId, date, startTime, 60);
       setDragTaskId(null);
@@ -458,21 +441,49 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
     }
   }, [dragTaskId, date, getGridY, scheduleTask, createBlock, setDragTaskId]);
 
-  // ── Block pointer-drag (move) ─────────────────────────────────
+  // ── Block pointer-drag (move) ──────────────────────────────
+  // FIX 5: The old onPointerDownGrip had a stale-closure bug: the `blocks`
+  // array captured at creation time was used to look up the block, but after
+  // any re-render (e.g., a block color change) the closure held the OLD blocks
+  // array. Even if the block existed in the new render, the old closure
+  // couldn't find it and bailed out early with `if (!block) return`.
+  // Fix: read the block directly from the store at pointerdown time instead
+  // of from the closed-over `blocks` array, and remove `blocks` from deps.
   const onPointerDownGrip = useCallback(
     (e: React.PointerEvent, blockId: string) => {
       e.preventDefault();
-      const block    = blocks.find((b) => b.id === blockId);
+      // Read live from store, not from stale closure
+      const block = usePlannerStore.getState().blocks.find((b) => b.id === blockId);
       if (!block) return;
-      const startY   = getGridY(e.clientY);
+
+      // Snapshot geometry at pointerdown — see FIX 3
+      const gridRect    = gridRef.current?.getBoundingClientRect();
+      const scrollAtDown = wrapRef.current?.scrollTop ?? 0;
+      if (!gridRect) return;
+
       const blockTop = timeToY(block.startTime);
       const durPx    = timeToY(block.endTime) - blockTop;
-      dragMoveRef.current = { blockId, offsetY: startY - blockTop, durationPx: durPx };
+      const startY   = getGridY(e.clientY, gridRect, scrollAtDown);
+
+      dragMoveRef.current = {
+        blockId,
+        offsetY:    startY - blockTop,
+        durationPx: durPx,
+        gridRect,
+        scrollAtDown,
+      };
+
+      // FIX 1 (move): capture pointer so moves/up arrive even when pointer
+      // leaves the grip element or moves faster than the render loop.
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 
       const onMove = (ev: PointerEvent) => {
         const ref = dragMoveRef.current;
         if (!ref) return;
-        const y        = getGridY(ev.clientY) - ref.offsetY;
+        // Account for scroll that happened since pointerdown (FIX 3)
+        const currentScroll = wrapRef.current?.scrollTop ?? ref.scrollAtDown;
+        const scrollDelta   = currentScroll - ref.scrollAtDown;
+        const y        = getGridY(ev.clientY, ref.gridRect, ref.scrollAtDown + scrollDelta) - ref.offsetY;
         const snappedY = timeToY(snapMinutes(yToTime(Math.max(0, y))));
         setGhost({ y: snappedY, height: ref.durationPx });
       };
@@ -480,30 +491,37 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
       const onUp = async (ev: PointerEvent) => {
         const ref = dragMoveRef.current;
         dragMoveRef.current = null;
+        // FIX 5b: Always clear ghost even if we bail early
         setGhost(null);
-        if (!ref || !block) return;
-        const y        = getGridY(ev.clientY) - ref.offsetY;
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup",   onUp);
+        if (!ref) return;
+
+        const currentScroll = wrapRef.current?.scrollTop ?? ref.scrollAtDown;
+        const scrollDelta   = currentScroll - ref.scrollAtDown;
+        const y        = getGridY(ev.clientY, ref.gridRect, ref.scrollAtDown + scrollDelta) - ref.offsetY;
         const newStart = snapMinutes(yToTime(Math.max(0, y)));
         const [sh, sm] = newStart.split(":").map(Number);
-        const dur      =
-          (parseInt(block.endTime.split(":")[0]) * 60 + parseInt(block.endTime.split(":")[1])) -
-          (parseInt(block.startTime.split(":")[0]) * 60 + parseInt(block.startTime.split(":")[1]));
-        const em2  = sh * 60 + sm + dur;
+        // Re-read block duration from store in case it was resized during drag
+        const liveBlock = usePlannerStore.getState().blocks.find((b) => b.id === ref.blockId);
+        if (!liveBlock) return;
+        const dur =
+          (parseInt(liveBlock.endTime.split(":")[0]) * 60 + parseInt(liveBlock.endTime.split(":")[1])) -
+          (parseInt(liveBlock.startTime.split(":")[0]) * 60 + parseInt(liveBlock.startTime.split(":")[1]));
+        const em2    = sh * 60 + sm + dur;
         const newEnd = clampTime(`${String(Math.floor(em2 / 60)).padStart(2, "0")}:${String(em2 % 60).padStart(2, "0")}`);
-        await rescheduleBlock(blockId, newStart, newEnd);
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onUp);
+        await rescheduleBlock(ref.blockId, newStart, newEnd);
       };
 
       window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointerup",   onUp);
     },
-    [blocks, getGridY, rescheduleBlock]
+    // blocks intentionally removed — we read from store directly (FIX 5)
+    [getGridY, rescheduleBlock]
   );
 
   return (
     <div ref={wrapRef} className="flex flex-col flex-1 min-w-0 overflow-y-auto overflow-x-hidden">
-      {/* Grid canvas */}
       <div
         ref={gridRef}
         className="day-col-grid relative shrink-0"
@@ -512,33 +530,26 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
         onDragLeave={onDragLeave}
         onDrop={onDrop}
       >
-        {/* ── Gutter background ──────────────────────────── */}
+        {/* Gutter */}
         <div
           className="absolute top-0 bottom-0 left-0 bg-muted/20 border-r border-border/40 pointer-events-none z-0"
           style={{ width: GUTTER_W }}
         />
 
-        {/* ── Hour rows (full-hour lines + labels) ──────── */}
+        {/* Hour lines + labels */}
         {HOURS.map((h) => {
           const y       = timeToY(`${String(h).padStart(2, "0")}:00`);
           const isMajor = MAJOR_HOURS.has(h);
           return (
             <div key={h} className="absolute left-0 right-0 pointer-events-none" style={{ top: y }}>
-              {/* Full-width grid line */}
               <div
-                className={cn(
-                  "absolute right-0 border-t",
-                  isMajor ? "border-border/50" : "border-border/20"
-                )}
+                className={cn("absolute right-0 border-t", isMajor ? "border-border/50" : "border-border/20")}
                 style={{ left: GUTTER_W }}
               />
-              {/* Time label — right-aligned inside gutter */}
               <span
                 className={cn(
                   "absolute right-0 -translate-y-1/2 pr-2 tabular-nums select-none leading-none",
-                  isMajor
-                    ? "text-[11px] font-semibold text-muted-foreground/80"
-                    : "text-[10px] font-normal text-muted-foreground/45"
+                  isMajor ? "text-[11px] font-semibold text-muted-foreground/80" : "text-[10px] font-normal text-muted-foreground/45"
                 )}
                 style={{ width: GUTTER_W }}
               >
@@ -548,45 +559,35 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
           );
         })}
 
-        {/* ── Half-hour tick marks ───────────────────────── */}
-        {HOURS.map((h) => {
-          const y = timeToY(`${String(h).padStart(2, "0")}:30`);
-          return (
-            <div
-              key={`${h}:30`}
-              className="absolute right-0 border-t border-border/15 pointer-events-none"
-              style={{ top: y, left: GUTTER_W }}
-            />
-          );
-        })}
-
-        {/* ── Now indicator ─────────────────────────────── */}
-        {nowY !== null && (
+        {/* Half-hour ticks */}
+        {HOURS.map((h) => (
           <div
-            className="absolute left-0 right-0 z-20 pointer-events-none"
-            style={{ top: nowY }}
-          >
+            key={`${h}:30`}
+            className="absolute right-0 border-t border-border/15 pointer-events-none"
+            style={{ top: timeToY(`${String(h).padStart(2, "0")}:30`), left: GUTTER_W }}
+          />
+        ))}
+
+        {/* Now indicator */}
+        {nowY !== null && (
+          <div className="absolute left-0 right-0 z-20 pointer-events-none" style={{ top: nowY }}>
             <div className="relative flex items-center">
-              {/* Time bubble */}
               <span
                 className="absolute text-[9px] font-bold tabular-nums text-primary bg-primary/10 px-1 py-0.5 rounded-full leading-none z-10 -translate-y-1/2"
                 style={{ width: GUTTER_W, textAlign: "center", top: "50%" }}
               >
                 {nowTime}
               </span>
-              {/* Dot + line */}
               <div className="w-2 h-2 rounded-full bg-primary shrink-0 z-10" style={{ marginLeft: GUTTER_W - 4 }} />
               <div className="flex-1 h-px bg-primary/70" />
             </div>
           </div>
         )}
 
-        {/* ── Calendar event strips (behind blocks) ─────── */}
-        {calEvents.map((ev) => (
-          <CalendarEventStrip key={ev.id} event={ev} />
-        ))}
+        {/* Calendar events */}
+        {calEvents.map((ev) => <CalendarEventStrip key={ev.id} event={ev} />)}
 
-        {/* ── Planner blocks ─────────────────────────────── */}
+        {/* Blocks */}
         {blocks.map((block) => (
           <BlockCard
             key={block.id}
@@ -600,16 +601,11 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
           />
         ))}
 
-        {/* ── Drop ghost ─────────────────────────────────── */}
         {ghost && <DropGhost y={ghost.y} height={ghost.height} />}
       </div>
 
-      {/* Block edit modal */}
       {editingBlockId && (
-        <BlockEditModal
-          blockId={editingBlockId}
-          onClose={() => setEditingBlockId(null)}
-        />
+        <BlockEditModal blockId={editingBlockId} onClose={() => setEditingBlockId(null)} />
       )}
     </div>
   );
