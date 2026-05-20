@@ -792,6 +792,8 @@ function EntryRow({ entry, onEdit, onDelete, onResume }: {
   const project  = entry.projectId ? projects.find((p) => p.id === entry.projectId) : null;
   const isRunning = !entry.endAt;
   const liveDur   = useLiveDuration(entry.startAt, !isRunning);
+  
+  const isCancelledTask = task && (task.status === "cancelled" || task.status === "archived");
 
   return (
     <div className="group flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors border-b last:border-0"
@@ -801,7 +803,7 @@ function EntryRow({ entry, onEdit, onDelete, onResume }: {
       )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
-          <span className="text-sm truncate leading-tight">
+          <span className={cn("text-sm truncate leading-tight", isCancelledTask && "opacity-50")}>
             {entry.description || <span className="text-muted-foreground italic">No description</span>}
           </span>
           {entry.isBillable && <DollarSign size={10} className="text-emerald-500 shrink-0" />}
@@ -812,7 +814,12 @@ function EntryRow({ entry, onEdit, onDelete, onResume }: {
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
           {project && <span className="flex items-center gap-1 text-[11px] text-muted-foreground"><ProjectDot color={project.color} size={8} />{project.name}</span>}
-          {task    && <span className="text-[11px] text-muted-foreground/70 truncate">· {task.title}</span>}
+          {task && (
+            <span className={cn("text-[11px] truncate", isCancelledTask ? "text-muted-foreground/40 line-through" : "text-muted-foreground/70")}>
+              · {task.title}
+              {isCancelledTask && <span className="ml-1 text-[10px]">(cancelled)</span>}
+            </span>
+          )}
           <span className="text-[11px] text-muted-foreground/50 ml-auto hidden sm:block">
             {fmtTime(entry.startAt)}{entry.endAt ? `–${fmtTime(entry.endAt)}` : " (running)"}
           </span>

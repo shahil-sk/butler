@@ -71,5 +71,16 @@ export function setupTaskEventListeners(): () => void {
     })
   );
 
+  // Project archived → unlink tasks from that project (same behavior as delete)
+  unsubs.push(
+    bus.on("project:updated", ({ project, changed }) => {
+      if (changed.status === "archived") {
+        const store = useTaskStore.getState();
+        const affected = store.tasks.filter((t) => t.projectId === project.id);
+        affected.forEach((t) => store.updateTask(t.id, { projectId: undefined }));
+      }
+    })
+  );
+
   return () => unsubs.forEach((u) => u());
 }
