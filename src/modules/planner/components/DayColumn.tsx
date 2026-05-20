@@ -1,11 +1,12 @@
 import { useRef, useState, useCallback } from "react";
-import { X, GripVertical, Pencil, Focus as FocusIcon, Check } from "lucide-react";
+import { X, GripVertical, Pencil, Focus as FocusIcon, Check, Timer } from "lucide-react";
 import { cn, toISODate } from "@/shared/utils";
-import { usePlannerStore, type TimeBlock, snapMinutes, clampTime } from "../store";
+import { usePlannerStore, type TimeBlock, snapMinutes, clampTime, blockSpentFraction } from "../store";
 import { useTaskStore } from "@/modules/tasks/store";
 import { useProjectStore } from "@/modules/projects/store";
 import { useCalendarStore } from "@/modules/calendar/store";
 import { useFocusStore } from "@/modules/focus/store";
+import { useTimeStore } from "@/modules/time-tracking/store";
 import type { ISODate } from "@/shared/types";
 import { BlockEditModal } from "./BlockEditModal";
 
@@ -174,6 +175,7 @@ function BlockCard({
 
   const activeSession = useFocusStore((s) => s.activeSession);
   const sessions      = useFocusStore((s) => s.sessions);
+  const timeEntries   = useTimeStore((s) => s.entries);
 
   const blockDuration = Math.max(0, getBlockDurationMinutes(block));
 
@@ -184,7 +186,15 @@ function BlockCard({
         .reduce((a, s) => a + (s.actualMinutes ?? 0), 0)
     : 0;
 
-  const focusPct = blockDuration > 0 ? Math.min(1, focusedMinutes / blockDuration) : 0;
+  // Time-tracking minutes for this task
+  const trackedMinutes = task
+    ? timeEntries
+        .filter((e) => e.taskId === task.id && e.endAt && e.durationMinutes)
+        .reduce((a, e) => a + (e.durationMinutes ?? 0), 0)
+    : 0;
+
+  const totalSpentMinutes = focusedMinutes + trackedMinutes;
+  const focusPct = blockDuration > 0 ? Math.min(1, totalSpentMinutes / blockDuration) : 0;
 
   const isTaskCompleted = task && (task.status === "done" || task.status === "cancelled" || task.status === "archived");
   const isTaskCancelled = task && (task.status === "cancelled" || task.status === "archived");
@@ -217,6 +227,17 @@ function BlockCard({
     if (!task) return;
     await useFocusStore.getState().startFocus({ taskId: task.id, projectId: task.projectId });
   };
+
+  const handleStartTimer = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    await useTimeStore.getState().startTimer({
+      taskId: task?.id,
+      projectId: task?.projectId,
+      description: task?.title ?? block.title,
+    });
+  };
+
+  const spentFraction = blockSpentFraction(block, totalSpentMinutes);
 
   return (
     <div
@@ -280,28 +301,37 @@ function BlockCard({
 
           {!compact && height > 44 && (
             <div className="mt-0.5 space-y-0.5">
-              <p className="text-[10px] text-muted-foreground/60 tabular-nums flex items-center justify-between">
+              <p className="text-[10px] text-muted-foreground/60 tabular-nums flex items-center justify-between gap-1">
                 <span>
                   {block.startTime} – {block.endTime}
                   {task && <span className="ml-1 opacity-50">· {task.estimateMinutes ?? blockDuration}m</span>}
                 </span>
-                {task && (
+                <span className="inline-flex items-center gap-1">
+                  {task && (
+                    <button
+                      onClick={handleStartFocus}
+                      className={cn(
+                        "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border text-[9px] font-medium transition-fast",
+                        isActiveFocus
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-border/60 text-muted-foreground/70 hover:bg-primary/5 hover:border-primary/60"
+                      )}
+                    >
+                      {isActiveFocus ? <Check size={8} /> : <FocusIcon size={8} />}
+                      {isActiveFocus ? "Focusing" : "Focus"}
+                    </button>
+                  )}
                   <button
-                    onClick={handleStartFocus}
-                    className={cn(
-                      "ml-1 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border text-[9px] font-medium transition-fast",
-                      isActiveFocus
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "border-border/60 text-muted-foreground/70 hover:bg-primary/5 hover:border-primary/60"
-                    )}
+                    onClick={handleStartTimer}
+                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border border-border/60 text-[9px] text-muted-foreground/70 hover:bg-primary/5 hover:border-primary/60 transition-fast"
                   >
-                    {isActiveFocus ? <Check size={8} /> : <FocusIcon size={8} />}
-                    {isActiveFocus ? "Focusing" : "Focus"}
+                    <Timer size={8} />
+                    Log
                   </button>
-                )}
+                </span>
               </p>
 
-              {task && focusedMinutes > 0 && (
+              {task && totalSpentMinutes > 0 && (
                 <div className="flex items-center gap-1">
                   <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
                     <div
@@ -313,7 +343,21 @@ function BlockCard({
                     />
                   </div>
                   <span className="text-[9px] text-muted-foreground/70 tabular-nums whitespace-nowrap">
-                    {focusedMinutes}m
+                    {totalSpentMinutes}m
+                  </span>
+                </div>
+              )}
+
+              {!task && spentFraction > 0 && (
+                <div className="flex items-center gap-1">
+                  <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-1.5 rounded-full bg-primary transition-all"
+                      style={{ width: `${spentFraction * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-[9px] text-muted-foreground/70 tabular-nums whitespace-nowrap">
+                    {Math.round(spentFraction * 100)}%
                   </span>
                 </div>
               )}
