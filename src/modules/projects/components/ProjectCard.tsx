@@ -120,7 +120,7 @@ export function ProjectCard({
         tabIndex={0}
         onClick={() => openProject(project.id)}
         onKeyDown={(e) => { if (e.key === "Enter") openProject(project.id); }}
-        className="group flex items-center gap-4 rounded-xl border border-border bg-card hover:border-border/80 hover:bg-card/80 transition-fast cursor-pointer px-4 py-3"
+        className="group flex items-center gap-3 rounded-xl border border-border bg-card hover:border-border/80 hover:bg-card/80 transition-fast cursor-pointer px-4 py-3"
       >
         {/* Color swatch */}
         <div
@@ -163,7 +163,7 @@ export function ProjectCard({
         {/* Due date */}
         {project.dueDate && (
           <span className={cn(
-            "text-[12px] tabular-nums shrink-0 w-20 text-right",
+            "text-[11px] tabular-nums shrink-0 w-20 text-right",
             isOverdue ? "text-red-500 font-medium" : "text-muted-foreground"
           )}>
             {formatDate(project.dueDate)}
@@ -182,14 +182,14 @@ export function ProjectCard({
       tabIndex={0}
       onClick={() => openProject(project.id)}
       onKeyDown={(e) => { if (e.key === "Enter") openProject(project.id); }}
-      className="group relative flex flex-col rounded-xl border border-border bg-card hover:shadow-md hover:border-border/70 transition-fast cursor-pointer overflow-hidden"
+      className="group relative flex flex-col rounded-xl border border-border bg-card hover:shadow-md hover:border-border/70 transition-fast cursor-pointer"
     >
-      {/* Thick color accent top bar */}
+      {/* Thick color accent top bar 
       <div
         className="h-[3px] w-full shrink-0"
         style={{ backgroundColor: project.color }}
       />
-
+      */}
       <div className="flex flex-col flex-1 p-4 gap-4">
 
         {/* Top row: name + menu */}
