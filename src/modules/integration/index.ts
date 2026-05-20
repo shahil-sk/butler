@@ -11,11 +11,25 @@ import { toISODate } from "@/shared/utils";
 
 let started = false;
 
+// Per-task mutex: prevents race between concurrent task:created + task:updated
+// events from inserting two calendar events for the same task.
+const syncInFlight = new Set<string>();
+
+async function withTaskMutex<T>(taskId: string, fn: () => Promise<T>): Promise<T | undefined> {
+  if (syncInFlight.has(taskId)) return undefined;
+  syncInFlight.add(taskId);
+  try {
+    return await fn();
+  } finally {
+    syncInFlight.delete(taskId);
+  }
+}
+
 export function startIntegration() {
   if (started) return;
   started = true;
 
-  // ── 1. Task completed → gray-out / remove planner block ──────────
+  // ── 1. Task completed → gray-out / remove planner block ──────────────────
   bus.on("task:completed", ({ taskId }) => {
     import("@/modules/planner/store").then(({ usePlannerStore }) => {
       const { blocks, deleteBlock } = usePlannerStore.getState();
@@ -27,7 +41,7 @@ export function startIntegration() {
     });
   });
 
-  // ── 2. Task deleted → remove all linked planner blocks ───────────
+  // ── 2. Task deleted → remove all linked planner blocks ─────────────────
   bus.on("task:deleted", ({ taskId }) => {
     import("@/modules/planner/store").then(({ usePlannerStore }) => {
       const { blocks, deleteBlock } = usePlannerStore.getState();
@@ -45,23 +59,22 @@ export function startIntegration() {
     });
   });
 
-  // ── 3. Task scheduledDate changed → move / create planner block ──
+  // ── 3. Task scheduledDate changed → move / create planner block ────────
   bus.on("task:updated", ({ task, changed }) => {
     if (!changed.scheduledDate) return;
 
-    import("@/modules/planner/store").then(({ usePlannerStore }) => {
+    void withTaskMutex(task.id + ":planner", async () => {
+      const { usePlannerStore } = await import("@/modules/planner/store");
       const { blocks, createBlock, updateBlock } = usePlannerStore.getState();
       const existing = blocks.find((b) => b.taskId === task.id);
 
       if (existing) {
-        // Move block to new date, keep same time
-        void updateBlock(existing.id, { date: changed.scheduledDate! });
+        await updateBlock(existing.id, { date: changed.scheduledDate! });
       } else if (changed.scheduledDate) {
-        // No block yet — create a default one at 09:00
         const dur = task.estimateMinutes ?? 60;
         const endH = 9 + Math.floor(dur / 60);
         const endM = dur % 60;
-        void createBlock({
+        await createBlock({
           date:      changed.scheduledDate,
           taskId:    task.id,
           title:     task.title,
@@ -72,30 +85,31 @@ export function startIntegration() {
     });
   });
 
-  // ── 4. Task dueDate changed → update linked calendar event ───────
+  // ── 4. Task dueDate / title changed → update linked calendar event ─────
   bus.on("task:updated", ({ task, changed }) => {
     if (!changed.dueDate && !changed.title) return;
 
-    import("@/modules/calendar/store").then(({ useCalendarStore }) => {
+    void withTaskMutex(task.id + ":calendar-update", async () => {
+      const { useCalendarStore } = await import("@/modules/calendar/store");
       const { events, updateEvent } = useCalendarStore.getState();
       const linked = events.filter((e) => e.taskId === task.id);
-      linked.forEach((e) => {
+      for (const e of linked) {
         const patch: Record<string, unknown> = {};
         if (changed.title)   patch.title = task.title;
         if (changed.dueDate) patch.date  = task.dueDate;
-        if (Object.keys(patch).length) void updateEvent(e.id, patch);
-      });
+        if (Object.keys(patch).length) await updateEvent(e.id, patch);
+      }
     });
   });
 
-  // ── 5. Calendar event created/updated with taskId → sync planner ─
+  // ── 5. Calendar event created with taskId → sync task scheduledDate ───
   bus.on("calendar:event-created", ({ event }) => {
     if (!event.taskId) return;
 
-    // Set scheduledDate on the task (task store handles the rest)
-    import("@/modules/tasks/store").then(({ useTaskStore }) => {
+    void withTaskMutex(event.taskId + ":task-sync", async () => {
+      const { useTaskStore } = await import("@/modules/tasks/store");
       const { updateTask } = useTaskStore.getState();
-      void updateTask(event.taskId!, {
+      await updateTask(event.taskId!, {
         scheduledDate: event.date ?? toISODate(new Date(event.startTime ?? Date.now())),
       });
     });
@@ -104,60 +118,56 @@ export function startIntegration() {
   bus.on("calendar:event-updated", ({ event }) => {
     if (!event.taskId) return;
 
-    import("@/modules/planner/store").then(({ usePlannerStore }) => {
+    void withTaskMutex(event.taskId + ":planner-sync", async () => {
+      const { usePlannerStore } = await import("@/modules/planner/store");
       const { blocks, rescheduleBlock, updateBlock } = usePlannerStore.getState();
       const block = blocks.find((b) => b.taskId === event.taskId);
       if (!block) return;
 
-      // Sync date + time from calendar event
-      const newDate = event.date ?? block.date;
-      const newStart = event.startTime
-        ? event.startTime.slice(11, 16)   // ISO datetime → "HH:MM"
-        : block.startTime;
-      const newEnd = event.endTime
-        ? event.endTime.slice(11, 16)
-        : block.endTime;
+      const newDate  = event.date ?? block.date;
+      const newStart = event.startTime ? event.startTime.slice(11, 16) : block.startTime;
+      const newEnd   = event.endTime   ? event.endTime.slice(11, 16)   : block.endTime;
 
-      void updateBlock(block.id, { date: newDate });
+      await updateBlock(block.id, { date: newDate });
       if (newStart !== block.startTime || newEnd !== block.endTime) {
-        void rescheduleBlock(block.id, newStart, newEnd);
+        await rescheduleBlock(block.id, newStart, newEnd);
       }
     });
   });
 
-  // ── 6. Focus session completed → write actualMinutes to task ─────
+  // ── 6. Focus session completed → write actualMinutes to task ─────────
   bus.on("focus:session-completed", ({ session }) => {
     if (!session.taskId) return;
 
-    import("@/modules/tasks/store").then(({ useTaskStore }) => {
+    void withTaskMutex(session.taskId + ":focus", async () => {
+      const { useTaskStore } = await import("@/modules/tasks/store");
       const { tasks, updateTask } = useTaskStore.getState();
       const task = tasks.find((t) => t.id === session.taskId);
       if (!task) return;
-      const prev    = task.actualMinutes ?? 0;
-      const added   = Math.round((session.durationSeconds ?? 0) / 60);
-      void updateTask(session.taskId!, { actualMinutes: prev + added });
+      const prev  = task.actualMinutes ?? 0;
+      const added = Math.round((session.durationSeconds ?? 0) / 60);
+      await updateTask(session.taskId!, { actualMinutes: prev + added });
     });
   });
 
-  // ── 7. Planner block linked to task → set task.scheduledDate ─────
+  // ── 7. Planner block linked to task → set task.scheduledDate ─────────
   bus.on("planner:block-linked-task", ({ blockId, taskId, date }) => {
-    import("@/modules/tasks/store").then(({ useTaskStore }) => {
-      void useTaskStore.getState().updateTask(taskId, { scheduledDate: date });
+    void withTaskMutex(taskId + ":planner-link", async () => {
+      const { useTaskStore } = await import("@/modules/tasks/store");
+      await useTaskStore.getState().updateTask(taskId, { scheduledDate: date });
     });
   });
 
-  // ── 8. Task "schedule in planner" request ────────────────────────
+  // ── 8. Task "schedule in planner" request ───────────────────────
   bus.on("task:schedule-in-planner", ({ task, date, startTime }) => {
-    import("@/modules/planner/store").then(({ usePlannerStore }) => {
-      void usePlannerStore.getState().scheduleTask(
+    void withTaskMutex(task.id + ":schedule", async () => {
+      const { usePlannerStore } = await import("@/modules/planner/store");
+      await usePlannerStore.getState().scheduleTask(
         task.id,
         date ?? toISODate(new Date()),
         startTime ?? "09:00",
         task.estimateMinutes ?? 60
       );
-    });
-    // Also navigate to planner on the right date
-    import("@/modules/planner/store").then(({ usePlannerStore }) => {
       usePlannerStore.getState().setActiveDate(date ?? toISODate(new Date()));
     });
     bus.emit("navigate:to", { path: "/planner" });
