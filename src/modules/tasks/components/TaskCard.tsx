@@ -160,6 +160,20 @@ export function TaskCard({ task, view }: TaskCardProps) {
           {task.title}
         </span>
 
+        {/* Checklist progress pill — list view */}
+        {task.checklistItems && task.checklistItems.length > 0 && (() => {
+          const done = task.checklistItems.filter((i) => i.checked).length;
+          const all  = done === task.checklistItems.length;
+          return (
+            <span className={cn(
+              "text-[10px] tabular-nums px-1.5 py-0.5 rounded-full font-medium shrink-0",
+              all ? "bg-emerald-500/10 text-emerald-500" : "bg-muted text-muted-foreground/55"
+            )}>
+              ✓ {done}/{task.checklistItems.length}
+            </span>
+          );
+        })()}
+
         {/* Meta cluster — right-aligned */}
         <div className="flex items-center gap-2.5 shrink-0">
 
@@ -298,6 +312,26 @@ export function TaskCard({ task, view }: TaskCardProps) {
             )}
           </div>
         )}
+
+        {/* Checklist progress */}
+        {task.checklistItems && task.checklistItems.length > 0 && (() => {
+          const done = task.checklistItems.filter((i) => i.checked).length;
+          const pct  = Math.round((done / task.checklistItems.length) * 100);
+          const all  = done === task.checklistItems.length;
+          return (
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-[3px] rounded-full bg-border overflow-hidden">
+                <div
+                  className={cn("h-full rounded-full transition-all duration-500", all ? "bg-emerald-500" : "bg-primary/60")}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <span className={cn("text-[10px] tabular-nums font-medium shrink-0", all ? "text-emerald-500" : "text-muted-foreground/50")}>
+                {done}/{task.checklistItems.length}
+              </span>
+            </div>
+          );
+        })()}
 
         <div className="mt-auto flex items-center justify-between gap-2 pt-1">
           <div className="flex items-center gap-2">

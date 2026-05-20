@@ -43,7 +43,7 @@ const GROUPS: TaskGroup[] = [
   { id: "done",        label: "Completed",   colorClass: "text-emerald-500", bgClass: "bg-emerald-100 dark:bg-emerald-950/60", textClass: "text-emerald-700 dark:text-emerald-300", borderClass: "border-l-emerald-500", defaultOpen: false },
 ];
 
-// ─── Kanban columns ──────────────────────────────────────────
+
 interface KanbanCol {
   status:      TaskStatus;
   label:       string;
@@ -199,7 +199,7 @@ function KanbanBoard({ tasks }: { tasks: Task[] }) {
   };
 
   return (
-    <div className="flex gap-3 h-full pb-4 overflow-x-auto min-h-0">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 h-full pb-4 min-h-0 overflow-y-auto">
       {KANBAN_COLS.map((col) => {
         const colTasks = tasks.filter((t) => t.status === col.status);
         const isOver   = dragOverCol === col.status;
@@ -207,7 +207,7 @@ function KanbanBoard({ tasks }: { tasks: Task[] }) {
           <div
             key={col.status}
             className={cn(
-              "flex flex-col rounded-xl border border-border shrink-0 w-[260px] transition-colors duration-150",
+              "flex flex-col rounded-xl border border-border min-w-0 transition-colors duration-150 min-h-[200px]",
               isOver ? col.dropBg : "bg-muted/20",
             )}
             onDragOver={(e) => handleDragOver(e, col.status)}
@@ -403,7 +403,7 @@ export function TasksModule() {
       />
 
       {/* ── Content ──────────────────────────────────────── */}
-      <div className={cn("flex-1 overflow-hidden", layout === "kanban" ? "px-4 pt-3" : "overflow-y-auto px-6 py-5")}>
+      <div className={cn("flex-1 overflow-hidden", layout === "kanban" ? "overflow-y-auto px-4 pt-3" : "overflow-y-auto px-6 py-5")}>
         {tasks.length === 0 ? (
           <EmptyState
             title={

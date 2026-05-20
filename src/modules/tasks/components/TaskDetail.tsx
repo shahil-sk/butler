@@ -77,6 +77,7 @@ function StatusChip({
     <button
       ref={btnRef}
       onClick={onClick}
+      aria-label={`Status: ${STATUS_OPTIONS.find((o) => o.value === status)?.label ?? "To do"}. Click to change.`}
       className={cn(
         "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-semibold transition-fast",
         status === "done"        && "border-emerald-500/30 bg-emerald-500/8  text-emerald-600 dark:text-emerald-400",
@@ -124,7 +125,7 @@ function SchedulePanel({
     <div className="fixed inset-0 z-[300] flex items-end sm:items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
-        onClick={onClose}
+        onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
       />
       <div className="relative z-10 bg-popover border border-border rounded-2xl shadow-2xl p-5 w-80 animate-fade-in">
         <div className="flex items-center justify-between mb-4">
@@ -165,6 +166,7 @@ function SchedulePanel({
             <input
               type="date"
               value={scheduleDate}
+              min={new Date().toISOString().split("T")[0]}
               onChange={(e) => onDateChange(e.target.value)}
               className="w-full text-sm bg-muted/40 rounded-lg px-3 py-2 outline-none border border-border focus:border-primary/50"
             />
@@ -435,12 +437,16 @@ export function TaskDetail() {
           <div className="px-5 pt-2 pb-4">
             <textarea
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) => {
+                setDescription(e.target.value);
+                e.target.style.height = "auto";
+                e.target.style.height = e.target.scrollHeight + "px";
+              }}
               onBlur={() => {
                 if (!isCreating && description !== (task?.description ?? ""))
                   save({ description: description || undefined });
               }}
-              className="w-full text-sm text-muted-foreground bg-transparent outline-none resize-none leading-relaxed placeholder:text-muted-foreground/25"
+              className="w-full text-sm text-muted-foreground bg-transparent outline-none resize-none leading-relaxed placeholder:text-muted-foreground/25 min-h-[2.5rem] overflow-hidden"
               placeholder="Add notes…"
               rows={2}
             />
@@ -538,6 +544,7 @@ export function TaskDetail() {
                 className="w-10 bg-transparent outline-none text-xs tabular-nums"
                 placeholder="Est."
                 min={0}
+                max={1440}
                 step={5}
               />
               <span className="text-muted-foreground/50">min</span>
@@ -605,6 +612,7 @@ export function TaskDetail() {
                         void deleteChecklistItem(task!.id, item.id);
                       }
                     }}
+                    title="Remove item"
                     className="opacity-0 group-hover:opacity-100 p-1 rounded text-muted-foreground/30 hover:text-red-500 transition-fast"
                   >
                     <X size={11} />
@@ -619,7 +627,12 @@ export function TaskDetail() {
               <input
                 value={newCheckItem}
                 onChange={(e) => setNewCheckItem(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") addCheckItem(); }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    if (newCheckItem.trim()) addCheckItem();
+                    else if (isCreating) { e.preventDefault(); void handleCreate(); }
+                  }
+                }}
                 placeholder="Add item…"
                 className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground/25"
               />
