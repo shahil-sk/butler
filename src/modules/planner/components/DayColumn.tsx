@@ -131,6 +131,15 @@ function CalendarEventStrip({ event }: { event: { id: string; title: string; sta
   );
 }
 
+// Priority → block color mapping when no explicit block/project color
+const PRIORITY_BLOCK_COLOR: Record<string, string> = {
+  urgent: "#ef4444",  // red
+  high:   "#f97316",  // orange
+  medium: "#eab308",  // yellow
+  low:    "#0ea5e9",  // sky
+  none:   "#6b7280",  // gray
+};
+
 // ── BlockCard ──────────────────────────────────────────────────
 function BlockCard({
   block, tasks, projects, compact, onDelete, onEdit, onPointerDownGrip,
@@ -148,7 +157,9 @@ function BlockCard({
 
   const top    = timeToY(block.startTime);
   const height = Math.max(timeToY(block.endTime) - top, 24);
-  const color  = block.color ?? project?.color ?? (block.isBreak ? "#6b7280" : "#3b82f6");
+
+  const priorityColor = task ? PRIORITY_BLOCK_COLOR[task.priority ?? "none"] ?? PRIORITY_BLOCK_COLOR.none : undefined;
+  const baseColor = block.color || project?.color || priorityColor || (block.isBreak ? "#6b7280" : "#3b82f6");
 
   const [editing, setEditing] = useState(false);
   const [title, setTitle]     = useState(task?.title ?? block.title);
@@ -176,8 +187,8 @@ function BlockCard({
       style={{
         top,
         height,
-        backgroundColor: isTaskCompleted ? `#6b728018` : `${color}18`,
-        borderLeftColor: isTaskCompleted ? "#6b7280" : color,
+        backgroundColor: isTaskCompleted ? `#6b728018` : `${baseColor}18`,
+        borderLeftColor: isTaskCompleted ? "#6b7280" : baseColor,
         cursor: editing ? "text" : "default",
       }}
       onDoubleClick={onEdit}
@@ -203,7 +214,7 @@ function BlockCard({
                 if (e.key === "Escape") setEditing(false);
               }}
               className="text-xs font-medium bg-transparent outline-none w-full"
-              style={{ color: isTaskCompleted ? "#6b7280" : color }}
+              style={{ color: isTaskCompleted ? "#6b7280" : baseColor }}
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
@@ -212,7 +223,7 @@ function BlockCard({
                 "text-xs font-medium truncate leading-tight",
                 isTaskCancelled && "line-through"
               )}
-              style={{ color: isTaskCompleted ? "#6b7280" : color }}
+              style={{ color: isTaskCompleted ? "#6b7280" : baseColor }}
               onClick={() => !compact && setEditing(true)}
             >
               {task?.title ?? block.title}
@@ -250,7 +261,7 @@ function BlockCard({
   );
 }
 
-// ── DayColumn ──────────────────────────────────────────────────
+// ── DayColumn ─────────────────────────────────────────────────-
 export function DayColumn({ date, compact = false }: { date: ISODate; compact?: boolean }) {
   const {
     getBlocksForDate, createBlock, deleteBlock,
@@ -277,7 +288,7 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
     return Math.max(0, Math.min(clientY - rect.top, TOTAL_HEIGHT));
   }, []);
 
-  // ── Task drag-over / drop ──────────────────────────────────────
+  // ── Task drag-over / drop ─────────────────────────────────────-
   const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
