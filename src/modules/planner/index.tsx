@@ -368,3 +368,7 @@ export default function PlannerPage() {
     </div>
   );
 }
+
+// Named export so Shell.tsx lazy import resolves correctly:
+// lazy(() => import("@/modules/planner").then((m) => ({ default: m.PlannerModule })))
+export const PlannerModule = PlannerPage;
