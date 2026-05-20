@@ -73,6 +73,13 @@ function updateEventParams(e: CalendarEvent): unknown[] {
   ];
 }
 
+// ── Debounce helper ──────────────────────────────────────────────
+let loadEventsTimer: ReturnType<typeof setTimeout> | null = null;
+function debounceLoadEvents(fn: () => void, ms = 150) {
+  if (loadEventsTimer) clearTimeout(loadEventsTimer);
+  loadEventsTimer = setTimeout(fn, ms);
+}
+
 // ── Types ─────────────────────────────────────────────────
 
 export type CalendarView = "month" | "week" | "day" | "agenda";
@@ -107,6 +114,7 @@ interface CalendarActions {
   goPrev:         () => void;
   getEventsInRange: (from: string, to: string) => CalendarEvent[];
   getEventsForDay:  (date: string) => CalendarEvent[];
+  scheduledLoadEvents: (from: string, to: string) => void;
 }
 
 export const useCalendarStore = create<CalendarState & CalendarActions>()((set, get) => ({
@@ -126,18 +134,27 @@ export const useCalendarStore = create<CalendarState & CalendarActions>()((set, 
   loadEvents: async (from, to) => {
     set({ loading: true });
     try {
+      // Query uses end_at >= from to catch events that straddle the boundary
       const rows = await db.select<Record<string, unknown>>(
-        "SELECT * FROM calendar_events WHERE start_at >= ? AND start_at <= ? ORDER BY start_at ASC",
+        "SELECT * FROM calendar_events WHERE end_at >= ? AND start_at <= ? ORDER BY start_at ASC",
         [from, to]
       );
+      const loaded = rows.map(rowToEvent);
       set((s) => {
-        const outside = s.events.filter((e) => e.startAt < from || e.startAt > to);
-        return { events: [...outside, ...rows.map(rowToEvent)], loading: false };
+        // Keep events outside this window that were previously loaded
+        const outside = s.events.filter(
+          (e) => e.endAt < from || e.startAt > to
+        );
+        return { events: [...outside, ...loaded], loading: false };
       });
     } catch (err) {
       console.error("[Calendar] loadEvents error:", err);
       set({ loading: false });
     }
+  },
+
+  scheduledLoadEvents: (from, to) => {
+    debounceLoadEvents(() => get().loadEvents(from, to));
   },
 
   createEvent: async (input) => {
@@ -208,7 +225,8 @@ export const useCalendarStore = create<CalendarState & CalendarActions>()((set, 
   getEventsInRange: (from, to) =>
     get().events.filter((e) => {
       const visible = get().calendars.find((c) => c.id === e.calendarId)?.isVisible ?? true;
-      return visible && e.startAt >= from && e.startAt <= to;
+      // Include events that overlap the range (straddle-safe)
+      return visible && e.endAt >= from && e.startAt <= to;
     }),
 
   getEventsForDay: (date) => {

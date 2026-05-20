@@ -13,7 +13,8 @@ export const CALENDAR_MIGRATIONS: Migration[] = [
         is_visible INTEGER NOT NULL DEFAULT 1,
         source TEXT NOT NULL DEFAULT 'local',
         source_url TEXT,
-        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
       );
 
       CREATE TABLE IF NOT EXISTS calendar_events (
@@ -39,8 +40,8 @@ export const CALENDAR_MIGRATIONS: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_events_time_block ON calendar_events (is_time_block);
 
       -- Insert default calendar
-      INSERT OR IGNORE INTO calendars (id, name, color, is_default, is_visible, source, created_at)
-      VALUES ('default', 'Personal', '#3b82f6', 1, 1, 'local', datetime('now'));
+      INSERT OR IGNORE INTO calendars (id, name, color, is_default, is_visible, source, created_at, updated_at)
+      VALUES ('default', 'Personal', '#3b82f6', 1, 1, 'local', datetime('now'), datetime('now'));
     `,
     down: `
       DROP TABLE IF EXISTS calendar_events;
@@ -55,8 +56,8 @@ export const CALENDAR_MIGRATIONS: Migration[] = [
     module: "calendar",
     up: `
       -- Ensure default calendar always exists (idempotent)
-      INSERT OR IGNORE INTO calendars (id, name, color, is_default, is_visible, source, created_at)
-      VALUES ('default', 'Personal', '#3b82f6', 1, 1, 'local', datetime('now'));
+      INSERT OR IGNORE INTO calendars (id, name, color, is_default, is_visible, source, created_at, updated_at)
+      VALUES ('default', 'Personal', '#3b82f6', 1, 1, 'local', datetime('now'), datetime('now'));
     `,
     down: `SELECT 1;`,
   },
