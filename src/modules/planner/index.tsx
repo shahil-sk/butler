@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   ChevronLeft, ChevronRight, CalendarDays, LayoutGrid, Columns3,
-  Clock, Coffee, Layers, BookTemplate, Plus, Save, Trash2, CheckSquare,
+  Clock, Coffee, Layers, BookTemplate, CheckSquare, PanelRightClose, PanelRightOpen,
 } from "lucide-react";
 import { registry } from "@/kernel/router";
 import { usePlannerStore, type PlannerView } from "./store";
@@ -43,7 +43,7 @@ function fmtMins(m: number) {
   return h > 0 ? (r > 0 ? `${h}h ${r}m` : `${h}h`) : `${m}m`;
 }
 
-// ── Stats bar (unified: planner blocks + time entries + focus) ─
+// ── Stats bar ─────────────────────────────────────────────────
 function StatsBar({ date }: { date: string }) {
   const { getDayStats }  = usePlannerStore();
   const timeEntries      = useTimeStore((s) => s.entries);
@@ -51,12 +51,10 @@ function StatsBar({ date }: { date: string }) {
 
   const s = getDayStats(date);
 
-  // Tracked minutes from time-tracking entries for this date
   const trackedMins = timeEntries
     .filter((e) => e.endAt && e.startAt.startsWith(date))
     .reduce((a, e) => a + (e.durationMinutes ?? 0), 0);
 
-  // Focus minutes from completed focus sessions for this date
   const focusMins = focusSessions
     .filter((fs) => fs.type === "focus" && fs.completedAt && fs.startedAt?.startsWith(date))
     .reduce((a, fs) => a + (fs.actualMinutes ?? 0), 0);
@@ -65,7 +63,7 @@ function StatsBar({ date }: { date: string }) {
   if (s.totalBlocks === 0 && totalTracked === 0) return null;
 
   return (
-    <div className="flex items-center gap-3 px-6 py-2.5 border-b border-border/40 bg-surface-1/40 shrink-0 backdrop-blur-sm flex-wrap">
+    <div className="flex items-center gap-3 px-4 py-1.5 border-b border-border/40 bg-surface-1/40 shrink-0 backdrop-blur-sm flex-wrap">
       {s.totalBlocks > 0 && (
         <StatPill icon={<Layers size={9} />} label={`${s.totalBlocks} blocks`} />
       )}
@@ -157,7 +155,6 @@ function CustomPlanModal({ onClose }: { onClose: () => void }) {
       <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
 
       <div className="relative w-full max-w-md mx-4 rounded-xl bg-card border border-border shadow-xl flex flex-col max-h-[80vh]">
-        {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
           <div className="flex items-center gap-2">
             <BookTemplate size={14} className="text-primary" />
@@ -165,17 +162,15 @@ function CustomPlanModal({ onClose }: { onClose: () => void }) {
           </div>
           <button onClick={onClose}
             className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-fast">
-            ✕
+            \u2715
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
-
-          {/* Save today as template */}
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Save today as template</p>
             {todayBlocks.length === 0 ? (
-              <p className="text-xs text-muted-foreground/60 italic">No blocks on {format(parseISO(activeDate), "MMM d")} — add blocks first.</p>
+              <p className="text-xs text-muted-foreground/60 italic">No blocks on {format(parseISO(activeDate), "MMM d")} \u2014 add blocks first.</p>
             ) : (
               <div className="flex gap-2">
                 <input
@@ -190,14 +185,12 @@ function CustomPlanModal({ onClose }: { onClose: () => void }) {
                   disabled={!newName.trim() || saving}
                   className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 transition-opacity disabled:opacity-40"
                 >
-                  <Save size={12} />
-                  {saving ? "Saving…" : "Save"}
+                  {saving ? "Saving\u2026" : "Save"}
                 </button>
               </div>
             )}
           </div>
 
-          {/* Existing templates */}
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Apply a saved template</p>
             {templates.length === 0 ? (
@@ -214,7 +207,7 @@ function CustomPlanModal({ onClose }: { onClose: () => void }) {
                     <span className="truncate">{t.name}</span>
                     <span className="flex items-center gap-2 text-[10px] text-muted-foreground/60">
                       <span>{t.blocks.length} blocks</span>
-                      {applying === t.id && <span className="italic">Applying…</span>}
+                      {applying === t.id && <span className="italic">Applying\u2026</span>}
                     </span>
                   </button>
                 ))}
@@ -235,9 +228,10 @@ function CustomPlanModal({ onClose }: { onClose: () => void }) {
 
 export default function PlannerPage() {
   const { activeDate, setActiveDate, view, setView } = usePlannerStore();
-  const [showTemplates, setShowTemplates] = useState(false);
+  const [showTemplates,  setShowTemplates]  = useState(false);
+  const [sidebarOpen,    setSidebarOpen]    = useState(true);
 
-  const active = parseISO(activeDate);
+  const active    = parseISO(activeDate);
   const weekStart = startOfWeek(active, { weekStartsOn: 1 });
 
   const visibleDates: string[] = (() => {
@@ -246,105 +240,128 @@ export default function PlannerPage() {
     return Array.from({ length: 7 }, (_, i) => toISODate(addDays(weekStart, i)));
   })();
 
+  const dateLabel = view === "week"
+    ? `${format(weekStart, "MMM d")} \u2013 ${format(addDays(weekStart, 6), "MMM d")}`
+    : format(active, "EEE, MMM d");
+
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-3 border-b border-border bg-surface-1/60 backdrop-blur-sm">
-        <div className="flex items-center gap-3">
+      {/* ── Header ─────────────────────────────────────────────── */}
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-surface-1/60 backdrop-blur-sm shrink-0">
+        {/* Nav */}
+        <div className="flex items-center gap-1">
           <button
             onClick={() => setActiveDate(toISODate(addDays(active, view === "week" ? -7 : -1)))}
             className="p-1.5 rounded-md border border-border/60 hover:bg-accent transition-fast"
+            aria-label="Previous"
           >
-            <ChevronLeft size={14} />
+            <ChevronLeft size={13} />
           </button>
           <button
             onClick={() => setActiveDate(toISODate(new Date()))}
-            className="px-2.5 py-1.5 rounded-md border border-primary/70 bg-primary/10 text-[11px] font-semibold text-primary hover:bg-primary/15 transition-fast"
+            className="px-2 py-1 rounded-md border border-primary/60 bg-primary/8 text-[11px] font-semibold text-primary hover:bg-primary/15 transition-fast"
           >
             Today
           </button>
           <button
             onClick={() => setActiveDate(toISODate(addDays(active, view === "week" ? 7 : 1)))}
             className="p-1.5 rounded-md border border-border/60 hover:bg-accent transition-fast"
+            aria-label="Next"
           >
-            <ChevronRight size={14} />
-          </button>
-          <div className="flex flex-col">
-            <span className="text-sm font-semibold">
-              {view === "week"
-                ? `${format(weekStart, "MMM d")} – ${format(addDays(weekStart, 6), "MMM d, yyyy")}`
-                : format(active, "EEEE, MMM d, yyyy")}
-            </span>
-            {view !== "week" && (
-              <span className="text-[11px] text-muted-foreground/70">
-                Plan your deep work, breaks, and meetings in one place.
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <div className="inline-flex items-center rounded-md border border-border bg-background text-[11px]">
-            {VIEW_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => setView(opt.value)}
-                className={cn(
-                  "flex items-center gap-1 px-2.5 py-1.5 rounded-md transition-fast",
-                  view === opt.value
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "text-muted-foreground hover:bg-accent"
-                )}
-              >
-                <opt.icon size={11} />
-                {opt.label}
-              </button>
-            ))}
-          </div>
-
-          <button
-            onClick={() => setShowTemplates(true)}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-border bg-background text-[11px] font-medium text-muted-foreground hover:bg-accent transition-fast"
-          >
-            <BookTemplate size={11} />
-            Templates
+            <ChevronRight size={13} />
           </button>
         </div>
+
+        {/* Date label */}
+        <span className="text-sm font-semibold min-w-0 truncate">{dateLabel}</span>
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* View switcher */}
+        <div className="inline-flex items-center rounded-md border border-border bg-background text-[11px]">
+          {VIEW_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setView(opt.value)}
+              title={opt.label}
+              aria-label={opt.label}
+              className={cn(
+                "flex items-center gap-1 px-2.5 py-1.5 rounded-md transition-fast",
+                view === opt.value
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-accent"
+              )}
+            >
+              <opt.icon size={11} />
+              <span className="hidden sm:inline">{opt.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Templates */}
+        <button
+          onClick={() => setShowTemplates(true)}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-border bg-background text-[11px] font-medium text-muted-foreground hover:bg-accent transition-fast"
+        >
+          <BookTemplate size={11} />
+          <span className="hidden md:inline">Templates</span>
+        </button>
+
+        {/* Task sidebar toggle */}
+        <button
+          onClick={() => setSidebarOpen((v) => !v)}
+          title={sidebarOpen ? "Hide task panel" : "Show task panel"}
+          aria-label={sidebarOpen ? "Hide task panel" : "Show task panel"}
+          className={cn(
+            "p-1.5 rounded-md border transition-fast",
+            sidebarOpen
+              ? "border-primary/60 bg-primary/8 text-primary hover:bg-primary/15"
+              : "border-border/60 text-muted-foreground hover:bg-accent"
+          )}
+        >
+          {sidebarOpen ? <PanelRightClose size={13} /> : <PanelRightOpen size={13} />}
+        </button>
       </div>
 
-      {/* Stats bar for active day (only in day/3-day views) */}
+      {/* Stats bar */}
       {view !== "week" && <StatsBar date={activeDate} />}
 
-      {/* Body */}
+      {/* ── Body ───────────────────────────────────────────────── */}
       <div className="flex flex-1 min-h-0">
         {/* Planner grid */}
-        <div className="flex-1 flex flex-col border-r border-border bg-surface-1/40">
-          {/* Day columns header */}
-          <div className="grid" style={{ gridTemplateColumns: `repeat(${visibleDates.length}, minmax(0, 1fr))` }}>
+        <div className="flex-1 flex flex-col border-r border-border bg-surface-1/40 min-w-0">
+          {/* Day column headers */}
+          <div className="grid shrink-0" style={{ gridTemplateColumns: `repeat(${visibleDates.length}, minmax(0, 1fr))` }}>
             {visibleDates.map((d, idx) => {
-              const dObj = parseISO(d);
+              const dObj    = parseISO(d);
               const isToday = d === toISODate(new Date());
               return (
                 <button
                   key={d}
                   onClick={() => setActiveDate(d)}
                   className={cn(
-                    "flex flex-col items-start gap-0.5 px-6 py-2 border-b border-border/60 bg-surface-1/60",
+                    "flex items-center gap-2 px-4 py-1.5 border-b border-border/60 bg-surface-1/60 hover:bg-accent/40 transition-fast",
                     idx > 0 && "border-l border-border/60",
                     d === activeDate && "bg-primary/5"
                   )}
                 >
-                  <span className="text-[11px] font-medium text-muted-foreground/70 flex items-center gap-1">
-                    {view === "week" && (
-                      <span className="w-6 text-left text-[10px] text-muted-foreground/60 uppercase tracking-widest">
-                        {WEEK_DAYS[dObj.getDay() === 0 ? 6 : dObj.getDay() - 1]}
-                      </span>
-                    )}
-                    {isToday && <span className="px-1 py-0.5 rounded-full bg-primary/10 text-primary text-[9px] font-semibold">Today</span>}
+                  {view === "week" && (
+                    <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 shrink-0">
+                      {WEEK_DAYS[dObj.getDay() === 0 ? 6 : dObj.getDay() - 1]}
+                    </span>
+                  )}
+                  <span className={cn(
+                    "text-sm font-semibold tabular-nums",
+                    isToday && "text-primary"
+                  )}>
+                    {format(dObj, view === "week" ? "d" : "MMM d, yyyy")}
                   </span>
-                  <span className="text-sm font-semibold tabular-nums">
-                    {format(dObj, view === "week" ? "MMM d" : "MMM d, yyyy")}
-                  </span>
+                  {isToday && (
+                    <span className="px-1 py-0.5 rounded-full bg-primary/10 text-primary text-[9px] font-semibold leading-none">
+                      Today
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -358,10 +375,12 @@ export default function PlannerPage() {
           </div>
         </div>
 
-        {/* Task sidebar */}
-        <div className="w-[320px] shrink-0 bg-surface-2 border-l border-border">
-          <TaskSidebar visibleDates={visibleDates} />
-        </div>
+        {/* Task sidebar \u2014 collapsible */}
+        {sidebarOpen && (
+          <div className="w-[280px] shrink-0 bg-surface-2 border-l border-border overflow-hidden">
+            <TaskSidebar visibleDates={visibleDates} />
+          </div>
+        )}
       </div>
 
       {showTemplates && <CustomPlanModal onClose={() => setShowTemplates(false)} />}
@@ -369,6 +388,4 @@ export default function PlannerPage() {
   );
 }
 
-// Named export so Shell.tsx lazy import resolves correctly:
-// lazy(() => import("@/modules/planner").then((m) => ({ default: m.PlannerModule })))
 export const PlannerModule = PlannerPage;

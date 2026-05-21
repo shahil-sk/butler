@@ -18,7 +18,6 @@ const END_HOUR    = 24;
 const HOURS       = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i);
 const TOTAL_HEIGHT = HOUR_HEIGHT * HOURS.length;
 const MAJOR_HOURS = new Set([0, 6, 9, 12, 15, 18, 21]);
-// Minimum block height in px to keep the resize handle reachable
 const MIN_BLOCK_HEIGHT_PX = HOUR_HEIGHT / 4; // 15 min
 
 export function timeToY(time: string): number {
@@ -59,59 +58,68 @@ function DropGhost({ y, height }: { y: number; height: number }) {
 }
 
 // ── ResizeHandle ──────────────────────────────────────────────
-// FIX 1: Use setPointerCapture so the resize keeps working even if the pointer
-// leaves the element or moves fast. Without capture, pointerup on a different
-// element silently drops the listener and the resize gets stuck.
-function ResizeHandle({ blockId, startY }: { blockId: string; startY: number }) {
+// Use element-level pointer events (not window) so setPointerCapture routes
+// all move/up events here correctly — window listeners are skipped when
+// the pointer is captured to a specific element.
+function ResizeHandle({
+  blockId,
+  startY,
+  wrapRef,
+}: {
+  blockId: string;
+  startY: number;
+  wrapRef: React.RefObject<HTMLDivElement | null>;
+}) {
   const { resizeBlock } = usePlannerStore();
-  const rafRef   = useRef<number | null>(null);
-  // FIX 2: Keep a ref to gridRect so we don't re-query the DOM on every move.
-  // Re-querying inside the rAF callback causes layout thrashing and drops frames.
-  const rectRef  = useRef<DOMRect | null>(null);
+  const rafRef  = useRef<number | null>(null);
+  const rectRef = useRef<DOMRect | null>(null);
+  const scrollAtDownRef = useRef(0);
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       e.stopPropagation();
       e.preventDefault();
-      // Capture pointer to this element — moves and up events come here
-      // regardless of where the pointer physically is on the screen.
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      const el = e.currentTarget as HTMLElement;
+      el.setPointerCapture(e.pointerId);
 
-      const grid = (e.target as HTMLElement).closest(".day-col-grid") as HTMLElement | null
+      const grid = el.closest(".day-col-grid") as HTMLElement | null
         ?? document.querySelector(".day-col-grid") as HTMLElement | null;
-      rectRef.current = grid?.getBoundingClientRect() ?? null;
-
-      const onMove = (ev: PointerEvent) => {
-        if (!rectRef.current) return;
-        if (rafRef.current) cancelAnimationFrame(rafRef.current);
-        rafRef.current = requestAnimationFrame(() => {
-          if (!rectRef.current) return;
-          const y      = Math.max(startY + MIN_BLOCK_HEIGHT_PX, ev.clientY - rectRef.current.top);
-          const newEnd = snapMinutes(yToTime(y));
-          usePlannerStore.setState((s) => ({
-            blocks: s.blocks.map((b) => b.id === blockId ? { ...b, endTime: newEnd } : b),
-          }));
-        });
-      };
-
-      const onUp = async () => {
-        if (rafRef.current) cancelAnimationFrame(rafRef.current);
-        rectRef.current = null;
-        const b = usePlannerStore.getState().blocks.find((x) => x.id === blockId);
-        if (b) await resizeBlock(blockId, b.endTime);
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup",   onUp);
-      };
-
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup",   onUp);
+      rectRef.current       = grid?.getBoundingClientRect() ?? null;
+      scrollAtDownRef.current = wrapRef.current?.scrollTop ?? 0;
     },
-    [blockId, startY, resizeBlock]
+    [wrapRef]
   );
+
+  const onPointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!rectRef.current) return;
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        if (!rectRef.current) return;
+        const currentScroll = wrapRef.current?.scrollTop ?? scrollAtDownRef.current;
+        const scrollDelta   = currentScroll - scrollAtDownRef.current;
+        const y      = Math.max(startY + MIN_BLOCK_HEIGHT_PX, e.clientY - rectRef.current.top + scrollAtDownRef.current + scrollDelta);
+        const newEnd = snapMinutes(yToTime(y));
+        usePlannerStore.setState((s) => ({
+          blocks: s.blocks.map((b) => b.id === blockId ? { ...b, endTime: newEnd } : b),
+        }));
+      });
+    },
+    [blockId, startY, wrapRef]
+  );
+
+  const onPointerUp = useCallback(async () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rectRef.current = null;
+    const b = usePlannerStore.getState().blocks.find((x) => x.id === blockId);
+    if (b) await resizeBlock(blockId, b.endTime);
+  }, [blockId, resizeBlock]);
 
   return (
     <div
       onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
       className="absolute bottom-0 left-0 right-0 h-3 cursor-ns-resize flex items-center justify-center opacity-0 group-hover:opacity-100 transition-fast touch-none"
     >
       <div className="w-8 h-0.5 rounded-full bg-current opacity-40" />
@@ -156,7 +164,7 @@ function getBlockDurationMinutes(block: TimeBlock): number {
 
 // ── BlockCard ─────────────────────────────────────────────────
 function BlockCard({
-  block, tasks, projects, compact, onDelete, onEdit, onPointerDownGrip,
+  block, tasks, projects, compact, onDelete, onEdit, onPointerDownGrip, wrapRef,
 }: {
   block:    TimeBlock;
   tasks:    ReturnType<typeof useTaskStore.getState>["tasks"];
@@ -165,6 +173,7 @@ function BlockCard({
   onDelete: () => void;
   onEdit:   () => void;
   onPointerDownGrip: (e: React.PointerEvent) => void;
+  wrapRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const task    = block.taskId ? tasks.find((t) => t.id === block.taskId) : null;
   const project = task?.projectId ? projects.find((p) => p.id === task.projectId) : null;
@@ -284,7 +293,7 @@ function BlockCard({
             <div className="mt-0.5 space-y-1">
               <p className="text-[10px] text-muted-foreground/70 tabular-nums flex items-center justify-between gap-1">
                 <span className="font-medium">
-                  {fmt12(block.startTime)} – {fmt12(block.endTime)}
+                  {fmt12(block.startTime)} \u2013 {fmt12(block.endTime)}
                   {blockDuration > 0 && (
                     <span className="ml-1 opacity-50">
                       {blockDuration >= 60
@@ -350,7 +359,7 @@ function BlockCard({
         </div>
       </div>
 
-      <ResizeHandle blockId={block.id} startY={top} />
+      <ResizeHandle blockId={block.id} startY={top} wrapRef={wrapRef} />
     </div>
   );
 }
@@ -371,19 +380,15 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
 
   const [ghost, setGhost] = useState<{ y: number; height: number } | null>(null);
 
-  // FIX 3: Store ALL drag-move state in a single ref — blockId, offsetY, durationPx,
-  // AND a snapshot of gridRect + scrollTop captured at pointerdown time.
-  // The old code called getGridY() (which re-reads getBoundingClientRect) inside
-  // the move handler, but getBoundingClientRect returns values relative to the
-  // current viewport scroll. When the user scrolls the grid mid-drag, the
-  // rect changes and blocks teleport. Snapshotting at pointerdown and adding
-  // the scroll delta on each move event fixes this.
+  // All drag-move state in a single ref; geometry snapshot at pointerdown.
   const dragMoveRef = useRef<{
-    blockId:    string;
-    offsetY:    number;
-    durationPx: number;
-    gridRect:   DOMRect;
+    blockId:      string;
+    offsetY:      number;
+    durationPx:   number;
+    gridRect:     DOMRect;
     scrollAtDown: number;
+    gripEl:       HTMLElement;
+    pointerId:    number;
   } | null>(null);
 
   const blocks  = getBlocksForDate(date);
@@ -392,7 +397,6 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
   const isToday = date === toISODate(nowObj);
   const nowY    = isToday ? timeToY(nowTime) : null;
 
-  // Auto-scroll to current time (or 8 AM on non-today) on mount / date change
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
@@ -401,10 +405,6 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
 
-  // FIX 4: getGridY must account for the scroll position of the wrapper.
-  // The old version only subtracted gridRect.top (viewport-relative), but
-  // the grid is inside a scrollable container. Adding wrapRef.current.scrollTop
-  // gives the correct canvas-local Y even when the column is scrolled.
   const getGridY = useCallback((clientY: number, overrideRect?: DOMRect, overrideScroll?: number): number => {
     const rect   = overrideRect   ?? gridRef.current?.getBoundingClientRect();
     const scroll = overrideScroll ?? wrapRef.current?.scrollTop ?? 0;
@@ -442,28 +442,23 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
   }, [dragTaskId, date, getGridY, scheduleTask, createBlock, setDragTaskId]);
 
   // ── Block pointer-drag (move) ──────────────────────────────
-  // FIX 5: The old onPointerDownGrip had a stale-closure bug: the `blocks`
-  // array captured at creation time was used to look up the block, but after
-  // any re-render (e.g., a block color change) the closure held the OLD blocks
-  // array. Even if the block existed in the new render, the old closure
-  // couldn't find it and bailed out early with `if (!block) return`.
-  // Fix: read the block directly from the store at pointerdown time instead
-  // of from the closed-over `blocks` array, and remove `blocks` from deps.
+  // Capture the pointer to the GRID element so pointermove/pointerup
+  // correctly receive the captured events — window listeners are bypassed
+  // when pointer is captured, which was the root cause of drag sticking.
   const onPointerDownGrip = useCallback(
     (e: React.PointerEvent, blockId: string) => {
       e.preventDefault();
-      // Read live from store, not from stale closure
       const block = usePlannerStore.getState().blocks.find((b) => b.id === blockId);
       if (!block) return;
 
-      // Snapshot geometry at pointerdown — see FIX 3
-      const gridRect    = gridRef.current?.getBoundingClientRect();
+      const gridRect     = gridRef.current?.getBoundingClientRect();
       const scrollAtDown = wrapRef.current?.scrollTop ?? 0;
       if (!gridRect) return;
 
       const blockTop = timeToY(block.startTime);
       const durPx    = timeToY(block.endTime) - blockTop;
       const startY   = getGridY(e.clientY, gridRect, scrollAtDown);
+      const gripEl   = e.currentTarget as HTMLElement;
 
       dragMoveRef.current = {
         blockId,
@@ -471,54 +466,47 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
         durationPx: durPx,
         gridRect,
         scrollAtDown,
+        gripEl,
+        pointerId: e.pointerId,
       };
 
-      // FIX 1 (move): capture pointer so moves/up arrive even when pointer
-      // leaves the grip element or moves faster than the render loop.
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-
-      const onMove = (ev: PointerEvent) => {
-        const ref = dragMoveRef.current;
-        if (!ref) return;
-        // Account for scroll that happened since pointerdown (FIX 3)
-        const currentScroll = wrapRef.current?.scrollTop ?? ref.scrollAtDown;
-        const scrollDelta   = currentScroll - ref.scrollAtDown;
-        const y        = getGridY(ev.clientY, ref.gridRect, ref.scrollAtDown + scrollDelta) - ref.offsetY;
-        const snappedY = timeToY(snapMinutes(yToTime(Math.max(0, y))));
-        setGhost({ y: snappedY, height: ref.durationPx });
-      };
-
-      const onUp = async (ev: PointerEvent) => {
-        const ref = dragMoveRef.current;
-        dragMoveRef.current = null;
-        // FIX 5b: Always clear ghost even if we bail early
-        setGhost(null);
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup",   onUp);
-        if (!ref) return;
-
-        const currentScroll = wrapRef.current?.scrollTop ?? ref.scrollAtDown;
-        const scrollDelta   = currentScroll - ref.scrollAtDown;
-        const y        = getGridY(ev.clientY, ref.gridRect, ref.scrollAtDown + scrollDelta) - ref.offsetY;
-        const newStart = snapMinutes(yToTime(Math.max(0, y)));
-        const [sh, sm] = newStart.split(":").map(Number);
-        // Re-read block duration from store in case it was resized during drag
-        const liveBlock = usePlannerStore.getState().blocks.find((b) => b.id === ref.blockId);
-        if (!liveBlock) return;
-        const dur =
-          (parseInt(liveBlock.endTime.split(":")[0]) * 60 + parseInt(liveBlock.endTime.split(":")[1])) -
-          (parseInt(liveBlock.startTime.split(":")[0]) * 60 + parseInt(liveBlock.startTime.split(":")[1]));
-        const em2    = sh * 60 + sm + dur;
-        const newEnd = clampTime(`${String(Math.floor(em2 / 60)).padStart(2, "0")}:${String(em2 % 60).padStart(2, "0")}`);
-        await rescheduleBlock(ref.blockId, newStart, newEnd);
-      };
-
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup",   onUp);
+      // Capture to the GRID element so pointermove/pointerup fire on it
+      gridRef.current?.setPointerCapture(e.pointerId);
     },
-    // blocks intentionally removed — we read from store directly (FIX 5)
-    [getGridY, rescheduleBlock]
+    [getGridY]
   );
+
+  // Grid-level pointer move — receives captured events from grip drags
+  const onGridPointerMove = useCallback((e: React.PointerEvent) => {
+    const ref = dragMoveRef.current;
+    if (!ref || e.pointerId !== ref.pointerId) return;
+    const currentScroll = wrapRef.current?.scrollTop ?? ref.scrollAtDown;
+    const scrollDelta   = currentScroll - ref.scrollAtDown;
+    const y        = getGridY(e.clientY, ref.gridRect, ref.scrollAtDown + scrollDelta) - ref.offsetY;
+    const snappedY = timeToY(snapMinutes(yToTime(Math.max(0, y))));
+    setGhost({ y: snappedY, height: ref.durationPx });
+  }, [getGridY]);
+
+  const onGridPointerUp = useCallback(async (e: React.PointerEvent) => {
+    const ref = dragMoveRef.current;
+    dragMoveRef.current = null;
+    setGhost(null);
+    if (!ref || e.pointerId !== ref.pointerId) return;
+
+    const currentScroll = wrapRef.current?.scrollTop ?? ref.scrollAtDown;
+    const scrollDelta   = currentScroll - ref.scrollAtDown;
+    const y        = getGridY(e.clientY, ref.gridRect, ref.scrollAtDown + scrollDelta) - ref.offsetY;
+    const newStart = snapMinutes(yToTime(Math.max(0, y)));
+    const [sh, sm] = newStart.split(":").map(Number);
+    const liveBlock = usePlannerStore.getState().blocks.find((b) => b.id === ref.blockId);
+    if (!liveBlock) return;
+    const dur =
+      (parseInt(liveBlock.endTime.split(":")[0]) * 60 + parseInt(liveBlock.endTime.split(":")[1])) -
+      (parseInt(liveBlock.startTime.split(":")[0]) * 60 + parseInt(liveBlock.startTime.split(":")[1]));
+    const em2    = sh * 60 + sm + dur;
+    const newEnd = clampTime(`${String(Math.floor(em2 / 60)).padStart(2, "0")}:${String(em2 % 60).padStart(2, "0")}`);
+    await rescheduleBlock(ref.blockId, newStart, newEnd);
+  }, [getGridY, rescheduleBlock]);
 
   return (
     <div ref={wrapRef} className="flex flex-col flex-1 min-w-0 overflow-y-auto overflow-x-hidden">
@@ -529,6 +517,8 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
+        onPointerMove={onGridPointerMove}
+        onPointerUp={onGridPointerUp}
       >
         {/* Gutter */}
         <div
@@ -598,6 +588,7 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
             onDelete={() => void deleteBlock(block.id)}
             onEdit={() => setEditingBlockId(block.id)}
             onPointerDownGrip={(e) => onPointerDownGrip(e, block.id)}
+            wrapRef={wrapRef}
           />
         ))}
 
