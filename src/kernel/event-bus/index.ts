@@ -28,7 +28,7 @@ import type {
   ResearchAiJob,
 } from "@/shared/types";
 
-// ── Event map ────────────────────────────────────────────
+// ── Event map ────────────────────────────────────────────────
 
 export interface ButlerEventMap {
   // ── Navigation ──────────────────────────────────────────
@@ -45,6 +45,8 @@ export interface ButlerEventMap {
   "task:updated":              { task: Task; changed: Partial<Task> };
   "task:deleted":              { taskId: ID };
   "task:completed":            { taskId: ID; completedAt: string };
+  /** taskId + title kept for legacy; cancelledAt added per phase-4 spec */
+  "task:cancelled":            { taskId: ID; title: string; cancelledAt?: string };
   "task:restored":             { taskId: ID };
   "task:moved":                { taskId: ID; toProjectId: ID | null };
   "task:quick-add":            { prefill?: Partial<Task> };
@@ -57,6 +59,12 @@ export interface ButlerEventMap {
   "project:updated":           { project: Project; changed: Partial<Project> };
   "project:deleted":           { projectId: ID };
   "project:open":              { projectId: ID };
+  /**
+   * allTasksDone kept for legacy consumers.
+   * health field added per phase-4 spec for richer status signalling.
+   */
+  "project:health-changed":    { projectId: ID; allTasksDone: boolean; health?: "on-track" | "at-risk" | "overdue" };
+  "project:completed":         { projectId: ID; completedAt: string };
 
   // ── Note events ───────────────────────────────────────
   "note:created":              { note: Note };
@@ -64,6 +72,7 @@ export interface ButlerEventMap {
   "note:deleted":              { noteId: ID };
   "note:open":                 { noteId: ID };
   "note:link-to-task":         { noteId: ID; taskId: ID };
+  "note:wikilink-created":     { fromNoteId: ID; toNoteId: ID };
 
   // ── Calendar events ──────────────────────────────────
   "calendar:event-created":    { event: CalendarEvent };
@@ -76,6 +85,12 @@ export interface ButlerEventMap {
   "planner:block-linked-task": { blockId: ID; taskId: ID; date: string };
   /** Emitted when a planner block is unlinked from a task */
   "planner:block-unlinked-task": { blockId: ID; previousTaskId: ID };
+  /** Emitted when user checks off a planner block */
+  "planner:block-completed":   { blockId: ID; taskId?: ID; date: string; durationMinutes?: number };
+  /** Emitted when user creates a freeform block with no task */
+  "planner:block-created":     { blockId: ID; date: string; title: string; startTime: string; endTime: string; taskId?: ID };
+  /** Emitted when a planner block is removed */
+  "planner:block-deleted":     { blockId: ID; taskId?: ID; date: string };
 
   // ── Focus events ─────────────────────────────────────
   "focus:start-requested":     { taskId?: ID };
@@ -85,6 +100,7 @@ export interface ButlerEventMap {
   "focus:session-completed":   { session: FocusSession };
   "focus:session-cancelled":   { sessionId: ID };
   "focus:tick":                { sessionId: ID; remainingSeconds: number };
+  "focus:session-note-saved":  { sessionId: ID; taskId?: ID; noteId: ID };
 
   // ── Time tracking events ─────────────────────────────
   "time:entry-created":        { entry: TimeEntry };
@@ -92,11 +108,13 @@ export interface ButlerEventMap {
   "time:entry-deleted":        { entryId: ID };
   "time:timer-started":        { entryId: ID };
   "time:timer-stopped":        { entryId: ID };
+  "time:daily-summary":        { date: string; totalMinutes: number; byProject: Record<ID, number> };
 
   // ── Journal events ───────────────────────────────────
   "journal:entry-created":     { entry: JournalEntry };
   "journal:entry-updated":     { entry: JournalEntry };
   "journal:open-date":         { date: string };
+  "journal:tasks-injected":    { date: string; taskIds: ID[] };
 
   // ── Database events ──────────────────────────────────
   "database:created":       { database: Database };
