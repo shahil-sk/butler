@@ -28,7 +28,7 @@ import type {
   ResearchAiJob,
 } from "@/shared/types";
 
-// ── Event map ────────────────────────────────────────────
+// ── Event map ────────────────────────────────────────────────
 
 export interface ButlerEventMap {
   // ── Navigation ──────────────────────────────────────────
@@ -45,6 +45,7 @@ export interface ButlerEventMap {
   "task:updated":              { task: Task; changed: Partial<Task> };
   "task:deleted":              { taskId: ID };
   "task:completed":            { taskId: ID; completedAt: string };
+  "task:cancelled":            { taskId: ID; title: string };
   "task:restored":             { taskId: ID };
   "task:moved":                { taskId: ID; toProjectId: ID | null };
   "task:quick-add":            { prefill?: Partial<Task> };
@@ -57,6 +58,7 @@ export interface ButlerEventMap {
   "project:updated":           { project: Project; changed: Partial<Project> };
   "project:deleted":           { projectId: ID };
   "project:open":              { projectId: ID };
+  "project:health-changed":    { projectId: ID; allTasksDone: boolean };
 
   // ── Note events ───────────────────────────────────────
   "note:created":              { note: Note };
@@ -76,6 +78,12 @@ export interface ButlerEventMap {
   "planner:block-linked-task": { blockId: ID; taskId: ID; date: string };
   /** Emitted when a planner block is unlinked from a task */
   "planner:block-unlinked-task": { blockId: ID; previousTaskId: ID };
+  /** Emitted when user checks off a planner block */
+  "planner:block-completed":   { blockId: ID; taskId?: ID; date: string; durationMinutes?: number };
+  /** Emitted when user creates a freeform block with no task */
+  "planner:block-created":     { blockId: ID; date: string; title: string; startTime: string; endTime: string; taskId?: ID };
+  /** Emitted when a planner block is removed */
+  "planner:block-deleted":     { blockId: ID; taskId?: ID; date: string };
 
   // ── Focus events ─────────────────────────────────────
   "focus:start-requested":     { taskId?: ID };
