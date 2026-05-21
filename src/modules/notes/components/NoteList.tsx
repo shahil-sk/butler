@@ -1,93 +1,58 @@
-import { Plus, Search, Pin, FileText, Calendar, Users, Star } from "lucide-react";
+// ============================================================
+// NOTES — NoteList
+// Search only. Filter + new note actions live in index.tsx.
+// ============================================================
+
+import { Search, Pin, FileText, Calendar, Users, Star, StickyNote } from "lucide-react";
 import { cn, formatRelative } from "@/shared/utils";
 import { useNoteStore } from "../store";
-import { FilterBar, type FilterTab } from "@/shared/ui";
 import type { Note } from "@/shared/types";
 
-const FILTER_TABS: FilterTab[] = [
-  { id: "all",     label: "All" },
-  { id: "note",    label: "Notes" },
-  { id: "daily",   label: "Daily" },
-  { id: "meeting", label: "Meetings" },
-  { id: "pinned",  label: "Pinned" },
-];
-
 const TYPE_ICONS: Record<string, React.ElementType> = {
-  note:    FileText,
-  daily:   Calendar,
-  meeting: Users,
-  template:Star,
+  note:     StickyNote,
+  daily:    Calendar,
+  meeting:  Users,
+  template: Star,
 };
 
 export function NoteList() {
   const {
     searchQuery, setSearchQuery,
-    activeFilter, setActiveFilter,
     getFilteredNotes, openNote, openNoteId,
-    createNote, getOrCreateToday,
   } = useNoteStore();
 
   const notes = getFilteredNotes();
 
-  const handleNewNote = async () => {
-    const note = await createNote();
-    openNote(note.id);
-  };
-
-  const handleTodayNote = async () => {
-    const note = await getOrCreateToday();
-    openNote(note.id);
-  };
-
   return (
-    <div className="flex flex-col w-64 shrink-0 border-r border-border bg-surface-1 h-full overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center gap-1.5 px-3 py-2.5 border-b border-border shrink-0">
-        <span className="text-xs font-semibold flex-1 text-muted-foreground uppercase tracking-widest">
-          Notes
-        </span>
-        <button
-          onClick={handleTodayNote}
-          title="Today's note"
-          className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-fast"
-        >
-          <Calendar size={13} />
-        </button>
-        <button
-          onClick={() => void handleNewNote()}
-          title="New note"
-          className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-fast"
-        >
-          <Plus size={13} />
-        </button>
-      </div>
+    <div className="flex flex-col h-full min-h-0 bg-[hsl(var(--surface-1))]">
 
-      {/* Search */}
-      <div className="px-2 py-1.5 border-b border-border shrink-0">
-        <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-background border border-border">
-          <Search size={11} className="text-muted-foreground/50 shrink-0" />
+    <div className="flex items-center justify-between px-4 py-2.5 shrink-0">
+    <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+    Search
+    </span>
+    </div>
+
+      {/* ── Search ─────────────────────────────────────────── */}
+      <div className="px-3 pb-2 shrink-0">
+        <label className="flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-muted/40 border border-border/40 focus-within:ring-1 focus-within:ring-primary/25 transition-all">
+          <Search size={11} className="text-muted-foreground/40 shrink-0" />
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search notes…"
-            className="flex-1 text-xs bg-transparent outline-none placeholder:text-muted-foreground/40"
+            placeholder="Search…"
+            className="flex-1 bg-transparent text-[12px] placeholder:text-muted-foreground/40 focus:outline-none"
           />
-        </div>
+        </label>
       </div>
 
-      {/* Filter tabs */}
-      <FilterBar
-        tabs={FILTER_TABS}
-        activeId={activeFilter}
-        onSelect={(id) => setActiveFilter(id as typeof activeFilter)}
-        className="px-2 py-1"
-      />
-
-      {/* Note list */}
-      <div className="flex-1 overflow-y-auto py-1">
+      {/* ── Note items ─────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto min-h-0 py-1 px-1.5">
         {notes.length === 0 ? (
-          <div className="px-3 py-8 text-center text-xs text-muted-foreground/60">
-            {searchQuery ? "No matching notes" : "No notes yet"}
+          <div className="flex flex-col items-center justify-center gap-2 py-12">
+            <FileText size={26} className="text-muted-foreground/25" />
+            <p className="text-[11px] text-muted-foreground/40 italic">
+              {searchQuery ? "No matching notes" : "No notes yet"}
+            </p>
           </div>
         ) : (
           notes.map((note) => (
@@ -104,52 +69,65 @@ export function NoteList() {
   );
 }
 
-function NoteListItem({
-  note, isActive, onOpen,
-}: {
+// ── Note row ──────────────────────────────────────────────────
+function NoteListItem({ note, isActive, onOpen }: {
   note: Note;
   isActive: boolean;
   onOpen: () => void;
 }) {
   const Icon = TYPE_ICONS[note.type] ?? FileText;
 
-  // Extract plain text preview from Tiptap JSON
   const preview = (() => {
     try {
       const doc = JSON.parse(note.content);
       const texts: string[] = [];
       const walk = (node: { type?: string; text?: string; content?: unknown[] }) => {
         if (node.text) texts.push(node.text);
-        if (node.content) node.content.forEach((c) => walk(c as typeof node));
+        node.content?.forEach((c) => walk(c as typeof node));
       };
       walk(doc);
       return texts.join(" ").slice(0, 80);
-    } catch {
-      return "";
-    }
+    } catch { return ""; }
   })();
 
   return (
     <button
       onClick={onOpen}
       className={cn(
-        "w-full text-left flex flex-col gap-0.5 px-3 py-2.5 transition-fast",
-        isActive
-          ? "bg-primary/8 border-r-2 border-r-primary"
-          : "hover:bg-accent/60 border-r-2 border-r-transparent"
+        "w-full text-left flex flex-col gap-0.5 px-3 py-2.5 rounded-lg mb-px transition-colors",
+        isActive ? "bg-accent" : "hover:bg-accent/60",
       )}
     >
-      <div className="flex items-center gap-1.5">
-        {note.isPinned && <Pin size={10} className="text-muted-foreground/60 shrink-0" />}
-        <Icon size={11} className="text-muted-foreground/60 shrink-0" />
-        <span className="text-xs font-medium truncate flex-1">{note.title}</span>
+      {/* Title row */}
+      <div className="flex items-center gap-1.5 min-w-0">
+        {note.isPinned
+          ? <Pin size={10} className="text-primary shrink-0" />
+          : <Icon size={11} className="text-muted-foreground/60 shrink-0" />
+        }
+        <span className={cn(
+          "text-[13px] font-medium truncate leading-tight",
+          isActive ? "text-foreground" : "text-foreground/90",
+        )}>
+          {note.title || "Untitled"}
+        </span>
       </div>
+
+      {/* Preview */}
       {preview && (
-        <p className="text-[11px] text-muted-foreground/60 truncate pl-5">{preview}</p>
+        <p className="text-[11px] truncate leading-snug text-muted-foreground/60 pl-[18px]">
+          {preview}
+        </p>
       )}
-      <span className="text-[10px] text-muted-foreground/40 pl-5 tabular-nums">
-        {formatRelative(note.updatedAt)}
-      </span>
+
+      {/* Meta */}
+      <div className="flex items-center gap-2 text-[10px] tabular-nums text-muted-foreground/50 pl-[18px]">
+        <span>{formatRelative(note.updatedAt)}</span>
+        {note.tags.length > 0 && (
+          <span className="text-muted-foreground/40">
+            {note.tags.slice(0, 2).map((t) => `#${t}`).join(" ")}
+          </span>
+        )}
+      </div>
     </button>
   );
 }

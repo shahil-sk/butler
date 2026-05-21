@@ -1,7 +1,7 @@
 // src/modules/calendar/events.ts
 
 import { bus } from '@/kernel/event-bus'
-import type { CalendarEvent } from './db'
+import type { CalendarEvent } from '@/shared/types'
 
 export const calendarEvents = {
   emit: {

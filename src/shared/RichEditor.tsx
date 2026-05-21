@@ -3,7 +3,7 @@
 // Generic Tiptap editor. No store coupling.
 //
 // Props:
-//   content      — Tiptap JSON string or plain text
+//   content      — Tiptap JSON string, plain markdown, or plain text
 //   onChange     — called with JSON string (debounced)
 //   placeholder  — editor placeholder text
 //   debounceMs   — debounce delay, default 800
@@ -12,6 +12,13 @@
 //   borderless   — removes outer border (Notes: NoteToolbar provides chrome)
 //   className    — wrapper class
 //   resetKey     — resets editor content when changed (e.g. note.id)
+//
+// FIX 1: Markdown input — uses @tiptap/extension-markdown to accept
+//         raw markdown strings and render them as Tiptap nodes.
+//         Install: pnpm add @tiptap/extension-markdown
+//
+// FIX 2: Sticky toolbar — toolbar is position:sticky top-0 z-10,
+//         editor area scrolls independently beneath it.
 //
 // Used by:
 //   Notes    → NoteEditor.tsx (borderless, full height)
@@ -25,6 +32,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import Link from "@tiptap/extension-link";
+import { Markdown } from "tiptap-markdown";
 import { useEffect, useCallback, useRef } from "react";
 import { cn } from "@/shared/utils";
 import type { Editor } from "@tiptap/react";
@@ -59,7 +67,8 @@ function Sep() {
 
 function Toolbar({ editor }: { editor: Editor }) {
   return (
-    <div className="flex items-center gap-0.5 px-2 py-1 border-b border-border bg-background shrink-0 flex-wrap">
+    // FIX 2: sticky — stays pinned while editor content scrolls
+    <div className="sticky top-0 z-10 flex items-center gap-0.5 px-2 py-1 border-b border-border bg-background shrink-0 flex-wrap">
       <ToolbarBtn title="Heading 1" active={editor.isActive("heading", { level: 1 })}
         onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}>H1</ToolbarBtn>
       <ToolbarBtn title="Heading 2" active={editor.isActive("heading", { level: 2 })}
@@ -117,9 +126,23 @@ function useDebounced<T extends (...args: Parameters<T>) => void>(fn: T, ms: num
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/**
+ * Parse content for Tiptap.
+ * tiptap-markdown patches setContent() to accept raw markdown strings directly.
+ * Just detect JSON vs markdown and return appropriately.
+ *   1. Empty        → ""
+ *   2. Tiptap JSON  → parsed object
+ *   3. Markdown/text → raw string (tiptap-markdown handles it)
+ */
 function parseContent(raw: string): object | string {
   if (!raw || raw === "{}") return "";
-  try { return JSON.parse(raw); } catch { return raw; }
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && parsed.type === "doc") return parsed;
+    return raw; // unexpected JSON shape → treat as text
+  } catch {
+    return raw; // raw markdown string
+  }
 }
 
 // ── RichEditor ────────────────────────────────────────────────────────────────
@@ -163,6 +186,12 @@ export function RichEditor({
       TaskList,
       TaskItem.configure({ nested: true }),
       Link.configure({ openOnClick: false }),
+      Markdown.configure({
+        html:                false,
+        tightLists:          true,
+        transformPastedText: true,   // paste markdown → rendered nodes
+        transformCopiedText: false,
+      }),
     ],
     content: parseContent(content),
     onUpdate: ({ editor }) => {
@@ -204,10 +233,12 @@ export function RichEditor({
   }, [resetKey]);
 
   return (
+    // FIX 2: outer wrapper does NOT overflow-hidden — allows sticky to work.
+    // The scrolling container must be the PARENT (NoteEditor / EntryEditor),
+    // not this wrapper. overflow-hidden on this wrapper would clip sticky.
     <div className={cn(
       "flex flex-col bg-background",
-      !borderless && "border border-border rounded-lg overflow-hidden",
-      borderless  && "overflow-hidden",
+      !borderless && "border border-border rounded-lg",
       className
     )}>
       {showToolbar && editor && <Toolbar editor={editor} />}

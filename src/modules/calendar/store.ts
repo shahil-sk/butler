@@ -5,7 +5,7 @@ import { generateId, now, today, toISODate } from "@/shared/utils";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addMonths, subMonths, addWeeks, subWeeks } from "date-fns";
 import type { CalendarEvent, Calendar, ID } from "@/shared/types";
 
-// ── DB row → entity ───────────────────────────────────────────
+// ── DB row → entity ─────────────────────────────────────────────
 
 function rowToEvent(r: Record<string, unknown>): CalendarEvent {
   return {
@@ -73,14 +73,21 @@ function updateEventParams(e: CalendarEvent): unknown[] {
   ];
 }
 
-// ── Types ─────────────────────────────────────────────────────
+// ── Debounce helper ──────────────────────────────────────────────
+let loadEventsTimer: ReturnType<typeof setTimeout> | null = null;
+function debounceLoadEvents(fn: () => void, ms = 150) {
+  if (loadEventsTimer) clearTimeout(loadEventsTimer);
+  loadEventsTimer = setTimeout(fn, ms);
+}
+
+// ── Types ─────────────────────────────────────────────────
 
 export type CalendarView = "month" | "week" | "day" | "agenda";
 
 interface EventFormState {
-  open: boolean;
-  prefill: Partial<CalendarEvent>;
-  editingId: ID | null;
+  open:      boolean;
+  prefill:   Partial<CalendarEvent>;
+  editingId: ID | undefined;
 }
 
 interface CalendarState {
@@ -93,26 +100,27 @@ interface CalendarState {
 }
 
 interface CalendarActions {
-  loadEvents:     (from: string, to: string) => Promise<void>;
-  loadCalendars:  () => Promise<void>;
-  createEvent:    (input: Partial<CalendarEvent>) => Promise<CalendarEvent>;
-  updateEvent:    (id: ID, patch: Partial<CalendarEvent>) => Promise<void>;
-  deleteEvent:    (id: ID) => Promise<void>;
-  setView:        (v: CalendarView) => void;
-  setActiveDate:  (d: string) => void;
-  openEventForm:  (prefill?: Partial<CalendarEvent>, editingId?: ID) => void;
-  closeEventForm: () => void;
-  goToday:        () => void;
-  goNext:         () => void;
-  goPrev:         () => void;
-  getEventsInRange: (from: string, to: string) => CalendarEvent[];
-  getEventsForDay:  (date: string) => CalendarEvent[];
+  loadEvents:          (from: string, to: string) => Promise<void>;
+  loadCalendars:       () => Promise<void>;
+  createEvent:         (input: Partial<CalendarEvent>) => Promise<CalendarEvent>;
+  updateEvent:         (id: ID, patch: Partial<CalendarEvent>) => Promise<void>;
+  deleteEvent:         (id: ID) => Promise<void>;
+  setView:             (v: CalendarView) => void;
+  setActiveDate:       (d: string) => void;
+  openEventForm:       (prefill?: Partial<CalendarEvent>, editingId?: ID) => void;
+  closeEventForm:      () => void;
+  goToday:             () => void;
+  goNext:              () => void;
+  goPrev:              () => void;
+  getEventsInRange:    (from: string, to: string) => CalendarEvent[];
+  getEventsForDay:     (date: string) => CalendarEvent[];
+  scheduledLoadEvents: (from: string, to: string) => void;
 }
 
 export const useCalendarStore = create<CalendarState & CalendarActions>()((set, get) => ({
   events: [], calendars: [], loading: false,
   view: "month", activeDate: today(),
-  eventForm: { open: false, prefill: {}, editingId: null },
+  eventForm: { open: false, prefill: {}, editingId: undefined },
 
   loadCalendars: async () => {
     try {
@@ -126,18 +134,26 @@ export const useCalendarStore = create<CalendarState & CalendarActions>()((set, 
   loadEvents: async (from, to) => {
     set({ loading: true });
     try {
+      // end_at >= from catches events that straddle the window start boundary
       const rows = await db.select<Record<string, unknown>>(
-        "SELECT * FROM calendar_events WHERE start_at >= ? AND start_at <= ? ORDER BY start_at ASC",
+        "SELECT * FROM calendar_events WHERE end_at >= ? AND start_at <= ? ORDER BY start_at ASC",
         [from, to]
       );
+      const loaded = rows.map(rowToEvent);
       set((s) => {
-        const outside = s.events.filter((e) => e.startAt < from || e.startAt > to);
-        return { events: [...outside, ...rows.map(rowToEvent)], loading: false };
+        const outside = s.events.filter(
+          (e) => e.endAt < from || e.startAt > to
+        );
+        return { events: [...outside, ...loaded], loading: false };
       });
     } catch (err) {
       console.error("[Calendar] loadEvents error:", err);
       set({ loading: false });
     }
+  },
+
+  scheduledLoadEvents: (from, to) => {
+    debounceLoadEvents(() => get().loadEvents(from, to));
   },
 
   createEvent: async (input) => {
@@ -182,10 +198,10 @@ export const useCalendarStore = create<CalendarState & CalendarActions>()((set, 
   setView:       (v) => set({ view: v }),
   setActiveDate: (d) => set({ activeDate: d }),
 
-  openEventForm:  (prefill = {}, editingId = null) =>
+  openEventForm:  (prefill = {}, editingId?: ID) =>
     set({ eventForm: { open: true, prefill, editingId } }),
   closeEventForm: () =>
-    set({ eventForm: { open: false, prefill: {}, editingId: null } }),
+    set({ eventForm: { open: false, prefill: {}, editingId: undefined } }),
 
   goToday: () => set({ activeDate: today() }),
 
@@ -208,12 +224,23 @@ export const useCalendarStore = create<CalendarState & CalendarActions>()((set, 
   getEventsInRange: (from, to) =>
     get().events.filter((e) => {
       const visible = get().calendars.find((c) => c.id === e.calendarId)?.isVisible ?? true;
-      return visible && e.startAt >= from && e.startAt <= to;
+      // Overlap check: event overlaps [from, to] if it starts before to AND ends after from
+      return visible && e.endAt >= from && e.startAt <= to;
     }),
 
   getEventsForDay: (date) => {
-    const start = `${date}T00:00:00`;
-    const end   = `${date}T23:59:59`;
-    return get().getEventsInRange(start, end);
+    // Use date prefix comparison so events stored as "YYYY-MM-DDThh:mm:ss"
+    // (no timezone suffix) and all-day events stored as "YYYY-MM-DD" both match.
+    // An event belongs to this day if it starts before end-of-day AND ends after start-of-day.
+    const dayStart = `${date}T00:00:00.000`;
+    const dayEnd   = `${date}T23:59:59.999`;
+    return get().events.filter((e) => {
+      const visible = get().calendars.find((c) => c.id === e.calendarId)?.isVisible ?? true;
+      if (!visible) return false;
+      // All-day events are stored as bare date strings ("YYYY-MM-DD") — compare by prefix
+      if (e.allDay) return e.startAt.startsWith(date) || e.endAt.startsWith(date);
+      // Timed events: overlap check against day boundaries
+      return e.startAt <= dayEnd && e.endAt >= dayStart;
+    });
   },
 }));

@@ -1,158 +1,408 @@
-import { useState } from "react";
+// ============================================================
+// NOTES — NoteToolbar  (journal redesign)
+// Big title + subtle divider + meta row.
+// Full dark/light support via hsl(var(--*)) tokens.
+// ============================================================
+
+import { useState, useRef, useEffect } from "react";
 import {
-  Pin, PinOff, Trash2, MoreHorizontal, Tag,
-  CheckSquare, FolderKanban, Calendar, Plus, X, Circle, CheckCircle2,
+  Tag, Link2, MoreHorizontal, X, Trash2, Pin,
+  CheckCircle2, Circle, Calendar, Hash,
 } from "lucide-react";
-import { cn, formatDate } from "@/shared/utils";
-import { ProjectDot } from "@/shared/ui";
+import { cn } from "@/shared/utils";
 import { useNoteStore } from "../store";
 import { useTaskStore } from "@/modules/tasks/store";
 import { useProjectStore } from "@/modules/projects/store";
 import { useCalendarStore } from "@/modules/calendar/store";
+import { ProjectDot } from "@/shared/ui";
 import { bus } from "@/kernel/event-bus";
 import type { Note } from "@/shared/types";
 
-const TYPE_LABELS: Record<string, string> = {
-  note: "Note", daily: "Daily", meeting: "Meeting", template: "Template",
-};
+interface NoteToolbarProps { note: Note; }
 
-export function NoteToolbar({ note }: { note: Note }) {
-  const { updateNote, deleteNote, closeNote, pinNote } = useNoteStore();
+// ── Tiny toolbar icon button ───────────────────────────────────
+function TBtn({
+  children, title, danger = false, active = false, onClick,
+}: {
+  children: React.ReactNode;
+  title?: string;
+  danger?: boolean;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className="w-7 h-7 flex items-center justify-center rounded-md transition-fast shrink-0"
+      style={{
+        color: danger
+          ? "hsl(var(--destructive))"
+          : active
+            ? "hsl(var(--primary))"
+            : "hsl(var(--muted-foreground))",
+        background: active ? "hsl(var(--primary) / 0.10)" : "transparent",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = danger
+          ? "hsl(var(--destructive) / 0.10)"
+          : "hsl(var(--accent))";
+        e.currentTarget.style.color = danger
+          ? "hsl(var(--destructive))"
+          : "hsl(var(--foreground))";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = active ? "hsl(var(--primary) / 0.10)" : "transparent";
+        e.currentTarget.style.color = danger
+          ? "hsl(var(--destructive))"
+          : active ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))";
+      }}
+    >
+      {children}
+    </button>
+  );
+}
 
-  // Cross-module stores — read-only for display
+// ── Linked-entity chip ─────────────────────────────────────────
+function LinkedChip({ label, icon, onOpen, onRemove }: {
+  label: string;
+  icon: React.ReactNode;
+  onOpen: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <span
+      className="group/chip inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[11px] font-medium max-w-[160px] transition-fast"
+      style={{
+        background: "hsl(var(--muted) / 0.6)",
+        border: "1px solid hsl(var(--border))",
+        color: "hsl(var(--muted-foreground))",
+      }}
+    >
+      {icon}
+      <button
+        onClick={onOpen}
+        className="truncate transition-fast"
+        title={label}
+        onMouseEnter={(e) => (e.currentTarget.style.color = "hsl(var(--primary))")}
+        onMouseLeave={(e) => (e.currentTarget.style.color = "hsl(var(--muted-foreground))")}
+      >
+        {label}
+      </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); onRemove(); }}
+        className="opacity-0 group-hover/chip:opacity-100 w-4 h-4 flex items-center justify-center rounded-full transition-fast shrink-0"
+        style={{ color: "hsl(var(--muted-foreground))" }}
+        aria-label="Unlink"
+        onMouseEnter={(e) => (e.currentTarget.style.background = "hsl(var(--accent))")}
+        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+      >
+        <X size={9} />
+      </button>
+    </span>
+  );
+}
+
+// ── Tag chip ───────────────────────────────────────────────────
+function TagChip({ tag, onRemove }: { tag: string; onRemove: () => void }) {
+  return (
+    <span
+      className="group/tag inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[11px] font-medium transition-fast"
+      style={{
+        background: "hsl(var(--primary) / 0.08)",
+        border: "1px solid hsl(var(--primary) / 0.20)",
+        color: "hsl(var(--primary))",
+      }}
+    >
+      <Hash size={9} />
+      {tag}
+      <button
+        onClick={onRemove}
+        className="opacity-0 group-hover/tag:opacity-100 w-4 h-4 flex items-center justify-center rounded-full transition-fast shrink-0"
+        aria-label="Remove tag"
+        onMouseEnter={(e) => (e.currentTarget.style.background = "hsl(var(--primary) / 0.12)")}
+        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+      >
+        <X size={9} />
+      </button>
+    </span>
+  );
+}
+
+// ── Link popup ────────────────────────────────────────────────
+function LinkPopup({
+  note, tasks, projects, onLinkTask, onLinkProject, onClose,
+}: {
+  note: Note;
+  tasks: ReturnType<typeof useTaskStore.getState>["tasks"];
+  projects: ReturnType<typeof useProjectStore.getState>["projects"];
+  onLinkTask: (id: string) => void;
+  onLinkProject: (id: string) => void;
+  onClose: () => void;
+}) {
+  const [tab, setTab] = useState<"tasks" | "projects">("tasks");
+  const [q,   setQ]   = useState("");
+
+  const filteredTasks    = tasks.filter((t)    => t.title.toLowerCase().includes(q.toLowerCase())).slice(0, 8);
+  const filteredProjects = projects.filter((p) => p.name.toLowerCase().includes(q.toLowerCase())).slice(0, 8);
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} />
+      <div
+        className="absolute right-0 top-full mt-1.5 z-50 w-60 rounded-xl overflow-hidden"
+        style={{
+          background: "hsl(var(--popover))",
+          border: "1px solid hsl(var(--border))",
+          boxShadow: "var(--shadow-lg)",
+        }}
+      >
+        {/* Tabs */}
+        <div
+          className="flex"
+          style={{ borderBottom: "1px solid hsl(var(--border))" }}
+        >
+          {(["tasks", "projects"] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => { setTab(t); setQ(""); }}
+              className="flex-1 py-2 text-[11px] font-semibold capitalize transition-fast"
+              style={{
+                color: tab === t ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))",
+                borderBottom: tab === t
+                  ? "2px solid hsl(var(--primary))"
+                  : "2px solid transparent",
+              }}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+
+        {/* Search */}
+        <div className="px-3 pt-2.5 pb-1.5">
+          <input
+            autoFocus
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={`Search ${tab}…`}
+            className="w-full text-[12px] rounded-md px-2.5 py-1.5 outline-none"
+            style={{
+              background: "hsl(var(--muted) / 0.5)",
+              color: "hsl(var(--foreground))",
+            }}
+          />
+        </div>
+
+        {/* Results */}
+        <div className="max-h-44 overflow-y-auto py-1">
+          {tab === "tasks" && (
+            filteredTasks.length === 0
+              ? <p className="px-4 py-3 text-[11px]" style={{ color: "hsl(var(--muted-foreground) / 0.5)" }}>No tasks</p>
+              : filteredTasks.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => onLinkTask(t.id)}
+                    className={cn(
+                      "w-full flex items-center gap-2 px-3 py-2 text-[12px] text-left transition-fast",
+                      note.linkedTaskIds.includes(t.id) && "opacity-40 pointer-events-none"
+                    )}
+                    style={{ color: "hsl(var(--foreground))" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "hsl(var(--accent))")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  >
+                    {t.status === "done"
+                      ? <CheckCircle2 size={11} style={{ color: "hsl(var(--success))", flexShrink: 0 }} />
+                      : <Circle       size={11} style={{ color: "hsl(var(--muted-foreground) / 0.4)", flexShrink: 0 }} />}
+                    <span className="flex-1 truncate">{t.title}</span>
+                    {note.linkedTaskIds.includes(t.id) && (
+                      <span className="text-[10px]" style={{ color: "hsl(var(--muted-foreground))" }}>linked</span>
+                    )}
+                  </button>
+                ))
+          )}
+          {tab === "projects" && (
+            filteredProjects.length === 0
+              ? <p className="px-4 py-3 text-[11px]" style={{ color: "hsl(var(--muted-foreground) / 0.5)" }}>No projects</p>
+              : filteredProjects.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => onLinkProject(p.id)}
+                    className={cn(
+                      "w-full flex items-center gap-2 px-3 py-2 text-[12px] text-left transition-fast",
+                      note.linkedProjectIds?.includes(p.id) && "opacity-40 pointer-events-none"
+                    )}
+                    style={{ color: "hsl(var(--foreground))" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "hsl(var(--accent))")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  >
+                    <ProjectDot color={p.color} size={7} />
+                    <span className="flex-1 truncate">{p.name}</span>
+                    {note.linkedProjectIds?.includes(p.id) && (
+                      <span className="text-[10px]" style={{ color: "hsl(var(--muted-foreground))" }}>linked</span>
+                    )}
+                  </button>
+                ))
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Main toolbar ───────────────────────────────────────────────
+export function NoteToolbar({ note }: NoteToolbarProps) {
+  const { updateNote, deleteNote, closeNote } = useNoteStore();
   const tasks    = useTaskStore((s) => s.tasks);
   const projects = useProjectStore((s) => s.projects);
   const events   = useCalendarStore((s) => s.events);
 
-  const [title,      setTitle]      = useState(note.title);
-  const [menuOpen,   setMenuOpen]   = useState(false);
-  const [linkPanel,  setLinkPanel]  = useState<"tasks" | "projects" | "events" | null>(null);
-  const [linkSearch, setLinkSearch] = useState("");
-
   const linkedTasks    = tasks.filter((t)    => note.linkedTaskIds.includes(t.id));
-  const linkedProjects = projects.filter((p) => note.linkedProjectIds.includes(p.id));
-  const linkedEvents   = events.filter((e)   => note.linkedEventIds.includes(e.id));
+  const linkedProjects = projects.filter((p) => note.linkedProjectIds?.includes(p.id));
+  const linkedEvents   = events.filter((e)   => note.linkedEventIds?.includes(e.id));
 
-  const handleTitleBlur = () => {
-    if (title.trim() && title !== note.title) void updateNote(note.id, { title: title.trim() });
+  const [title,     setTitle]     = useState(note.title);
+  const [tagInput,  setTagInput]  = useState("");
+  const [linkOpen,  setLinkOpen]  = useState(false);
+  const [menuOpen,  setMenuOpen]  = useState(false);
+
+  const titleRef = useRef<HTMLInputElement>(null);
+  const menuRef  = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { setTitle(note.title); }, [note.id, note.title]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const h = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [menuOpen]);
+
+  const saveTitle = () => {
+    const t = title.trim() || "Untitled";
+    if (t !== note.title) void updateNote(note.id, { title: t });
   };
+
+  const addTag = (raw: string) => {
+    const t = raw.trim().toLowerCase().replace(/^#+/, "");
+    if (!t || note.tags.includes(t)) return;
+    void updateNote(note.id, { tags: [...note.tags, t] });
+    setTagInput("");
+  };
+
+  const removeTag     = (tag: string) => void updateNote(note.id, { tags: note.tags.filter((x) => x !== tag) });
+  const unlinkTask    = (id: string)  => void updateNote(note.id, { linkedTaskIds:    note.linkedTaskIds.filter((x) => x !== id) });
+  const unlinkProject = (id: string)  => void updateNote(note.id, { linkedProjectIds: (note.linkedProjectIds ?? []).filter((x) => x !== id) });
+  const unlinkEvent   = (id: string)  => void updateNote(note.id, { linkedEventIds:   (note.linkedEventIds ?? []).filter((x) => x !== id) });
 
   const linkTask = (taskId: string) => {
     if (note.linkedTaskIds.includes(taskId)) return;
-    const updated = [...note.linkedTaskIds, taskId];
-    void updateNote(note.id, { linkedTaskIds: updated });
+    void updateNote(note.id, { linkedTaskIds: [...note.linkedTaskIds, taskId] });
     bus.emit("note:link-to-task", { noteId: note.id, taskId });
+    setLinkOpen(false);
   };
-
-  const unlinkTask = (taskId: string) => {
-    void updateNote(note.id, { linkedTaskIds: note.linkedTaskIds.filter((id) => id !== taskId) });
-  };
-
   const linkProject = (projectId: string) => {
-    if (note.linkedProjectIds.includes(projectId)) return;
-    void updateNote(note.id, { linkedProjectIds: [...note.linkedProjectIds, projectId] });
+    if (note.linkedProjectIds?.includes(projectId)) return;
+    void updateNote(note.id, { linkedProjectIds: [...(note.linkedProjectIds ?? []), projectId] });
+    setLinkOpen(false);
   };
-
-  const unlinkProject = (projectId: string) => {
-    void updateNote(note.id, { linkedProjectIds: note.linkedProjectIds.filter((id) => id !== projectId) });
-  };
-
-  const linkEvent = (eventId: string) => {
-    if (note.linkedEventIds.includes(eventId)) return;
-    void updateNote(note.id, { linkedEventIds: [...note.linkedEventIds, eventId] });
-  };
-
-  const unlinkEvent = (eventId: string) => {
-    void updateNote(note.id, { linkedEventIds: note.linkedEventIds.filter((id) => id !== eventId) });
-  };
-
-  const searchedTasks    = tasks.filter((t) =>
-    t.status !== "archived" && t.title.toLowerCase().includes(linkSearch.toLowerCase())
-  ).slice(0, 8);
-  const searchedProjects = projects.filter((p) =>
-    p.name.toLowerCase().includes(linkSearch.toLowerCase())
-  ).slice(0, 8);
-  const searchedEvents   = events.filter((e) =>
-    e.title.toLowerCase().includes(linkSearch.toLowerCase())
-  ).slice(0, 8);
 
   return (
-    <div className="flex flex-col border-b border-border shrink-0">
-      {/* Title row */}
-      <div className="flex items-center gap-2 px-4 py-2.5">
-        <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium shrink-0">
-          {TYPE_LABELS[note.type] ?? "Note"}
-        </span>
-
+    <div
+      className="flex flex-col shrink-0"
+      style={{ borderBottom: "1px solid hsl(var(--border))" }}
+    >
+      {/* ── Title row ──────────────────────────────────────── */}
+      <div className="flex items-start gap-2 px-8 pt-7 pb-1">
+        {/* Big journal-style title */}
         <input
+          ref={titleRef}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          onBlur={handleTitleBlur}
-          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-          className="flex-1 text-sm font-semibold bg-transparent outline-none min-w-0"
+          onBlur={saveTitle}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") { e.preventDefault(); titleRef.current?.blur(); }
+          }}
+          className="flex-1 bg-transparent outline-none min-w-0 font-semibold"
+          style={{
+            fontSize: "clamp(1.25rem, 2vw, 1.5rem)",
+            lineHeight: 1.25,
+            color: "hsl(var(--foreground))",
+            caretColor: "hsl(var(--primary))",
+          }}
           placeholder="Untitled"
         />
 
-        <div className="flex items-center gap-0.5 shrink-0">
-          <button
-            onClick={() => void pinNote(note.id)}
-            className={cn(
-              "p-1.5 rounded transition-fast",
-              note.isPinned ? "text-primary hover:bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-accent"
-            )}
-            title={note.isPinned ? "Unpin" : "Pin"}
+        {/* Action cluster */}
+        <div className="flex items-center gap-0.5 mt-0.5 shrink-0">
+          <TBtn
+            title={note.isPinned ? "Unpin" : "Pin note"}
+            active={note.isPinned}
+            onClick={() => void updateNote(note.id, { isPinned: !note.isPinned })}
           >
-            {note.isPinned ? <PinOff size={13} /> : <Pin size={13} />}
-          </button>
+            <Pin size={13} style={{ fill: note.isPinned ? "currentColor" : "none" }} />
+          </TBtn>
 
+          {/* Link picker */}
           <div className="relative">
-            <button
-              onClick={() => setMenuOpen((v) => !v)}
-              className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-fast"
-            >
+            <TBtn title="Link task or project" onClick={() => setLinkOpen((v) => !v)}>
+              <Link2 size={13} />
+            </TBtn>
+            {linkOpen && (
+              <LinkPopup
+                note={note}
+                tasks={tasks}
+                projects={projects}
+                onLinkTask={linkTask}
+                onLinkProject={linkProject}
+                onClose={() => setLinkOpen(false)}
+              />
+            )}
+          </div>
+
+          {/* More menu */}
+          <div className="relative" ref={menuRef}>
+            <TBtn title="More" onClick={() => setMenuOpen((v) => !v)}>
               <MoreHorizontal size={13} />
-            </button>
+            </TBtn>
             {menuOpen && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-                <div className="absolute right-0 top-8 z-20 w-44 rounded-lg border border-border bg-popover shadow-xl py-1 animate-fade-in">
-                  {(["note", "daily", "meeting"] as const).map((type) => (
-                    <button
-                      key={type}
-                      onClick={() => { void updateNote(note.id, { type }); setMenuOpen(false); }}
-                      className="w-full flex items-center justify-between px-3 py-1.5 text-xs hover:bg-accent transition-fast"
-                    >
-                      {TYPE_LABELS[type]}
-                      {note.type === type && <span className="text-primary text-[10px]">✓</span>}
-                    </button>
-                  ))}
-                  <div className="my-1 border-t border-border/50" />
-                  <button
-                    onClick={() => { void deleteNote(note.id); closeNote(); setMenuOpen(false); }}
-                    className="w-full text-left px-3 py-1.5 text-xs text-red-500 hover:bg-red-500/10 transition-fast"
-                  >
-                    Delete note
-                  </button>
-                </div>
-              </>
+              <div
+                className="absolute right-0 top-full mt-1.5 z-50 w-40 rounded-xl py-1.5"
+                style={{
+                  background: "hsl(var(--popover))",
+                  border: "1px solid hsl(var(--border))",
+                  boxShadow: "var(--shadow-lg)",
+                }}
+              >
+                <button
+                  onClick={() => { void deleteNote(note.id); closeNote(); setMenuOpen(false); }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-fast"
+                  style={{ color: "hsl(var(--destructive))" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "hsl(var(--destructive) / 0.08)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  <Trash2 size={12} /> Delete note
+                </button>
+              </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* Link chips row */}
-      <div className="flex items-center gap-1.5 px-4 pb-2.5 flex-wrap">
+      {/* ── Meta row: chips + tag input ─────────────────────── */}
+      <div className="flex items-center gap-1.5 flex-wrap px-8 pb-3 pt-1.5 min-h-[2.25rem]">
 
         {/* Linked tasks */}
         {linkedTasks.map((t) => (
           <LinkedChip
             key={t.id}
             label={t.title}
-            icon={t.status === "done" ? <CheckCircle2 size={10} className="text-green-500" /> : <Circle size={10} />}
-            onOpen={() => {
-              useTaskStore.getState().openTask(t.id);
-              bus.emit("navigate:to", { path: "/tasks" });
-            }}
+            icon={t.status === "done"
+              ? <CheckCircle2 size={10} style={{ color: "hsl(var(--success))" }} />
+              : <Circle       size={10} style={{ color: "hsl(var(--muted-foreground))" }} />}
+            onOpen={() => useTaskStore.getState().openTask(t.id)}
             onRemove={() => unlinkTask(t.id)}
           />
         ))}
@@ -182,144 +432,39 @@ export function NoteToolbar({ note }: { note: Note }) {
           />
         ))}
 
-        {/* Link buttons */}
-        <div className="flex items-center gap-1 ml-auto">
-          <LinkButton
-            icon={<CheckSquare size={11} />}
-            label="Link task"
-            active={linkPanel === "tasks"}
-            onClick={() => { setLinkPanel(linkPanel === "tasks" ? null : "tasks"); setLinkSearch(""); }}
+        {/* Tags */}
+        {note.tags.map((tag) => (
+          <TagChip key={tag} tag={tag} onRemove={() => removeTag(tag)} />
+        ))}
+
+        {/* Inline tag input */}
+        <form
+          onSubmit={(e) => { e.preventDefault(); addTag(tagInput); }}
+          className="inline-flex items-center gap-1"
+        >
+          <Tag size={9} style={{ color: "hsl(var(--muted-foreground) / 0.3)", flexShrink: 0 }} />
+          <input
+            value={tagInput}
+            onChange={(e) => setTagInput(e.target.value)}
+            onBlur={() => { if (tagInput.trim()) addTag(tagInput); }}
+            placeholder="Add tag…"
+            className="bg-transparent outline-none text-[11px] transition-fast"
+            style={{
+              width: tagInput ? "4.5rem" : "3rem",
+              color: "hsl(var(--muted-foreground) / 0.5)",
+            }}
           />
-          <LinkButton
-            icon={<FolderKanban size={11} />}
-            label="Link project"
-            active={linkPanel === "projects"}
-            onClick={() => { setLinkPanel(linkPanel === "projects" ? null : "projects"); setLinkSearch(""); }}
-          />
-          <LinkButton
-            icon={<Calendar size={11} />}
-            label="Link event"
-            active={linkPanel === "events"}
-            onClick={() => { setLinkPanel(linkPanel === "events" ? null : "events"); setLinkSearch(""); }}
-          />
-        </div>
+        </form>
       </div>
 
-      {/* Link picker dropdown */}
-      {linkPanel && (
-        <div className="border-t border-border bg-surface-1 px-4 py-2">
-          <input
-            value={linkSearch}
-            onChange={(e) => setLinkSearch(e.target.value)}
-            placeholder={`Search ${linkPanel}…`}
-            autoFocus
-            className="w-full text-xs bg-background border border-border rounded-md px-2.5 py-1.5 outline-none mb-2"
-          />
-          <div className="space-y-0.5 max-h-36 overflow-y-auto">
-            {linkPanel === "tasks" && searchedTasks.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => { linkTask(t.id); setLinkPanel(null); }}
-                className={cn(
-                  "w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-accent transition-fast text-left",
-                  note.linkedTaskIds.includes(t.id) && "opacity-40 pointer-events-none"
-                )}
-              >
-                {t.status === "done"
-                  ? <CheckCircle2 size={12} className="text-green-500 shrink-0" />
-                  : <Circle size={12} className="text-muted-foreground shrink-0" />
-                }
-                <span className="flex-1 truncate">{t.title}</span>
-                {note.linkedTaskIds.includes(t.id) && <span className="text-[10px] text-muted-foreground">linked</span>}
-              </button>
-            ))}
-            {linkPanel === "projects" && searchedProjects.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => { linkProject(p.id); setLinkPanel(null); }}
-                className={cn(
-                  "w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-accent transition-fast text-left",
-                  note.linkedProjectIds.includes(p.id) && "opacity-40 pointer-events-none"
-                )}
-              >
-                <ProjectDot color={p.color} size={8} />
-                <span className="flex-1 truncate">{p.name}</span>
-                {note.linkedProjectIds.includes(p.id) && <span className="text-[10px] text-muted-foreground">linked</span>}
-              </button>
-            ))}
-            {linkPanel === "events" && searchedEvents.map((e) => (
-              <button
-                key={e.id}
-                onClick={() => { linkEvent(e.id); setLinkPanel(null); }}
-                className={cn(
-                  "w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-accent transition-fast text-left",
-                  note.linkedEventIds.includes(e.id) && "opacity-40 pointer-events-none"
-                )}
-              >
-                <Calendar size={11} className="text-muted-foreground shrink-0" />
-                <span className="flex-1 truncate">{e.title}</span>
-                <span className="text-[10px] text-muted-foreground/60 tabular-nums">{formatDate(e.startAt)}</span>
-              </button>
-            ))}
-            {((linkPanel === "tasks" && searchedTasks.length === 0) ||
-              (linkPanel === "projects" && searchedProjects.length === 0) ||
-              (linkPanel === "events" && searchedEvents.length === 0)) && (
-              <p className="text-xs text-muted-foreground/50 px-2 py-2">No results</p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Tags */}
-      {note.tags.length > 0 && (
-        <div className="flex items-center gap-1.5 px-4 pb-2 flex-wrap">
-          <Tag size={11} className="text-muted-foreground/50 shrink-0" />
-          {note.tags.map((tag) => (
-            <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
-              {tag}
-            </span>
-          ))}
-        </div>
-      )}
+      {/* ── Thin ruled divider (journal feel) ──────────────── */}
+      <div
+        className="mx-8 mb-0"
+        style={{
+          height: 1,
+          background: "linear-gradient(to right, hsl(var(--border)), hsl(var(--border) / 0.2))",
+        }}
+      />
     </div>
-  );
-}
-
-function LinkedChip({
-  label, icon, onOpen, onRemove,
-}: {
-  label: string; icon: React.ReactNode; onOpen: () => void; onRemove: () => void;
-}) {
-  return (
-    <span className="group flex items-center gap-1 px-1.5 py-0.5 rounded-full border border-border bg-muted/50 text-[10px] text-muted-foreground hover:border-primary/30 transition-fast">
-      {icon}
-      <button onClick={onOpen} className="hover:text-foreground transition-fast truncate max-w-[80px]">
-        {label}
-      </button>
-      <button onClick={onRemove} className="opacity-0 group-hover:opacity-100 hover:text-red-500 transition-fast">
-        <X size={9} />
-      </button>
-    </span>
-  );
-}
-
-function LinkButton({
-  icon, label, active, onClick,
-}: {
-  icon: React.ReactNode; label: string; active: boolean; onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      title={label}
-      className={cn(
-        "p-1.5 rounded transition-fast",
-        active
-          ? "bg-primary/10 text-primary"
-          : "text-muted-foreground hover:text-foreground hover:bg-accent"
-      )}
-    >
-      {icon}
-    </button>
   );
 }

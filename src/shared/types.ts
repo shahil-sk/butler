@@ -271,7 +271,11 @@ export type SearchableEntityType =
   | "event"
   | "journal"
   | "database_row"
-  | "pdf_annotation";
+  | "pdf_annotation"
+  | "research_document"
+  | "research_chunk"
+  | "research_entity"
+  | "research_thread";
 
 export interface SearchResult {
   id: ID;
@@ -325,4 +329,271 @@ export interface Shortcut {
   action: string;             // event name to emit
   description: string;
   global: boolean;
+}
+
+// ============================================================
+// RESEARCH MODULE TYPES
+// Migration version: 110
+// ============================================================
+
+export type ResearchSourceType =
+  | "pdf"
+  | "web"
+  | "markdown"
+  | "text"
+  | "image"
+  | "youtube"
+  | "code_snippet"
+  | "screenshot";
+
+export type ResearchProcessingStatus =
+  | "pending"
+  | "parsing"
+  | "chunking"
+  | "indexing"
+  | "ai_analysis"
+  | "completed"
+  | "failed";
+
+export type ResearchChunkType =
+  | "paragraph"
+  | "heading"
+  | "code"
+  | "quote"
+  | "table"
+  | "image_caption"
+  | "citation"
+  | "equation";
+
+export type ResearchRelationType =
+  | "RELATED_TO"
+  | "SUPPORTS"
+  | "CONTRADICTS"
+  | "DERIVED_FROM"
+  | "MENTIONS"
+  | "REFERENCES"
+  | "LINKED_TASK"
+  | "LINKED_PROJECT"
+  | "LINKED_NOTE";
+
+/** Raw ingested source — before any processing */
+export interface ResearchSource {
+  id: ID;
+  type: ResearchSourceType;
+  title: string;
+  url?: string;                // web / youtube
+  filePath?: string;           // pdf / image / local file
+  rawContent?: string;         // text / markdown / code snippet
+  mimeType?: string;
+  sizeBytes?: number;
+  processingStatus: ResearchProcessingStatus;
+  errorMessage?: string;       // populated on failure
+  threadIds: ID[];             // which research threads contain this source
+  tags: string[];
+  importedAt: ISODateTime;
+  updatedAt: ISODateTime;
+}
+
+/** Parsed, cleaned representation of a source — one per source */
+export interface ResearchDocument {
+  id: ID;
+  sourceId: ID;
+  title: string;
+  authors?: string[];
+  publishedDate?: ISODate;
+  language?: string;
+  abstract?: string;
+  totalChunks: number;
+  totalPages?: number;         // PDF only
+  wordCount?: number;
+  processingVersion: string;   // bump when pipeline changes
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
+}
+
+/** Atomic unit of knowledge — paragraph / heading / code etc. */
+export interface ResearchChunk {
+  id: ID;
+  documentId: ID;
+  sourceId: ID;
+  type: ResearchChunkType;
+  content: string;
+  order: number;               // position within document
+  pageNumber?: number;         // PDF only
+  sectionTitle?: string;
+  embeddingId?: string;        // FK → research_embeddings
+  semanticTags?: string[];
+  entities?: string[];         // entity names (denormalised for speed)
+  importanceScore?: number;    // 0–1, AI-assigned
+  summary?: string;            // AI-generated chunk summary
+  createdAt: ISODateTime;
+}
+
+/** Vector embedding stub — model + vector stored separately */
+export interface ResearchEmbedding {
+  id: ID;
+  chunkId: ID;
+  model: string;               // e.g. "text-embedding-3-small"
+  dimensions: number;
+  vector: number[];            // stored as JSON array for now; swap to sqlite-vss later
+  createdAt: ISODateTime;
+}
+
+/** Named entity extracted from a chunk */
+export interface ResearchEntity {
+  id: ID;
+  documentId: ID;
+  chunkId?: ID;
+  name: string;
+  type: "person" | "organization" | "concept" | "technology" | "location" | "event" | "other";
+  aliases?: string[];
+  description?: string;
+  importanceScore?: number;
+  createdAt: ISODateTime;
+}
+
+/** Knowledge graph edge */
+export interface ResearchRelation {
+  id: ID;
+  fromId: ID;                  // entity / document / chunk / task / note / project id
+  fromType: string;            // "entity" | "document" | "chunk" | "task" | "note" | "project"
+  toId: ID;
+  toType: string;
+  relationType: ResearchRelationType;
+  weight?: number;             // 0–1 confidence
+  context?: string;            // sentence that implied this relation
+  createdAt: ISODateTime;
+}
+
+/** Text highlight on a document chunk */
+export interface ResearchHighlight {
+  id: ID;
+  documentId: ID;
+  chunkId: ID;
+  sourceId: ID;
+  text: string;                // highlighted text
+  color: string;               // hex
+  pageNumber?: number;
+  position?: { start: number; end: number }; // char offsets in chunk
+  note?: string;               // inline annotation on highlight
+  linkedNoteId?: ID;
+  linkedTaskId?: ID;
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
+}
+
+/** Standalone annotation on a document */
+export interface ResearchAnnotation {
+  id: ID;
+  documentId: ID;
+  chunkId?: ID;
+  sourceId: ID;
+  type: "note" | "question" | "action" | "contradiction" | "definition";
+  content: string;
+  pageNumber?: number;
+  position?: { start: number; end: number };
+  linkedNoteId?: ID;
+  linkedTaskId?: ID;
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
+}
+
+/** Academic / web citation */
+export interface ResearchCitation {
+  id: ID;
+  documentId: ID;
+  chunkId?: ID;
+  raw: string;                 // original citation text
+  title?: string;
+  authors?: string[];
+  year?: number;
+  url?: string;
+  doi?: string;
+  linkedSourceId?: ID;         // if citation resolved to another source in DB
+  createdAt: ISODateTime;
+}
+
+/**
+ * Contextual knowledge container.
+ * Threads group sources, highlights, notes, tasks around a topic.
+ */
+export interface ResearchThread {
+  id: ID;
+  title: string;
+  description?: string;
+  color?: string;
+  sourceIds: ID[];
+  highlightIds: ID[];
+  annotationIds: ID[];
+  linkedNoteIds: ID[];
+  linkedTaskIds: ID[];
+  linkedProjectIds: ID[];
+  aiSummary?: string;
+  unresolvedQuestions: string[];
+  recentInsights: string[];
+  tags: string[];
+  isPinned: boolean;
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
+}
+
+/** AI-generated insight from documents / chunks */
+export interface ResearchInsight {
+  id: ID;
+  documentId?: ID;
+  threadId?: ID;
+  chunkIds: ID[];              // source chunks that produced this insight
+  type: "summary" | "contradiction" | "gap" | "connection" | "hypothesis" | "action_item";
+  content: string;
+  confidence?: number;         // 0–1
+  linkedTaskId?: ID;
+  linkedNoteId?: ID;
+  aiModel?: string;
+  createdAt: ISODateTime;
+}
+
+/** AI-generated question for review / spaced repetition */
+export interface ResearchQuestion {
+  id: ID;
+  documentId?: ID;
+  threadId?: ID;
+  chunkId?: ID;
+  question: string;
+  answer?: string;
+  type: "comprehension" | "application" | "analysis" | "flashcard";
+  difficulty?: 1 | 2 | 3 | 4 | 5;
+  reviewedAt?: ISODateTime;
+  createdAt: ISODateTime;
+}
+
+/** Async AI processing job */
+export interface ResearchAiJob {
+  id: ID;
+  sourceId: ID;
+  jobType:
+    | "parse"
+    | "chunk"
+    | "embed"
+    | "entity_extract"
+    | "summarize"
+    | "cite_extract"
+    | "insight_generate"
+    | "question_generate"
+    | "graph_link";
+  status: "queued" | "running" | "completed" | "failed";
+  progress?: number;           // 0–100
+  errorMessage?: string;
+  startedAt?: ISODateTime;
+  completedAt?: ISODateTime;
+  createdAt: ISODateTime;
+}
+
+/** Cross-module link: research ↔ task / note / project / event */
+export interface ResearchLink {
+  id: ID;
+  researchEntityType: "source" | "document" | "chunk" | "highlight" | "annotation" | "thread" | "insight";
+  researchEntityId: ID;
+  linkedEntityType: "task" | "note" | "project" | "event";
+  linkedEntityId: ID;
+  createdAt: ISODateTime;
 }

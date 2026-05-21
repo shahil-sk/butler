@@ -1,76 +1,151 @@
 // ============================================================
-// FOCUS — EVENTS
-// Called once inside FocusModule root via useEffect.
-//
-// Listeners:
-//   task:open              → if idle, offer focus session (existing)
-//   focus:start-requested  → navigate + pre-select task (new)
-//   task:completed         → if active session linked to that task → prompt stop
+// FOCUS — EVENT BUS LISTENERS
+// Wire focus module to task events (completed, cancelled, etc.)
+// Call useFocusEventListeners() from the Focus UI component.
 // ============================================================
 
 import { useEffect } from "react";
 import { bus } from "@/kernel/event-bus";
 import { useFocusStore } from "./store";
 
+// ── In-app confirmation dialog (replaces window.confirm) ──────────────────
+// Creates a lightweight modal overlay without freezing the JS thread.
+
+function showFocusEndPrompt(message: string, onConfirm: () => void): void {
+  // Remove any existing prompt to avoid stacking
+  document.getElementById("__focus-end-prompt")?.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = "__focus-end-prompt";
+  overlay.style.cssText = [
+    "position:fixed",
+    "inset:0",
+    "z-index:9999",
+    "display:flex",
+    "align-items:center",
+    "justify-content:center",
+    "background:oklch(0 0 0 / 0.45)",
+    "backdrop-filter:blur(4px)",
+    "-webkit-backdrop-filter:blur(4px)",
+    "animation:fadeIn 120ms ease",
+  ].join(";");
+
+  const card = document.createElement("div");
+  card.style.cssText = [
+    "background:hsl(var(--card, 0 0% 100%))",
+    "border:1px solid hsl(var(--border, 0 0% 88%))",
+    "border-radius:0.75rem",
+    "padding:1.25rem 1.5rem",
+    "max-width:22rem",
+    "width:calc(100% - 2rem)",
+    "box-shadow:0 20px 48px oklch(0 0 0 / 0.22)",
+    "display:flex",
+    "flex-direction:column",
+    "gap:1rem",
+  ].join(";");
+
+  const icon = document.createElement("div");
+  icon.style.cssText = "font-size:1.5rem;text-align:center";
+  icon.textContent = "⏸";
+
+  const text = document.createElement("p");
+  text.style.cssText = [
+    "font-size:0.875rem",
+    "color:hsl(var(--foreground, 0 0% 4%))",
+    "line-height:1.5",
+    "text-align:center",
+  ].join(";");
+  text.textContent = message;
+
+  const row = document.createElement("div");
+  row.style.cssText = "display:flex;gap:0.5rem;justify-content:center";
+
+  function dismiss() { overlay.remove(); }
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.textContent = "Keep going";
+  cancelBtn.style.cssText = [
+    "flex:1",
+    "padding:0.5rem 0.75rem",
+    "border-radius:0.5rem",
+    "border:1px solid hsl(var(--border, 0 0% 88%))",
+    "background:transparent",
+    "font-size:0.8125rem",
+    "font-weight:500",
+    "cursor:pointer",
+    "color:hsl(var(--foreground, 0 0% 4%))",
+    "transition:background 150ms ease",
+  ].join(";");
+  cancelBtn.onmouseenter = () => (cancelBtn.style.background = "hsl(var(--muted, 0 0% 94%))");
+  cancelBtn.onmouseleave = () => (cancelBtn.style.background = "transparent");
+  cancelBtn.onclick = dismiss;
+
+  const confirmBtn = document.createElement("button");
+  confirmBtn.textContent = "End session";
+  confirmBtn.style.cssText = [
+    "flex:1",
+    "padding:0.5rem 0.75rem",
+    "border-radius:0.5rem",
+    "border:none",
+    "background:hsl(var(--destructive, 0 84% 60%))",
+    "color:hsl(var(--destructive-foreground, 0 0% 100%))",
+    "font-size:0.8125rem",
+    "font-weight:600",
+    "cursor:pointer",
+    "transition:opacity 150ms ease",
+  ].join(";");
+  confirmBtn.onmouseenter = () => (confirmBtn.style.opacity = "0.88");
+  confirmBtn.onmouseleave = () => (confirmBtn.style.opacity = "1");
+  confirmBtn.onclick = () => { dismiss(); onConfirm(); };
+
+  // Dismiss on overlay click
+  overlay.onclick = (e) => { if (e.target === overlay) dismiss(); };
+  // Dismiss on Escape
+  const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { dismiss(); document.removeEventListener("keydown", onKey); } };
+  document.addEventListener("keydown", onKey);
+
+  row.append(cancelBtn, confirmBtn);
+  card.append(icon, text, row);
+  overlay.append(card);
+  document.body.append(overlay);
+
+  // Inject fade-in keyframe once
+  if (!document.getElementById("__focus-prompt-style")) {
+    const style = document.createElement("style");
+    style.id = "__focus-prompt-style";
+    style.textContent = "@keyframes fadeIn{from{opacity:0;transform:scale(0.96)}to{opacity:1;transform:scale(1)}}";
+    document.head.append(style);
+  }
+}
+
+// ── Event listeners ───────────────────────────────────────────
+
 export function useFocusEventListeners() {
   const activeSession = useFocusStore((s) => s.activeSession);
+  const cancel        = useFocusStore((s) => s.cancel);
 
   useEffect(() => {
-    const unsubs: Array<() => void> = [];
+    // Prompt user to end session when task is completed
+    const offCompleted = bus.on("task:completed", ({ taskId }) => {
+      if (!activeSession?.taskId || activeSession.taskId !== taskId) return;
+      showFocusEndPrompt(
+        "The task you're focusing on was just completed. End this focus session?",
+        () => void cancel()
+      );
+    });
 
-    // ── task:open → idle guard: offer focus session ───────────────────────────
-    unsubs.push(
-      bus.on("task:open", ({ taskId }) => {
-        if (useFocusStore.getState().activeSession) return;
-        bus.emit("ui:notification", {
-          id:         `focus-offer-${taskId}`,
-          type:       "info",
-          message:    "Start a focus session on this task? Go to Focus → select the task.",
-          durationMs: 6000,
-        });
-      })
-    );
+    // Prompt user to end session when task is cancelled
+    const offCancelled = bus.on("task:cancelled", ({ taskId }) => {
+      if (!activeSession?.taskId || activeSession.taskId !== taskId) return;
+      showFocusEndPrompt(
+        "The task you're focusing on was just cancelled. End this focus session?",
+        () => void cancel()
+      );
+    });
 
-    // ── focus:start-requested → navigate + pre-select task ───────────────────
-    // Any module (tasks, planner, cmd palette) can emit this to deep-link
-    // into focus with a task already selected.
-    unsubs.push(
-      bus.on("focus:start-requested", ({ taskId }) => {
-        // Navigate to focus view
-        bus.emit("navigate:to", { path: "/focus" });
-        // Pre-select the task if provided; store will handle it once idle
-        if (taskId) {
-          // If currently idle, pre-select immediately via a microtask
-          // so the UI renders with the task selected
-          setTimeout(() => {
-            const store = useFocusStore.getState();
-            if (!store.activeSession) {
-              // Trigger a synthetic selection by emitting into a known side channel.
-              // The Focus UI reads `pendingTaskId` from the store.
-              useFocusStore.setState({ _pendingTaskId: taskId } as never);
-            }
-          }, 50);
-        }
-      })
-    );
-
-    // ── task:completed → if active session is on that task, prompt end ────────
-    unsubs.push(
-      bus.on("task:completed", ({ taskId }) => {
-        const store = useFocusStore.getState();
-        if (!store.activeSession) return;
-        if (store.activeSession.taskId !== taskId) return;
-        if (store.activeSession.type !== "focus") return;
-        bus.emit("ui:notification", {
-          id:         `focus-task-done-${taskId}`,
-          type:       "success",
-          message:    "Task completed! End your focus session when ready.",
-          durationMs: 8000,
-        });
-      })
-    );
-
-    return () => unsubs.forEach((u) => u());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [!!activeSession]);
+    return () => {
+      offCompleted();
+      offCancelled();
+    };
+  }, [activeSession?.taskId, cancel]);
 }
