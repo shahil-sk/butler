@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { X, Trash2, Unlink, Plus, Calendar } from "lucide-react";
 import { cn } from "@/shared/utils";
-import { usePlannerStore, BLOCK_COLORS } from "../store";
+import { usePlannerStore } from "../store";
+import { BLOCK_COLORS } from "../types";
 import { useTaskStore } from "@/modules/tasks/store";
 import { bus } from "@/kernel/event-bus";
 
@@ -109,7 +110,7 @@ export function BlockEditModal({ blockId, onClose }: { blockId: string; onClose:
             onClick={onClose}
             className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-fast"
           >
-            <X size={14} />
+            ✕
           </button>
         </div>
 
