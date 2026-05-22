@@ -12,7 +12,9 @@
   <img src="https://img.shields.io/badge/TypeScript-5.4-blue?style=flat-square&logo=typescript" alt="TypeScript" />
   <img src="https://img.shields.io/badge/SQLite-3-003B57?style=flat-square&logo=sqlite" alt="SQLite" />
   <img src="https://img.shields.io/badge/Vite-5.1-646CFF?style=flat-square&logo=vite" alt="Vite" />
-  <img src="https://img.shields.io/badge/License-MIT-yellow?style=flat-square" alt="License" />
+  <img src="https://img.shields.io/badge/license-%20%20GNU%20GPLv3%20-green?style=plastic" alt="License" />
+  
+  
 </p>
 
 <br />
@@ -165,4 +167,4 @@ When developing Butler with an AI assistant or agent:
 
 ## License
 
-This project is licensed under the MIT License. See the LICENSE file for details.
+This project is licensed under The GNU General Public License v3.0. See the LICENSE file for details.
