@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import {
-  X, Flag, Calendar, Clock, Plus, Trash2,
-  CheckSquare, Circle, ChevronDown, FolderKanban,
-  FileText, ExternalLink, CalendarClock,
+  Flag, Calendar, Clock, Trash2,
+  FolderKanban, FileText, CalendarClock, X,
 } from "lucide-react";
 import { cn, formatDate, PRIORITY_LABELS, today } from "@/shared/utils";
 import {
@@ -15,193 +14,9 @@ import { useNoteStore } from "@/modules/notes/store";
 import { useCalendarStore } from "@/modules/calendar/store";
 import { bus } from "@/kernel/event-bus";
 import type { Task, Priority, TaskStatus } from "@/shared/types";
-
-// ─── constants ───────────────────────────────────────────────
-
-const STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
-  { value: "todo",        label: "To do" },
-  { value: "in_progress", label: "In progress" },
-  { value: "done",        label: "Done" },
-  { value: "cancelled",   label: "Cancelled" },
-];
-
-// ─── helper: metadata pill button ────────────────────────────
-
-function MetaPill({
-  icon,
-  label,
-  btnRef,
-  onClick,
-  active,
-  children,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  btnRef?: React.RefObject<HTMLButtonElement>;
-  onClick?: () => void;
-  active?: boolean;
-  children: React.ReactNode;
-}) {
-  const Tag = onClick ? "button" : "div";
-  return (
-    <Tag
-      ref={onClick ? btnRef as React.RefObject<HTMLButtonElement> : undefined}
-      onClick={onClick}
-      className={cn(
-        "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs transition-fast min-w-0",
-        onClick && "cursor-pointer",
-        active
-          ? "border-primary/40 bg-primary/6 text-foreground"
-          : "border-border bg-muted/30 text-muted-foreground hover:border-border hover:bg-accent hover:text-foreground",
-      )}
-    >
-      <span className="shrink-0 opacity-60">{icon}</span>
-      <span className="truncate">{children}</span>
-      {onClick && <ChevronDown size={10} className="shrink-0 opacity-40 ml-auto" />}
-    </Tag>
-  );
-}
-
-// ─── status chip ─────────────────────────────────────────────
-
-function StatusChip({
-  status,
-  btnRef,
-  onClick,
-}: {
-  status: TaskStatus;
-  btnRef: React.RefObject<HTMLButtonElement>;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      ref={btnRef}
-      onClick={onClick}
-      aria-label={`Status: ${STATUS_OPTIONS.find((o) => o.value === status)?.label ?? "To do"}. Click to change.`}
-      className={cn(
-        "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-semibold transition-fast",
-        status === "done"        && "border-emerald-500/30 bg-emerald-500/8  text-emerald-600 dark:text-emerald-400",
-        status === "in_progress" && "border-blue-500/30   bg-blue-500/8     text-blue-600    dark:text-blue-400",
-        status === "cancelled"   && "border-border        bg-muted/30       text-muted-foreground/50 line-through",
-        status === "todo"        && "border-border        bg-muted/30       text-muted-foreground",
-      )}
-    >
-      <span
-        className={cn(
-          "w-1.5 h-1.5 rounded-full shrink-0",
-          status === "done"        && "bg-emerald-500",
-          status === "in_progress" && "bg-blue-500",
-          status === "cancelled"   && "bg-muted-foreground/30",
-          status === "todo"        && "bg-muted-foreground/50",
-        )}
-      />
-      {STATUS_OPTIONS.find((o) => o.value === status)?.label ?? "To do"}
-      <ChevronDown size={9} className="opacity-40" />
-    </button>
-  );
-}
-
-// ─── schedule panel ───────────────────────────────────────────
-
-function SchedulePanel({
-  isCreating,
-  scheduleDate, scheduleTime,
-  scheduledDate, scheduledTime,
-  taskScheduledDate,
-  onDateChange, onTimeChange,
-  onClose, onConfirm, onClearExisting,
-}: {
-  isCreating: boolean;
-  scheduleDate: string; scheduleTime: string;
-  scheduledDate?: string; scheduledTime?: string;
-  taskScheduledDate?: string;
-  onDateChange: (v: string) => void;
-  onTimeChange: (v: string) => void;
-  onClose: () => void;
-  onConfirm: () => void;
-  onClearExisting: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-[300] flex items-end sm:items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
-        onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      />
-      <div className="relative z-10 bg-popover border border-border rounded-2xl shadow-2xl p-5 w-80 animate-fade-in">
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-sm font-semibold">
-            {isCreating ? "Schedule task" : "Schedule to calendar"}
-          </p>
-          <button
-            onClick={onClose}
-            className="p-1 rounded text-muted-foreground hover:text-foreground transition-fast"
-          >
-            <X size={13} />
-          </button>
-        </div>
-
-        {/* existing badge */}
-        {!isCreating && taskScheduledDate && (
-          <div className="flex items-center gap-2 mb-3 px-2.5 py-2 rounded-lg bg-primary/8 text-primary text-xs font-medium">
-            <CalendarClock size={12} />
-            <span className="flex-1">Scheduled: {taskScheduledDate}</span>
-            <button onClick={onClearExisting} className="text-muted-foreground hover:text-red-500 transition-fast">
-              <X size={11} />
-            </button>
-          </div>
-        )}
-        {isCreating && scheduledDate && (
-          <div className="flex items-center gap-2 mb-3 px-2.5 py-2 rounded-lg bg-primary/8 text-primary text-xs font-medium">
-            <CalendarClock size={12} />
-            <span className="flex-1">{scheduledDate} · {scheduledTime ?? "09:00"}</span>
-            <button onClick={onClearExisting} className="text-muted-foreground hover:text-red-500 transition-fast">
-              <X size={11} />
-            </button>
-          </div>
-        )}
-
-        <div className="space-y-3">
-          <div>
-            <label className="block text-[11px] text-muted-foreground mb-1">Date</label>
-            <input
-              type="date"
-              value={scheduleDate}
-              min={new Date().toISOString().split("T")[0]}
-              onChange={(e) => onDateChange(e.target.value)}
-              className="w-full text-sm bg-muted/40 rounded-lg px-3 py-2 outline-none border border-border focus:border-primary/50"
-            />
-          </div>
-          <div>
-            <label className="block text-[11px] text-muted-foreground mb-1">Time</label>
-            <input
-              type="time"
-              value={scheduleTime}
-              onChange={(e) => onTimeChange(e.target.value)}
-              className="w-full text-sm bg-muted/40 rounded-lg px-3 py-2 outline-none border border-border focus:border-primary/50"
-            />
-          </div>
-        </div>
-
-        <div className="flex gap-2 mt-4">
-          <button
-            onClick={onClose}
-            className="flex-1 px-3 py-2 rounded-lg text-xs border border-border text-muted-foreground hover:bg-accent transition-fast"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            className="flex-1 px-3 py-2 rounded-lg text-xs bg-primary text-primary-foreground hover:bg-primary/90 font-semibold transition-fast"
-          >
-            {isCreating ? "Set schedule" : "Add to calendar"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── main component ───────────────────────────────────────────
+import { MetaPill, StatusChip, STATUS_OPTIONS } from "./TaskMetaPills";
+import { TaskSchedulePanel } from "./TaskSchedulePanel";
+import { TaskChecklist, TaskLinkedNotes } from "./TaskDetailBody";
 
 export function TaskDetail() {
   const {
@@ -219,8 +34,8 @@ export function TaskDetail() {
   const task       = openTaskId ? getTaskById(openTaskId) : null;
   const isOpen     = isCreating || (openTaskId != null && task != null);
 
-  const project      = task?.projectId ? allProjects.find((p) => p.id === task.projectId) : undefined;
-  const linkedNotes  = allNotes.filter((n) => task?.linkedNoteIds.includes(n.id));
+  const project     = task?.projectId ? allProjects.find((p) => p.id === task.projectId) : undefined;
+  const linkedNotes = allNotes.filter((n) => task?.linkedNoteIds.includes(n.id));
 
   // ── local state ───────────────────────────────────────────
   const [title,          setTitle]          = useState("");
@@ -362,7 +177,7 @@ export function TaskDetail() {
     setNewCheckItem("");
   };
 
-  const handleClose  = isCreating ? closeQuickAdd : closeTask;
+  const handleClose    = isCreating ? closeQuickAdd : closeTask;
   const currentStatus   = isCreating ? status   : (task?.status   ?? "todo");
   const currentPriority = isCreating ? priority : (task?.priority ?? "none");
   const currentProject  = isCreating
@@ -388,11 +203,9 @@ export function TaskDetail() {
             btnRef={statusAnchor}
             onClick={() => setStatusOpen((v) => !v)}
           />
-
           <span className="flex-1 text-[11px] text-muted-foreground/40 tabular-nums truncate">
             {isCreating ? "New task" : `Edited ${formatDate(task!.updatedAt)}`}
           </span>
-
           {!isCreating && (
             <button
               onClick={() => { void deleteTask(task!.id); closeTask(); }}
@@ -551,141 +364,43 @@ export function TaskDetail() {
             </label>
           </div>
 
-          {/* ── checklist ───────────────────────────────── */}
-          <div className="border-t border-border/60 px-5 py-4">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/40">
-                Checklist
-                {checkItems.length > 0 && (
-                  <span className="ml-1.5 normal-case font-normal tabular-nums">
-                    {completedCount}/{checkItems.length}
-                  </span>
-                )}
-              </span>
-            </div>
+          {/* checklist */}
+          <TaskChecklist
+            isCreating={isCreating}
+            checkItems={checkItems}
+            completedCount={completedCount}
+            newCheckItem={newCheckItem}
+            onNewCheckItemChange={setNewCheckItem}
+            onToggle={(id) => {
+              if (isCreating) {
+                setChecklistItems((prev) =>
+                  prev.map((i) => i.id === id ? { ...i, checked: !i.checked } : i)
+                );
+              } else {
+                void toggleChecklistItem(task!.id, id);
+              }
+            }}
+            onDelete={(id) => {
+              if (isCreating) {
+                setChecklistItems((prev) => prev.filter((i) => i.id !== id));
+              } else {
+                void deleteChecklistItem(task!.id, id);
+              }
+            }}
+            onAdd={addCheckItem}
+            onCreateConfirm={() => void handleCreate()}
+          />
 
-            {/* progress bar */}
-            {checkItems.length > 0 && (
-              <div className="h-[3px] rounded-full bg-border mb-3 overflow-hidden">
-                <div
-                  className="h-full bg-emerald-500 rounded-full transition-all duration-500"
-                  style={{ width: `${(completedCount / checkItems.length) * 100}%` }}
-                />
-              </div>
-            )}
-
-            {/* items */}
-            <div className="space-y-0.5 mb-2">
-              {checkItems.map((item) => (
-                <div
-                  key={item.id}
-                  className="group flex items-center gap-2.5 py-1.5 px-2 -mx-2 rounded-lg hover:bg-accent/40 transition-colors"
-                >
-                  <button
-                    onClick={() => {
-                      if (isCreating) {
-                        setChecklistItems((prev) =>
-                          prev.map((i) => i.id === item.id ? { ...i, checked: !i.checked } : i)
-                        );
-                      } else {
-                        void toggleChecklistItem(task!.id, item.id);
-                      }
-                    }}
-                    className={cn(
-                      "shrink-0 transition-fast",
-                      item.checked ? "text-emerald-500" : "text-muted-foreground/25 hover:text-primary",
-                    )}
-                  >
-                    {item.checked ? <CheckSquare size={14} /> : <Circle size={14} />}
-                  </button>
-                  <span className={cn(
-                    "flex-1 text-sm leading-snug",
-                    item.checked && "line-through text-muted-foreground/35",
-                  )}>
-                    {item.text}
-                  </span>
-                  <button
-                    onClick={() => {
-                      if (isCreating) {
-                        setChecklistItems((prev) => prev.filter((i) => i.id !== item.id));
-                      } else {
-                        void deleteChecklistItem(task!.id, item.id);
-                      }
-                    }}
-                    title="Remove item"
-                    className="opacity-0 group-hover:opacity-100 p-1 rounded text-muted-foreground/30 hover:text-red-500 transition-fast"
-                  >
-                    <X size={11} />
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            {/* add item */}
-            <div className="flex items-center gap-2 py-1.5 px-2 -mx-2 rounded-lg hover:bg-accent/30 transition-colors">
-              <Plus size={12} className="text-muted-foreground/30 shrink-0" />
-              <input
-                value={newCheckItem}
-                onChange={(e) => setNewCheckItem(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    if (newCheckItem.trim()) addCheckItem();
-                    else if (isCreating) { e.preventDefault(); void handleCreate(); }
-                  }
-                }}
-                placeholder="Add item…"
-                className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground/25"
-              />
-              {newCheckItem.trim() && (
-                <button
-                  onClick={addCheckItem}
-                  className="text-[11px] text-primary font-medium shrink-0 hover:opacity-75 transition-fast"
-                >
-                  Add
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* ── linked notes — view mode only ───────────── */}
+          {/* linked notes — view mode only */}
           {!isCreating && (
-            <div className="border-t border-border/60 px-5 py-4">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/40 mb-2">
-                Notes
-              </p>
-              {linkedNotes.map((n) => (
-                <button
-                  key={n.id}
-                  onClick={() => useNoteStore.getState().openNote(n.id)}
-                  className="flex items-center gap-2 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-fast w-full text-left"
-                >
-                  <FileText size={13} className="shrink-0" />
-                  <span className="flex-1 truncate">{n.title || "Untitled"}</span>
-                  <ExternalLink size={11} className="shrink-0 opacity-30" />
-                </button>
-              ))}
-              {linkNoteOpen && (
-                <div className="mt-2 space-y-1">
-                  <input
-                    autoFocus
-                    value={noteSearch}
-                    onChange={(e) => setNoteSearch(e.target.value)}
-                    placeholder="Search notes…"
-                    className="w-full text-sm bg-muted/40 rounded-lg px-3 py-2 outline-none border border-border focus:border-primary/50"
-                  />
-                  {filteredNotes.map((n) => (
-                    <button
-                      key={n.id}
-                      onClick={() => handleLinkNote(n.id)}
-                      className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm hover:bg-accent transition-fast text-left"
-                    >
-                      <FileText size={12} className="shrink-0 text-muted-foreground/50" />
-                      {n.title || "Untitled"}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <TaskLinkedNotes
+              linkedNotes={linkedNotes}
+              linkNoteOpen={linkNoteOpen}
+              noteSearch={noteSearch}
+              filteredNotes={filteredNotes}
+              onNoteSearchChange={setNoteSearch}
+              onLinkNote={handleLinkNote}
+            />
           )}
         </div>
 
@@ -755,7 +470,7 @@ export function TaskDetail() {
 
       {/* schedule panel */}
       {scheduleOpen && (
-        <SchedulePanel
+        <TaskSchedulePanel
           isCreating={isCreating}
           scheduleDate={scheduleDate}
           scheduleTime={scheduleTime}

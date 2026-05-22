@@ -56,11 +56,26 @@ export function formatTime(date: ISODateTime): string {
   return format(parseISO(date), "h:mm a");
 }
 
+/** Format minutes → "1h 30m" / "45m". Used by focus, time-tracking, planner. */
 export function formatDuration(minutes: number): string {
   if (minutes < 60) return `${minutes}m`;
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
   return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
+/**
+ * Format seconds → "25:00" / "1:02:05".
+ * Consolidates the fmtDuration/formatSecs duplicates in focus + time-tracking.
+ */
+export function formatSeconds(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const mm = String(m).padStart(2, "0");
+  const ss = String(sec).padStart(2, "0");
+  return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
 }
 
 // ── Array utils ──────────────────────────────────────────────
