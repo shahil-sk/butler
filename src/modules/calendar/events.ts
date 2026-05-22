@@ -47,3 +47,13 @@ export const calendarEvents = {
       }),
   },
 };
+
+export function setupCalendarEventListeners(): () => void {
+  const offDeleted = calendarEvents.on.taskDeleted();
+  const offUpdated = calendarEvents.on.taskUpdated();
+  
+  return () => {
+    offDeleted();
+    offUpdated();
+  };
+}

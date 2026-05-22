@@ -6,7 +6,7 @@ import { EmptyState, ProjectDot } from "@/shared/ui";
 import { useTimeStore } from "@/modules/time-tracking/store";
 import { useProjectStore } from "@/modules/projects/store";
 import { useTaskStore } from "@/modules/tasks/store";
-import { dbLoadSessionsInRange } from "@/modules/focus/db";
+import { dbLoadSessionsInRange } from "@/modules/focus/repository";
 import type { FocusSession } from "@/shared/types";
 
 type RangePreset = "7d" | "30d" | "90d" | "custom";

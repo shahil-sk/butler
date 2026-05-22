@@ -4,17 +4,17 @@
  */
 import React, { useState } from 'react';
 import {
-  Table2, LayoutKanban, LayoutList, Image,
+  Table2, Kanban, LayoutList, Image,
   Filter, ArrowUpDown, Search, Plus, Eye,
 } from 'lucide-react';
-import { cn } from '@/shared/utils/cn';
+import { cn } from '@/shared/utils';
 import { useDatabaseStore } from '../store';
 import { useDatabaseMutations } from './hooks/useDatabaseData';
 import type { View, ViewType, Column, DatabaseDetail } from '../types';
 
 const VIEW_ICONS: Record<ViewType, React.ElementType> = {
   grid:    Table2,
-  kanban:  LayoutKanban,
+  kanban:  Kanban,
   list:    LayoutList,
   gallery: Image,
 };

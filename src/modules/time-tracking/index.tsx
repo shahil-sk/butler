@@ -8,7 +8,6 @@ import { Timer, Clock, BarChart2 } from "lucide-react";
 
 import { registry } from "@/kernel/router";
 import { useTimeStore } from "./store";
-import { setupTimeEventListeners } from "./events";
 import { TIME_MANIFEST } from "./manifest";
 import { PageHeader, SubNav } from "@/shared/ui";
 import { TrackerView } from "./ui/TrackerView";
@@ -19,8 +18,6 @@ export default function TimeTrackingModule() {
 
   useEffect(() => {
     registry.register(TIME_MANIFEST);
-    const unsub = setupTimeEventListeners();
-    return unsub;
   }, []);
 
   useEffect(() => {

@@ -17,8 +17,16 @@ import { DATABASE_MIGRATIONS } from "@/modules/database/db";
 import { RESEARCH_MIGRATIONS } from "@/modules/research/db";
 
 // ── Boot-time module listeners ────────────────────────────────
-import { registerFocusListeners } from "@/modules/focus/events";
-import { registerTimeListeners }  from "@/modules/time-tracking/events";
+import { setupTaskEventListeners }      from "@/modules/tasks/events";
+import { setupProjectEventListeners }   from "@/modules/projects/events";
+import { setupPlannerEventListeners }   from "@/modules/planner/events";
+import { registerNoteEventListeners }   from "@/modules/notes/events";
+import { setupCalendarEventListeners }  from "@/modules/calendar/events";
+import { setupJournalEventListeners }   from "@/modules/journal/events";
+import { registerFocusListeners }       from "@/modules/focus/events";
+import { registerTimeListeners }        from "@/modules/time-tracking/events";
+import { setupDatabaseEventListeners }  from "@/modules/database/events";
+import { setupResearchEventListeners }  from "@/modules/research/events";
 
 // ── Kernel services ───────────────────────────────────────────
 import { startTaskCalendarSync } from "@/kernel/task-calendar-sync";
@@ -55,8 +63,16 @@ async function boot() {
     startTaskCalendarSync();
 
     // Module bus listeners
+    setupTaskEventListeners();
+    setupProjectEventListeners();
+    setupPlannerEventListeners();
+    registerNoteEventListeners();
+    setupCalendarEventListeners();
+    setupJournalEventListeners();
     registerFocusListeners();
     registerTimeListeners();
+    setupDatabaseEventListeners();
+    setupResearchEventListeners();
 
     ReactDOM.createRoot(document.getElementById("root")!).render(
       <React.StrictMode>

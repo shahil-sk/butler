@@ -205,6 +205,45 @@ export interface DatabaseRow {
   updatedAt: ISODateTime;
 }
 
+export type DatabaseColumnType = "text" | "number" | "date" | "boolean" | "select" | "multi_select" | "relation" | "url" | "email";
+
+export interface SelectOption {
+  id: string;
+  label: string;
+  color: string;
+}
+
+export type DatabaseViewType = "grid" | "kanban" | "gallery" | "list";
+
+export interface DatabaseView {
+  id: ID;
+  tableId: ID;
+  name: string;
+  type: DatabaseViewType;
+  config: Record<string, unknown>;
+  position: number;
+  createdAt: ISODateTime;
+}
+
+export type FilterOperator = "equals" | "not_equals" | "contains" | "not_contains" | "is_empty" | "is_not_empty" | "gt" | "gte" | "lt" | "lte" | "before" | "after" | "is_checked" | "is_not_checked" | "eq" | "neq";
+
+export interface DatabaseFilter {
+  id: ID;
+  viewId: ID;
+  columnId: ID;
+  operator: FilterOperator;
+  value: unknown;
+  position: number;
+}
+
+export interface DatabaseSort {
+  id: ID;
+  viewId: ID;
+  columnId: ID;
+  direction: "asc" | "desc";
+  position: number;
+}
+
 export interface PdfDocument {
   id: ID;
   title: string;

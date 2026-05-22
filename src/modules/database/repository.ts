@@ -4,8 +4,7 @@
  * DB API: db.select(), db.selectOne(), db.execute(), db.transaction()
  */
 import { db } from '@/kernel/db';
-import { nanoid } from '@/shared/utils/nanoid';
-import { now } from '@/shared/utils/time';
+import { generateId as nanoid, now } from '@/shared/utils';
 import type {
   Database, DatabaseInsert,
   Column, ColumnInsert,

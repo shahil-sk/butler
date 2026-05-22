@@ -9,7 +9,7 @@
 //   label   — task/project name (optional)
 // ============================================================
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import type { UnifiedRecord } from "../hooks/useUnifiedTimeReport";
 import { formatDuration } from "@/shared/utils";
 

@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { registry } from "@/kernel/router";
 import { databaseManifest } from "./manifest";
-import { setupDatabaseEventListeners } from "./events";
+
 import { useDatabaseStore } from "./store";
 import { TableList } from "./components/TableList";
 import { ViewBar } from "./components/ViewBar";
@@ -17,10 +17,7 @@ registry.register(databaseManifest);
 function DatabaseLayout() {
   const { activeTableId, activeViewId, views, loadTable, setActiveView } = useDatabaseStore();
 
-  useEffect(() => {
-    const cleanup = setupDatabaseEventListeners();
-    return cleanup;
-  }, []);
+
 
   // When a table is selected, load its data
   useEffect(() => {

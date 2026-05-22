@@ -4,7 +4,7 @@
  */
 import React, { useMemo } from 'react';
 import { Plus } from 'lucide-react';
-import { cn } from '@/shared/utils/cn';
+import { cn } from '@/shared/utils';
 import { useDatabaseMutations } from './hooks/useDatabaseData';
 import type { Column, RowWithCells, View, SelectOption } from '../types';
 import { useDatabaseStore } from '../store';

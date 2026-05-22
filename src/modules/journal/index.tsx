@@ -14,7 +14,7 @@ import { RichEditor } from "@/shared/RichEditor";
 import { registry } from "@/kernel/router";
 import { bus } from "@/kernel/event-bus";
 import { useJournalStore } from "./store";
-import { setupJournalEventListeners } from "./events";
+
 import { JOURNAL_MANIFEST } from "./manifest";
 import { generateId, today, formatDate } from "@/shared/utils";
 import type { JournalEntry, ISODate } from "@/shared/types";
@@ -451,8 +451,6 @@ export default function JournalModule() {
 
   useEffect(() => {
     registry.register(JOURNAL_MANIFEST);
-    const cleanup = setupJournalEventListeners();
-    return cleanup;
   }, []);
 
   useEffect(() => {

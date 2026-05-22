@@ -7,7 +7,7 @@ import {
   Type, Hash, CheckSquare, ChevronDown, Calendar, Link,
   Mail, Phone, Zap, ArrowRight, MoreHorizontal,
 } from 'lucide-react';
-import { cn } from '@/shared/utils/cn';
+import { cn } from '@/shared/utils';
 import { useDatabaseStore } from '../store';
 import { useDatabaseMutations } from './hooks/useDatabaseData';
 import type { Column } from '../types';

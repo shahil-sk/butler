@@ -5,8 +5,7 @@
 import { useEffect, useState } from "react";
 import { Filter, ArrowUpDown, X, Plus } from "lucide-react";
 import { useDatabaseStore } from "../store";
-import type { DatabaseView, FilterOperator } from "../store";
-import type { DatabaseTable } from "@/shared/types";
+import type { DatabaseView, FilterOperator, DatabaseTable } from "@/shared/types";
 
 const OPERATORS: { value: FilterOperator; label: string }[] = [
   { value: "eq",           label: "=" },

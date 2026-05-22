@@ -3,7 +3,7 @@
  * Pure UI. No service calls.
  */
 import React, { useEffect, useRef } from 'react';
-import { cn } from '@/shared/utils/cn';
+import { cn } from '@/shared/utils';
 import type { Column } from '../types';
 
 interface CellRendererProps {

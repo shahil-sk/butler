@@ -4,7 +4,7 @@
  */
 import React, { useCallback, useRef, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import { cn } from '@/shared/utils/cn';
+import { cn } from '@/shared/utils';
 import { useDatabaseStore } from '../store';
 import { useDatabaseMutations } from './hooks/useDatabaseData';
 import type { Column, RowWithCells, View } from '../types';

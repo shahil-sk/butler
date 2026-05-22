@@ -14,7 +14,7 @@ import type {
   TimeEntry,
   JournalEntry,
   SearchResult,
-  Database,
+  DatabaseTable,
   ResearchSource,
   ResearchDocument,
   ResearchChunk,
@@ -117,8 +117,8 @@ export interface ButlerEventMap {
   "journal:tasks-injected":    { date: string; taskIds: ID[] };
 
   // ── Database events ──────────────────────────────────
-  "database:created":       { database: Database };
-  "database:updated":       { database: Database };
+  "database:created":       { database: DatabaseTable };
+  "database:updated":       { database: DatabaseTable };
   "database:deleted":       { databaseId: string };
   "database:row:created":   { databaseId: string; rowId: string };
   "database:row:deleted":   { databaseId: string; rowId: string };

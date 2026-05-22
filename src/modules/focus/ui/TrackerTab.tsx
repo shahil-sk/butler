@@ -11,7 +11,6 @@ import {
 } from "@/shared/formatters";
 import { EmptyState, ProjectDot } from "@/shared/ui";
 import { useTimeStore } from "@/modules/time-tracking/store";
-import { setupTimeEventListeners } from "@/modules/time-tracking/events";
 import { useTaskStore } from "@/modules/tasks/store";
 import { useProjectStore } from "@/modules/projects/store";
 import type { TimeEntry } from "@/shared/types";
@@ -264,8 +263,6 @@ export function EntryRow({
 
 // ── TrackerTab (exported) ─────────────────────────────────────────────────────
 export function TrackerTab() {
-  useEffect(() => { setupTimeEventListeners(); }, []);
-
   const entries       = useTimeStore((s) => s.entries);
   const activeEntryId = useTimeStore((s) => s.activeEntryId);
   const startTimer    = useTimeStore((s) => s.startTimer);

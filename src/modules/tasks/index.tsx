@@ -17,7 +17,7 @@ import { QuickAdd } from "./components/QuickAdd";
 import { TimeTracker } from "./components/TimeTracker";
 import { FilterBar, PrimaryButton, EmptyState, type FilterTab } from "@/shared/ui";
 import { cn } from "@/shared/utils";
-import type { TaskStatus } from "@/shared/types";
+import type { Task, TaskStatus } from "@/shared/types";
 
 registry.register(tasksManifest);
 
@@ -290,8 +290,6 @@ export function TasksModule() {
   useEffect(() => {
     void loadTasks();
     void loadProjects();
-    const cleanup = setupTaskEventListeners();
-    return cleanup;
   }, []);
 
   useEffect(() => {

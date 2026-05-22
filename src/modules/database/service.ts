@@ -2,7 +2,7 @@
  * service.ts — Business logic only. No direct DB calls.
  * All DB access via repository. All events via bus.
  */
-import { nanoid } from '@/shared/utils/nanoid';
+import { generateId } from '@/shared/utils';
 import { bus } from '@/kernel/event-bus';
 import * as repo from './repository';
 import type {
@@ -154,7 +154,7 @@ export async function setCellValue(
   column_id: string,
   value: string | null
 ): Promise<void> {
-  await repo.upsertCell({ id: nanoid(), row_id, column_id, value });
+  await repo.upsertCell({ id: generateId(), row_id, column_id, value });
   bus.emit('search:index-invalidated', { entityType: 'database:row', id: row_id });
 }
 

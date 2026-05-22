@@ -7,7 +7,7 @@ import { registry } from "@/kernel/router";
 import { bus } from "@/kernel/event-bus";
 import { useResearchStore } from "./store";
 import { researchManifest } from "./manifest";
-import { setupResearchEventListeners } from "./events";
+
 import { SectionLabel } from "@/shared/ui";
 import { cn } from "@/shared/utils";
 import { Layers, FileText, Share2 } from "lucide-react";
@@ -23,7 +23,6 @@ export function ResearchModule() {
   useEffect(() => {
     registry.register(researchManifest);
     void init();
-    const teardown = setupResearchEventListeners();
 
     const offImport = bus.on("research:open-import" as any, () => {
       setActiveView("sources");
@@ -35,7 +34,7 @@ export function ResearchModule() {
     });
 
     return () => {
-      teardown?.();
+
       offImport();
       offThread();
     };
