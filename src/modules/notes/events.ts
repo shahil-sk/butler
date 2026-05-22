@@ -1,43 +1,43 @@
-// ============================================================
-// NOTES — EVENT BUS LISTENERS
-// Wire notes module to cross-module bus events.
-// Call useNoteEventListeners() from the Notes UI component.
-// ============================================================
+// src/modules/notes/events.ts
+// Module-level bus listeners for cross-module reactions.
+// Call registerNoteEventListeners() once at app startup (not inside a React component).
+// This replaces the previous React-hook pattern that re-registered listeners
+// on every render whenever `notes` or `updateNote` changed reference.
 
-import { useEffect } from "react";
-import { bus } from "@/kernel/event-bus";
-import { useNoteStore } from "./store";
+import { bus } from '@/kernel/event-bus';
+import { handleTaskDeleted, handleProjectDeleted } from './service';
+import { useNoteStore } from './store';
 
-export function useNoteEventListeners() {
-  const updateNote = useNoteStore((s) => s.updateNote);
-  const notes      = useNoteStore((s) => s.notes);
+export function registerNoteEventListeners(): () => void {
+  // ── task:deleted → unlink from all notes ──────────────────────────
+  const offTaskDeleted = bus.on('task:deleted', async ({ taskId }: { taskId: string }) => {
+    await handleTaskDeleted(taskId);
+    // Sync in-memory store: re-fetch affected notes from DB state.
+    // Simpler than patching each note individually — notes list is small.
+    const { loadNotes } = useNoteStore.getState();
+    void loadNotes();
+  });
 
-  useEffect(() => {
-    // ── task:deleted → remove task link from all notes ──────
-    const offTaskDeleted = bus.on("task:deleted", ({ taskId }) => {
-      for (const note of notes) {
-        if (note.linkedTaskIds.includes(taskId)) {
-          void updateNote(note.id, {
-            linkedTaskIds: note.linkedTaskIds.filter((id) => id !== taskId),
-          });
-        }
-      }
-    });
+  // ── project:deleted → unlink from all notes ───────────────────────
+  const offProjectDeleted = bus.on('project:deleted', async ({ projectId }: { projectId: string }) => {
+    await handleProjectDeleted(projectId);
+    const { loadNotes } = useNoteStore.getState();
+    void loadNotes();
+  });
 
-    // ── project:deleted → remove project link from all notes ─
-    const offProjectDeleted = bus.on("project:deleted", ({ projectId }) => {
-      for (const note of notes) {
-        if (note.linkedProjectIds.includes(projectId)) {
-          void updateNote(note.id, {
-            linkedProjectIds: note.linkedProjectIds.filter((id) => id !== projectId),
-          });
-        }
-      }
-    });
-
-    return () => {
-      offTaskDeleted();
-      offProjectDeleted();
-    };
-  }, [notes, updateNote]);
+  // Return a cleanup function for use in test teardown or HMR.
+  return () => {
+    offTaskDeleted();
+    offProjectDeleted();
+  };
 }
+
+// Re-export typed emitter helpers for use in service.ts or UI code.
+export const noteEvents = {
+  emit: {
+    created:  (note: import('./types').Note) => bus.emit('note:created',  { note }),
+    updated:  (note: import('./types').Note) => bus.emit('note:updated',  { note }),
+    deleted:  (id: string)                   => bus.emit('note:deleted',  { noteId: id }),
+    opened:   (id: string)                   => bus.emit('note:open',     { noteId: id }),
+  },
+};
