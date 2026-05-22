@@ -1,7 +1,9 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { X, GripVertical, Pencil, Focus as FocusIcon, Check, Timer } from "lucide-react";
 import { cn, toISODate } from "@/shared/utils";
-import { usePlannerStore, type TimeBlock, snapMinutes, clampTime, blockSpentFraction } from "../store";
+import { usePlannerStore } from "../store";
+import { snapMinutes, clampTime, blockSpentFraction } from "../utils";
+import type { TimeBlock } from "../types";
 import { useTaskStore } from "@/modules/tasks/store";
 import { useProjectStore } from "@/modules/projects/store";
 import { useCalendarStore } from "@/modules/calendar/store";
@@ -58,9 +60,6 @@ function DropGhost({ y, height }: { y: number; height: number }) {
 }
 
 // ── ResizeHandle ──────────────────────────────────────────────
-// Use element-level pointer events (not window) so setPointerCapture routes
-// all move/up events here correctly — window listeners are skipped when
-// the pointer is captured to a specific element.
 function ResizeHandle({
   blockId,
   startY,
@@ -380,7 +379,6 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
 
   const [ghost, setGhost] = useState<{ y: number; height: number } | null>(null);
 
-  // All drag-move state in a single ref; geometry snapshot at pointerdown.
   const dragMoveRef = useRef<{
     blockId:      string;
     offsetY:      number;
@@ -412,7 +410,6 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
     return Math.max(0, Math.min(clientY - rect.top + scroll, TOTAL_HEIGHT));
   }, []);
 
-  // ── Task drag-over / drop ──────────────────────────────────
   const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
@@ -441,10 +438,6 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
     }
   }, [dragTaskId, date, getGridY, scheduleTask, createBlock, setDragTaskId]);
 
-  // ── Block pointer-drag (move) ──────────────────────────────
-  // Capture the pointer to the GRID element so pointermove/pointerup
-  // correctly receive the captured events — window listeners are bypassed
-  // when pointer is captured, which was the root cause of drag sticking.
   const onPointerDownGrip = useCallback(
     (e: React.PointerEvent, blockId: string) => {
       e.preventDefault();
@@ -470,13 +463,11 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
         pointerId: e.pointerId,
       };
 
-      // Capture to the GRID element so pointermove/pointerup fire on it
       gridRef.current?.setPointerCapture(e.pointerId);
     },
     [getGridY]
   );
 
-  // Grid-level pointer move — receives captured events from grip drags
   const onGridPointerMove = useCallback((e: React.PointerEvent) => {
     const ref = dragMoveRef.current;
     if (!ref || e.pointerId !== ref.pointerId) return;
