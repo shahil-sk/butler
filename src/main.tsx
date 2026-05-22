@@ -13,8 +13,12 @@ import { CALENDAR_MIGRATIONS } from "@/modules/calendar/db";
 import { JOURNAL_MIGRATIONS }  from "@/modules/journal/db";
 import { FOCUS_MIGRATIONS }    from "@/modules/focus/db";
 import { TIME_MIGRATIONS }     from "@/modules/time-tracking/db";
-import { DATABASE_MIGRATIONS } from '@/modules/database/db';
-import { RESEARCH_MIGRATIONS } from '@/modules/research/db';
+import { DATABASE_MIGRATIONS } from "@/modules/database/db";
+import { RESEARCH_MIGRATIONS } from "@/modules/research/db";
+
+// ── Boot-time module listeners ────────────────────────────────
+import { registerFocusListeners } from "@/modules/focus/events";
+import { registerTimeListeners }  from "@/modules/time-tracking/events";
 
 // ── Kernel services ───────────────────────────────────────────
 import { startTaskCalendarSync } from "@/kernel/task-calendar-sync";
@@ -47,8 +51,12 @@ async function boot() {
   try {
     await db.init();
 
-    // Start kernel services that depend on the DB being ready
+    // Kernel services
     startTaskCalendarSync();
+
+    // Module bus listeners
+    registerFocusListeners();
+    registerTimeListeners();
 
     ReactDOM.createRoot(document.getElementById("root")!).render(
       <React.StrictMode>

@@ -5,19 +5,34 @@
 // ============================================================
 
 import { create } from "zustand";
-import { db } from "@/kernel/db";
 import { bus } from "@/kernel/event-bus";
 import { generateId, now } from "@/shared/utils";
 import {
-  SQL,
-  RESEARCH_MIGRATIONS,
-  rowToSource,
-  rowToDocument,
-  rowToChunk,
-  rowToThread,
-  rowToHighlight,
-  rowToAnnotation,
-} from "./db";
+  dbSelectSources,
+  dbInsertSource,
+  dbUpdateSource,
+  dbUpdateSourceStatus,
+  dbDeleteSource,
+  dbSelectDocuments,
+  dbInsertDocument,
+  dbSelectChunksByDocument,
+  dbInsertChunk,
+  dbUpdateChunkAi,
+  dbSelectHighlightsByDocument,
+  dbInsertHighlight,
+  dbUpdateHighlight,
+  dbDeleteHighlight,
+  dbSelectAnnotationsByDocument,
+  dbInsertAnnotation,
+  dbUpdateAnnotation,
+  dbDeleteAnnotation,
+  dbSelectThreads,
+  dbInsertThread,
+  dbUpdateThread,
+  dbDeleteThread,
+  dbSelectPendingJobs,
+  dbFtsSearch,
+} from "./repository";
 import type {
   ResearchSource,
   ResearchDocument,
@@ -34,7 +49,7 @@ import type {
   ResearchSourceType,
   ResearchChunkType,
   ResearchRelationType,
-} from "@/shared/types";
+} from "./types";
 
 // ── State shape ─────────────────────────────────────────────
 
@@ -186,23 +201,16 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
   sidebarTab: "info",
 
   // ── init ─────────────────────────────────────────────────
-  // Fix #3: also hydrate aiJobs on init
   init: async () => {
     set({ isLoading: true });
     try {
-      const [sourceRows, docRows, threadRows, jobRows] = await Promise.all([
-        db.select<Record<string, unknown>>(SQL.SELECT_SOURCES, []),
-        db.select<Record<string, unknown>>(SQL.SELECT_DOCUMENTS, []),
-        db.select<Record<string, unknown>>(SQL.SELECT_THREADS, []),
-        db.select<Record<string, unknown>>(SQL.SELECT_PENDING_JOBS, []),
+      const [sources, documents, threads, aiJobs] = await Promise.all([
+        dbSelectSources(),
+        dbSelectDocuments(),
+        dbSelectThreads(),
+        dbSelectPendingJobs(),
       ]);
-      set({
-        sources: sourceRows.map(rowToSource) as ResearchSource[],
-        documents: docRows.map(rowToDocument) as ResearchDocument[],
-        threads: threadRows.map(rowToThread) as ResearchThread[],
-        aiJobs: jobRows as ResearchAiJob[],
-        isLoading: false,
-      });
+      set({ sources, documents, threads, aiJobs, isLoading: false });
     } catch (err) {
       console.error("[ResearchStore] init failed:", err);
       set({ isLoading: false });
@@ -226,15 +234,7 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
       importedAt: now(),
       updatedAt: now(),
     };
-    await db.execute(SQL.INSERT_SOURCE, [
-      source.id, source.type, source.title, source.url ?? null,
-      source.filePath ?? null, source.rawContent ?? null,
-      source.mimeType ?? null, source.sizeBytes ?? null,
-      source.processingStatus, source.errorMessage ?? null,
-      JSON.stringify(source.threadIds), JSON.stringify(source.tags),
-      source.importedAt, source.updatedAt,
-    ]);
-    await db.execute(SQL.FTS_INSERT, [source.id, "source", source.title, source.rawContent ?? ""]);
+    await dbInsertSource(source);
     set((s) => ({ sources: [source, ...s.sources] }));
     bus.emit("research:source-imported", { source });
     bus.emit("search:index-invalidated", { entityType: "research_document", id: source.id });
@@ -242,26 +242,17 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
   },
 
   // ── updateSource ─────────────────────────────────────────
-  // Fix #5: dedicated updateSource action for rename / re-tag
   updateSource: async (id, patch) => {
     const src = get().sources.find((s) => s.id === id);
     if (!src) return;
     const updated = { ...src, ...patch, updatedAt: now() };
-    await db.execute(SQL.UPDATE_SOURCE, [
-      updated.title,
-      JSON.stringify(updated.tags),
-      JSON.stringify(updated.threadIds),
-      updated.updatedAt,
-      id,
-    ]);
-    set((s) => ({
-      sources: s.sources.map((x) => (x.id === id ? updated : x)),
-    }));
+    await dbUpdateSource(id, updated.title, updated.tags, updated.threadIds, updated.updatedAt);
+    set((s) => ({ sources: s.sources.map((x) => (x.id === id ? updated : x)) }));
   },
 
   // ── updateSourceStatus ───────────────────────────────────
   updateSourceStatus: async (id, status, error) => {
-    await db.execute(SQL.UPDATE_SOURCE_STATUS, [status, error ?? null, now(), id]);
+    await dbUpdateSourceStatus(id, status, error, now());
     set((s) => ({
       sources: s.sources.map((src) =>
         src.id === id ? { ...src, processingStatus: status, errorMessage: error, updatedAt: now() } : src
@@ -271,8 +262,7 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
 
   // ── deleteSource ─────────────────────────────────────────
   deleteSource: async (id) => {
-    await db.execute(SQL.DELETE_SOURCE, [id]);
-    await db.execute(SQL.FTS_DELETE, [id]);
+    await dbDeleteSource(id);
     set((s) => ({
       sources: s.sources.filter((src) => src.id !== id),
       documents: s.documents.filter((doc) => doc.sourceId !== id),
@@ -296,14 +286,7 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
       createdAt: now(),
       updatedAt: now(),
     };
-    await db.execute(SQL.INSERT_DOCUMENT, [
-      doc.id, doc.sourceId, doc.title,
-      JSON.stringify(doc.authors),
-      doc.publishedDate ?? null, doc.language ?? null, doc.abstract ?? null,
-      doc.totalChunks, doc.totalPages ?? null, doc.wordCount ?? null,
-      doc.processingVersion, doc.createdAt, doc.updatedAt,
-    ]);
-    await db.execute(SQL.FTS_INSERT, [doc.id, "document", doc.title, doc.abstract ?? ""]);
+    await dbInsertDocument(doc);
     set((s) => ({ documents: [doc, ...s.documents] }));
     bus.emit("research:document-processed", { document: doc, sourceId: input.sourceId });
     return doc;
@@ -311,8 +294,8 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
 
   // ── loadDocumentChunks ───────────────────────────────────
   loadDocumentChunks: async (documentId) => {
-    const rows = await db.select<Record<string, unknown>>(SQL.SELECT_CHUNKS_BY_DOC, [documentId]);
-    set({ chunks: rows.map(rowToChunk) as ResearchChunk[] });
+    const chunks = await dbSelectChunksByDocument(documentId);
+    set({ chunks });
   },
 
   // ── createChunk ──────────────────────────────────────────
@@ -330,13 +313,7 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
       entities: [],
       createdAt: now(),
     };
-    await db.execute(SQL.INSERT_CHUNK, [
-      chunk.id, chunk.documentId, chunk.sourceId, chunk.type, chunk.content,
-      chunk.order, chunk.pageNumber ?? null, chunk.sectionTitle ?? null,
-      null, JSON.stringify(chunk.semanticTags), JSON.stringify(chunk.entities),
-      null, null, chunk.createdAt,
-    ]);
-    await db.execute(SQL.FTS_INSERT, [chunk.id, "chunk", chunk.sectionTitle ?? "", chunk.content]);
+    await dbInsertChunk(chunk);
     set((s) => ({ chunks: [...s.chunks, chunk] }));
     bus.emit("research:chunk-created", { chunk });
     return chunk;
@@ -344,9 +321,7 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
 
   // ── updateChunkAi ────────────────────────────────────────
   updateChunkAi: async (id, tags, entities, score, summary) => {
-    await db.execute(SQL.UPDATE_CHUNK_AI, [
-      JSON.stringify(tags), JSON.stringify(entities), score, summary, id,
-    ]);
+    await dbUpdateChunkAi(id, tags, entities, score, summary);
     set((s) => ({
       chunks: s.chunks.map((c) =>
         c.id === id ? { ...c, semanticTags: tags, entities, importanceScore: score, summary } : c
@@ -356,8 +331,8 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
 
   // ── loadHighlights ───────────────────────────────────────
   loadHighlights: async (documentId) => {
-    const rows = await db.select<Record<string, unknown>>(SQL.SELECT_HIGHLIGHTS_BY_DOC, [documentId]);
-    set({ highlights: rows.map(rowToHighlight) as ResearchHighlight[] });
+    const highlights = await dbSelectHighlightsByDocument(documentId);
+    set({ highlights });
   },
 
   // ── createHighlight ──────────────────────────────────────
@@ -375,13 +350,7 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
       createdAt: now(),
       updatedAt: now(),
     };
-    await db.execute(SQL.INSERT_HIGHLIGHT, [
-      h.id, h.documentId, h.chunkId, h.sourceId, h.text, h.color,
-      h.pageNumber ?? null,
-      h.position ? JSON.stringify(h.position) : null,
-      h.note ?? null, h.linkedNoteId ?? null, h.linkedTaskId ?? null,
-      h.createdAt, h.updatedAt,
-    ]);
+    await dbInsertHighlight(h);
     set((s) => ({ highlights: [...s.highlights, h] }));
     bus.emit("research:highlight-created", { highlight: h });
     bus.emit("search:index-invalidated", { entityType: "research_chunk", id: input.chunkId });
@@ -393,25 +362,21 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
     const h = get().highlights.find((x) => x.id === id);
     if (!h) return;
     const updated = { ...h, ...patch, updatedAt: now() };
-    await db.execute(SQL.UPDATE_HIGHLIGHT, [
-      updated.note ?? null, updated.color,
-      updated.linkedNoteId ?? null, updated.linkedTaskId ?? null,
-      updated.updatedAt, id,
-    ]);
+    await dbUpdateHighlight(updated);
     set((s) => ({ highlights: s.highlights.map((x) => (x.id === id ? updated : x)) }));
   },
 
   // ── deleteHighlight ──────────────────────────────────────
   deleteHighlight: async (id) => {
-    await db.execute(SQL.DELETE_HIGHLIGHT, [id]);
+    await dbDeleteHighlight(id);
     set((s) => ({ highlights: s.highlights.filter((h) => h.id !== id) }));
     bus.emit("research:highlight-deleted", { highlightId: id });
   },
 
   // ── loadAnnotations ──────────────────────────────────────
   loadAnnotations: async (documentId) => {
-    const rows = await db.select<Record<string, unknown>>(SQL.SELECT_ANNOTATIONS_BY_DOC, [documentId]);
-    set({ annotations: rows.map(rowToAnnotation) as ResearchAnnotation[] });
+    const annotations = await dbSelectAnnotationsByDocument(documentId);
+    set({ annotations });
   },
 
   // ── createAnnotation ─────────────────────────────────────
@@ -428,39 +393,25 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
       createdAt: now(),
       updatedAt: now(),
     };
-    await db.execute(SQL.INSERT_ANNOTATION, [
-      a.id, a.documentId, a.chunkId ?? null, a.sourceId, a.type, a.content,
-      a.pageNumber ?? null,
-      a.position ? JSON.stringify(a.position) : null,
-      a.linkedNoteId ?? null, a.linkedTaskId ?? null,
-      a.createdAt, a.updatedAt,
-    ]);
+    await dbInsertAnnotation(a);
     set((s) => ({ annotations: [...s.annotations, a] }));
     bus.emit("research:annotation-created", { annotation: a });
     return a;
   },
 
   // ── updateAnnotation ─────────────────────────────────────
-  // Fix #4: preserve original type — don't re-save from stale closure
   updateAnnotation: async (id, content) => {
     const a = get().annotations.find((x) => x.id === id);
     if (!a) return;
     const updated = { ...a, content, updatedAt: now() };
-    await db.execute(SQL.UPDATE_ANNOTATION, [
-      updated.content,
-      a.type, // explicitly use original type
-      updated.linkedNoteId ?? null,
-      updated.linkedTaskId ?? null,
-      updated.updatedAt,
-      id,
-    ]);
+    await dbUpdateAnnotation(updated);
     set((s) => ({ annotations: s.annotations.map((x) => (x.id === id ? updated : x)) }));
     bus.emit("research:annotation-updated", { annotation: updated });
   },
 
   // ── deleteAnnotation ─────────────────────────────────────
   deleteAnnotation: async (id) => {
-    await db.execute(SQL.DELETE_ANNOTATION, [id]);
+    await dbDeleteAnnotation(id);
     set((s) => ({ annotations: s.annotations.filter((a) => a.id !== id) }));
     bus.emit("research:annotation-deleted", { annotationId: id });
   },
@@ -484,16 +435,7 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
       createdAt: now(),
       updatedAt: now(),
     };
-    await db.execute(SQL.INSERT_THREAD, [
-      t.id, t.title, t.description ?? null, t.color ?? null,
-      JSON.stringify(t.sourceIds), JSON.stringify(t.highlightIds),
-      JSON.stringify(t.annotationIds), JSON.stringify(t.linkedNoteIds),
-      JSON.stringify(t.linkedTaskIds), JSON.stringify(t.linkedProjectIds),
-      t.aiSummary ?? null,
-      JSON.stringify(t.unresolvedQuestions), JSON.stringify(t.recentInsights),
-      JSON.stringify(t.tags), t.isPinned ? 1 : 0,
-      t.createdAt, t.updatedAt,
-    ]);
+    await dbInsertThread(t);
     set((s) => ({ threads: [t, ...s.threads] }));
     bus.emit("research:thread-created", { thread: t });
     return t;
@@ -504,42 +446,29 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
     const t = get().threads.find((x) => x.id === id);
     if (!t) return;
     const updated = { ...t, ...patch, updatedAt: now() };
-    await db.execute(SQL.UPDATE_THREAD, [
-      updated.title, updated.description ?? null, updated.color ?? null,
-      JSON.stringify(updated.sourceIds), JSON.stringify(updated.highlightIds),
-      JSON.stringify(updated.annotationIds), JSON.stringify(updated.linkedNoteIds),
-      JSON.stringify(updated.linkedTaskIds), JSON.stringify(updated.linkedProjectIds),
-      updated.aiSummary ?? null,
-      JSON.stringify(updated.unresolvedQuestions), JSON.stringify(updated.recentInsights),
-      JSON.stringify(updated.tags), updated.isPinned ? 1 : 0,
-      updated.updatedAt, id,
-    ]);
+    await dbUpdateThread(updated);
     set((s) => ({ threads: s.threads.map((x) => (x.id === id ? updated : x)) }));
     bus.emit("research:thread-updated", { thread: updated });
   },
 
   // ── deleteThread ─────────────────────────────────────────
   deleteThread: async (id) => {
-    await db.execute(SQL.DELETE_THREAD, [id]);
+    await dbDeleteThread(id);
     set((s) => ({ threads: s.threads.filter((t) => t.id !== id) }));
     bus.emit("research:thread-deleted", { threadId: id });
   },
 
   // ── addSourceToThread ────────────────────────────────────
-  // Fix #13: wrapped in try/catch to surface errors
   addSourceToThread: async (threadId, sourceId) => {
     try {
       const thread = get().threads.find((t) => t.id === threadId);
       if (!thread) return;
       if (thread.sourceIds.includes(sourceId)) return;
-      const updatedSourceIds = [...thread.sourceIds, sourceId];
-      await get().updateThread(threadId, { sourceIds: updatedSourceIds });
+      await get().updateThread(threadId, { sourceIds: [...thread.sourceIds, sourceId] });
       const source = get().sources.find((s) => s.id === sourceId);
       if (source && !source.threadIds.includes(threadId)) {
         const newThreadIds = [...source.threadIds, threadId];
-        await db.execute(SQL.UPDATE_SOURCE, [
-          source.title, JSON.stringify(source.tags), JSON.stringify(newThreadIds), now(), sourceId,
-        ]);
+        await dbUpdateSource(sourceId, source.title, source.tags, newThreadIds, now());
         set((s) => ({
           sources: s.sources.map((src) =>
             src.id === sourceId ? { ...src, threadIds: newThreadIds, updatedAt: now() } : src
@@ -558,7 +487,6 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
   },
 
   // ── removeSourceFromThread ───────────────────────────────
-  // Fix #1: new action — inverse of addSourceToThread
   removeSourceFromThread: async (threadId, sourceId) => {
     try {
       const thread = get().threads.find((t) => t.id === threadId);
@@ -569,9 +497,7 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
       const src = get().sources.find((s) => s.id === sourceId);
       if (src) {
         const newThreadIds = src.threadIds.filter((id) => id !== threadId);
-        await db.execute(SQL.UPDATE_SOURCE, [
-          src.title, JSON.stringify(src.tags), JSON.stringify(newThreadIds), now(), sourceId,
-        ]);
+        await dbUpdateSource(sourceId, src.title, src.tags, newThreadIds, now());
         set((s) => ({
           sources: s.sources.map((x) =>
             x.id === sourceId ? { ...x, threadIds: newThreadIds, updatedAt: now() } : x
@@ -597,15 +523,12 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
   setSidebarTab: (tab) => set({ sidebarTab: tab }),
 
   // ── search ───────────────────────────────────────────────
-  // Fix #14: sanitize FTS query to avoid special-char crashes
   search: async (query) => {
     set({ searchQuery: query });
     if (!query.trim()) { set({ searchResults: [] }); return; }
     try {
       const safeQ = query.replace(/[^a-zA-Z0-9 ]/g, "").trim() + "*";
-      const rows = await db.select<{ id: string; entity_type: string; title: string; excerpt?: string }>(
-        SQL.FTS_SEARCH, [safeQ, 30]
-      );
+      const rows = await dbFtsSearch(safeQ, 30);
       set({
         searchResults: rows.map((r) => ({
           id: r.id,
@@ -619,14 +542,12 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
       const q = query.toLowerCase();
       const results: ResearchState["searchResults"] = [];
       get().sources.forEach((s) => {
-        if (s.title.toLowerCase().includes(q)) {
+        if (s.title.toLowerCase().includes(q))
           results.push({ id: s.id, entityType: "source", title: s.title });
-        }
       });
       get().documents.forEach((d) => {
-        if (d.title.toLowerCase().includes(q)) {
+        if (d.title.toLowerCase().includes(q))
           results.push({ id: d.id, entityType: "document", title: d.title });
-        }
       });
       set({ searchResults: results });
     }
