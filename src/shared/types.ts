@@ -33,6 +33,7 @@ export interface Task {
   dueDate?: ISODate;
   startDate?: ISODate;
   scheduledDate?: ISODate;
+  scheduledTime?: string;
   completedAt?: ISODateTime;
   estimateMinutes?: number;
   actualMinutes?: number;      // from time tracking

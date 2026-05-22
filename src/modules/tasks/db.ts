@@ -23,6 +23,7 @@ export const TASK_MIGRATIONS: Migration[] = [
         due_date TEXT,
         start_date TEXT,
         scheduled_date TEXT,
+        scheduled_time TEXT,
         completed_at TEXT,
         estimate_minutes INTEGER,
         actual_minutes INTEGER,
@@ -53,6 +54,18 @@ export const TASK_MIGRATIONS: Migration[] = [
     down: `
       DROP TABLE IF EXISTS tasks;
       DROP TABLE IF EXISTS task_labels;
+    `,
+  },
+  {
+    version: 11,
+    module: "tasks",
+    up: `
+      ALTER TABLE tasks ADD COLUMN scheduled_time TEXT;
+    `,
+    down: `
+      -- SQLite doesn't easily support dropping columns in older versions, 
+      -- but newer versions do. We'll leave it as a no-op or drop if needed.
+      -- ALTER TABLE tasks DROP COLUMN scheduled_time;
     `,
   },
 ];

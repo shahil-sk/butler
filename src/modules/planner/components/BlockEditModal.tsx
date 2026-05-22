@@ -88,7 +88,7 @@ export function BlockEditModal({ blockId, onClose }: { blockId: string; onClose:
       scheduledDate: block.date,
       dueDate: block.date,
       estimateMinutes: durationMins > 0 ? durationMins : undefined,
-      notes,
+      description: notes,
     });
 
     // Link the new task to this block
@@ -110,7 +110,7 @@ export function BlockEditModal({ blockId, onClose }: { blockId: string; onClose:
             onClick={onClose}
             className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-fast"
           >
-            ✕
+            <X size={14} />
           </button>
         </div>
 

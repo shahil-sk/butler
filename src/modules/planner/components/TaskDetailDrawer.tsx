@@ -66,7 +66,8 @@ export function TaskDetailDrawer({ taskId, onClose }: Props) {
   function markDirty() { setDirty(true); }
 
   async function handleSave() {
-    if (!dirty) return;
+    if (!task) return;
+    if (!dirty) return onClose();
     setSaving(true);
     try {
       await updateTask(task.id, {
@@ -84,19 +85,20 @@ export function TaskDetailDrawer({ taskId, onClose }: Props) {
   }
 
   function handleToggleComplete() {
+    if (!task) return;
     if (isDone) { restoreTask(task.id); setStatus("todo"); }
     else        { completeTask(task.id); setStatus("done"); }
     markDirty();
   }
 
   function openFullDetail() {
+    if (!task) return;
     openTask(task.id);
     onClose();
   }
 
   return (
     <div className="flex flex-col h-full border-l border-border bg-card w-72 shrink-0 overflow-hidden animate-fade-in">
-
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border shrink-0">
         <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">

@@ -14,6 +14,7 @@ import { setupTaskEventListeners } from "./events";
 import { useProjectStore } from "@/modules/projects/store";
 import { TaskCard } from "./components/TaskCard";
 import { QuickAdd } from "./components/QuickAdd";
+import { TimeTracker } from "./components/TimeTracker";
 import { FilterBar, PrimaryButton, EmptyState, type FilterTab } from "@/shared/ui";
 import { cn } from "@/shared/utils";
 import type { TaskStatus } from "@/shared/types";
@@ -21,7 +22,7 @@ import type { TaskStatus } from "@/shared/types";
 registry.register(tasksManifest);
 
 // ─── Types ───────────────────────────────────────────────────
-type Task = ReturnType<ReturnType<typeof useTaskStore>["getFilteredTasks"]>[number];
+// The Task type is imported from @/shared/types above.
 type GroupId = "overdue" | "today" | "in_progress" | "todo" | "done";
 
 interface TaskGroup {
@@ -443,6 +444,7 @@ export function TasksModule() {
       </div>
 
       {quickAddOpen && <QuickAdd />}
+      <TimeTracker />
     </div>
   );
 }

@@ -30,7 +30,7 @@ export function PlanAdderModal({ defaultDate, defaultTime = "09:00", onClose }: 
     const end    = h * 60 + m + 60;
     return `${String(Math.floor(end / 60)).padStart(2, "0")}:${String(end % 60).padStart(2, "0")}`;
   });
-  const [color,     setColor]     = useState(BLOCK_COLORS[0]);
+  const [color,     setColor]     = useState<string>(BLOCK_COLORS[0]);
   const [isBreak,   setIsBreak]   = useState(false);
   const [notes,     setNotes]     = useState("");
   const [taskId,    setTaskId]    = useState("");

@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   due_date         TEXT,
   start_date       TEXT,
   scheduled_date   TEXT,
+  scheduled_time   TEXT,
   completed_at     TEXT,
   estimate_minutes INTEGER,
   actual_minutes   INTEGER,

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   ChevronLeft, ChevronRight, CalendarDays, LayoutGrid, Columns3,
-  Clock, Coffee, Layers, BookTemplate, CheckSquare, PanelRightClose, PanelRightOpen,
+  Clock, Coffee, Layers, BookTemplate, CheckSquare, PanelRightClose, PanelRightOpen, X,
 } from "lucide-react";
 import { registry } from "@/kernel/router";
 import { usePlannerStore, type PlannerView } from "./store";
@@ -162,7 +162,7 @@ function CustomPlanModal({ onClose }: { onClose: () => void }) {
           </div>
           <button onClick={onClose}
             className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-fast">
-            \u2715
+            <X size={14} />
           </button>
         </div>
 
@@ -330,47 +330,51 @@ export default function PlannerPage() {
       {/* ── Body ───────────────────────────────────────────────── */}
       <div className="flex flex-1 min-h-0">
         {/* Planner grid */}
-        <div className="flex-1 flex flex-col border-r border-border bg-surface-1/40 min-w-0">
+        <div className="flex-1 flex flex-col border-r border-border bg-surface-1/40 min-w-0 overflow-y-auto overflow-x-hidden planner-scroll-container relative">
           {/* Day column headers */}
-          <div className="grid shrink-0" style={{ gridTemplateColumns: `repeat(${visibleDates.length}, minmax(0, 1fr))` }}>
+          <div className="flex shrink-0 sticky top-0 z-50 bg-background shadow-sm border-b border-border/60">
             {visibleDates.map((d, idx) => {
-              const dObj    = parseISO(d);
-              const isToday = d === toISODate(new Date());
+              const dObj       = parseISO(d);
+              const isToday    = d === toISODate(new Date());
+              const hideGutter = view === "week" && idx > 0;
+              const gutterW    = hideGutter ? 0 : 52;
+              
               return (
-                <button
-                  key={d}
-                  onClick={() => setActiveDate(d)}
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-1.5 border-b border-border/60 bg-surface-1/60 hover:bg-accent/40 transition-fast",
-                    idx > 0 && "border-l border-border/60",
-                    d === activeDate && "bg-primary/5"
-                  )}
-                >
-                  {view === "week" && (
-                    <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 shrink-0">
-                      {WEEK_DAYS[dObj.getDay() === 0 ? 6 : dObj.getDay() - 1]}
+                <div key={d} className="flex flex-1" style={{ paddingLeft: gutterW }}>
+                  <button
+                    onClick={() => setActiveDate(d)}
+                    className={cn(
+                      "flex-1 flex items-center justify-center gap-2 px-2 py-1.5 hover:bg-accent/40 transition-fast",
+                      idx > 0 && "border-l border-border/60",
+                      d === activeDate && "bg-primary/5"
+                    )}
+                  >
+                    {view === "week" && (
+                      <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 shrink-0">
+                        {WEEK_DAYS[dObj.getDay() === 0 ? 6 : dObj.getDay() - 1]}
+                      </span>
+                    )}
+                    <span className={cn(
+                      "text-sm font-semibold tabular-nums",
+                      isToday && "text-primary"
+                    )}>
+                      {format(dObj, view === "week" ? "d" : "MMM d, yyyy")}
                     </span>
-                  )}
-                  <span className={cn(
-                    "text-sm font-semibold tabular-nums",
-                    isToday && "text-primary"
-                  )}>
-                    {format(dObj, view === "week" ? "d" : "MMM d, yyyy")}
-                  </span>
-                  {isToday && (
-                    <span className="px-1 py-0.5 rounded-full bg-primary/10 text-primary text-[9px] font-semibold leading-none">
-                      Today
-                    </span>
-                  )}
-                </button>
+                    {isToday && (
+                      <span className="px-1 py-0.5 rounded-full bg-primary/10 text-primary text-[9px] font-semibold leading-none hidden sm:inline-block">
+                        Today
+                      </span>
+                    )}
+                  </button>
+                </div>
               );
             })}
           </div>
 
           {/* Day columns body */}
-          <div className="flex flex-1 min-h-0">
-            {visibleDates.map((d) => (
-              <DayColumn key={d} date={d as any} compact={view === "week"} />
+          <div className="flex flex-1 shrink-0" style={{ height: 72 * 24 /* TOTAL_HEIGHT from DayColumn */ }}>
+            {visibleDates.map((d, i) => (
+              <DayColumn key={d} date={d as any} compact={view === "week"} hideGutter={view === "week" && i > 0} />
             ))}
           </div>
         </div>

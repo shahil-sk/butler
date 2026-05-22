@@ -7,7 +7,7 @@
 import { create } from "zustand";
 import { bus } from "@/kernel/event-bus";
 import type { Task, Priority, TaskStatus, ID } from "@/shared/types";
-import type { TaskFilter as _TaskFilter } from "./types";
+import type { CreateTaskInput, UpdateTaskInput } from "./types";
 import * as svc from "./service";
 import * as repo from "./repository";
 
@@ -40,6 +40,8 @@ interface TaskState {
   sortBy:          TaskSortBy;
   filter:          TaskFilter;
   activeRoute:     string;
+  activeTimerTaskId: ID | null;
+  activeTimerStartAt: number | null;
 }
 
 interface TaskActions {
@@ -59,6 +61,9 @@ interface TaskActions {
   addChecklistItem:    (taskId: ID, text: string) => Promise<void>;
   toggleChecklistItem: (taskId: ID, itemId: ID) => Promise<void>;
   deleteChecklistItem: (taskId: ID, itemId: ID) => Promise<void>;
+  // Timer
+  startTimer:          (taskId: ID) => void;
+  stopTimer:           () => Promise<void>;
   // UI
   openQuickAdd:        (prefill?: Partial<Task>) => void;
   closeQuickAdd:       () => void;
@@ -100,6 +105,7 @@ export const useTaskStore = create<TaskState & TaskActions>()((set, get) => ({
   quickAddOpen: false, quickAddPrefill: {},
   view: "list", groupBy: "none", sortBy: "manual",
   filter: DEFAULT_FILTER, activeRoute: "all",
+  activeTimerTaskId: null, activeTimerStartAt: null,
 
   // ── Data ──────────────────────────────────────────────────
 
@@ -226,6 +232,31 @@ export const useTaskStore = create<TaskState & TaskActions>()((set, get) => ({
     if (!task) return;
     const updated = await svc.deleteChecklistItem(task, itemId);
     set((s) => ({ tasks: s.tasks.map((t) => (t.id === taskId ? updated : t)) }));
+  },
+
+  // ── Timer ─────────────────────────────────────────────────
+
+  startTimer: (taskId) => {
+    const current = get().activeTimerTaskId;
+    if (current && current !== taskId) {
+      void get().stopTimer();
+    }
+    set({ activeTimerTaskId: taskId, activeTimerStartAt: Date.now() });
+  },
+
+  stopTimer: async () => {
+    const { activeTimerTaskId, activeTimerStartAt, tasks } = get();
+    if (!activeTimerTaskId || !activeTimerStartAt) return;
+    
+    const task = tasks.find((t) => t.id === activeTimerTaskId);
+    const elapsedMinutes = Math.floor((Date.now() - activeTimerStartAt) / 60000);
+    
+    set({ activeTimerTaskId: null, activeTimerStartAt: null });
+    
+    if (task && elapsedMinutes > 0) {
+      const currentActual = task.actualMinutes || 0;
+      await get().updateTask(activeTimerTaskId, { actualMinutes: currentActual + elapsedMinutes });
+    }
   },
 
   // ── UI ────────────────────────────────────────────────────

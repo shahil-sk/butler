@@ -26,11 +26,11 @@ export const checklistItemSchema = z.object({
 });
 
 export const recurrenceRuleSchema = z.object({
-  freq:     z.enum(["daily", "weekly", "monthly", "yearly"]),
-  interval: z.number().int().positive().optional(),
-  byDay:    z.array(z.string()).optional(),
-  until:    z.string().optional(),
-  count:    z.number().int().positive().optional(),
+  frequency: z.enum(["daily", "weekly", "monthly", "yearly", "custom"]),
+  interval: z.number().int().positive(),
+  daysOfWeek: z.array(z.number()).optional(),
+  endDate: z.string().optional(),
+  count: z.number().int().positive().optional(),
 });
 
 // ── Task schema (mirrors Task interface in @/shared/types) ─────
@@ -48,6 +48,7 @@ export const taskSchema = z.object({
   dueDate:          z.string().optional(),
   startDate:        z.string().optional(),
   scheduledDate:    z.string().optional(),
+  scheduledTime:    z.string().optional(),
   completedAt:      z.string().optional(),
   estimateMinutes:  z.number().int().nonnegative().optional(),
   actualMinutes:    z.number().int().nonnegative().optional(),
@@ -82,6 +83,7 @@ export const taskDbRowSchema = z.object({
   due_date:         z.string().nullable(),
   start_date:       z.string().nullable(),
   scheduled_date:   z.string().nullable(),
+  scheduled_time:   z.string().nullable().optional(),
   completed_at:     z.string().nullable(),
   estimate_minutes: z.number().nullable(),
   actual_minutes:   z.number().nullable(),
@@ -99,11 +101,13 @@ export type TaskDbRow = z.infer<typeof taskDbRowSchema>;
 
 // ── Partial input schema for createTask / updateTask ──────────
 
+import type { Task } from "@/shared/types";
+
 export const createTaskInputSchema = taskSchema
   .partial()
   .required({ title: true });
 
 export const updateTaskInputSchema = taskSchema.partial();
 
-export type CreateTaskInput = z.infer<typeof createTaskInputSchema>;
-export type UpdateTaskInput = z.infer<typeof updateTaskInputSchema>;
+export type CreateTaskInput = Partial<Task> & { title: string };
+export type UpdateTaskInput = Partial<Task>;

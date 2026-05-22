@@ -7,6 +7,7 @@
 
 import { bus } from "@/kernel/event-bus";
 import { generateId, now } from "@/shared/utils";
+import { addDays, addWeeks, addMonths, addYears } from "date-fns";
 import type { Task, ChecklistItem, ID } from "@/shared/types";
 import type { CreateTaskInput, UpdateTaskInput } from "./types";
 import * as repo from "./repository";
@@ -31,6 +32,7 @@ export function buildTask(input: CreateTaskInput): Task {
     dueDate:         input.dueDate,
     startDate:       input.startDate,
     scheduledDate:   input.scheduledDate,
+    scheduledTime:   input.scheduledTime,
     completedAt:     undefined,
     estimateMinutes: input.estimateMinutes,
     actualMinutes:   undefined,
@@ -100,6 +102,30 @@ export async function completeTask(id: ID, existing: Task): Promise<Task> {
   const completedAt = now();
   const updated = await updateTask(id, { status: "done", completedAt }, existing);
   bus.emit("task:completed", { taskId: id, completedAt });
+
+  if (existing.recurrence) {
+    const baseDateStr = existing.dueDate ?? existing.scheduledDate ?? completedAt.split("T")[0];
+    const baseDate = new Date(baseDateStr);
+    const interval = existing.recurrence.interval || 1;
+    let nextDate = baseDate;
+    
+    switch (existing.recurrence.frequency) {
+      case "daily": nextDate = addDays(baseDate, interval); break;
+      case "weekly": nextDate = addWeeks(baseDate, interval); break;
+      case "monthly": nextDate = addMonths(baseDate, interval); break;
+      case "yearly": nextDate = addYears(baseDate, interval); break;
+    }
+    
+    const nextIso = nextDate.toISOString().split("T")[0];
+    await createTask({
+      ...existing,
+      status: "todo",
+      dueDate: existing.dueDate ? nextIso : undefined,
+      scheduledDate: existing.scheduledDate ? nextIso : undefined,
+      checklistItems: existing.checklistItems.map(i => ({ ...i, checked: false })),
+    });
+  }
+
   return updated;
 }
 

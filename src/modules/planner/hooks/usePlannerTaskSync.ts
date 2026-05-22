@@ -61,9 +61,10 @@ export function useScheduleTask() {
     async (task: Task, date: ISODate, startTime: string) => {
       const block = await scheduleTask(
         task.id,
+        task.title,
+        task.estimateMinutes ?? 60,
         date,
-        startTime,
-        task.estimateMinutes ?? 60
+        startTime
       );
       bus.emit("planner:block-linked-task", { blockId: block.id, taskId: task.id, date });
       return block;

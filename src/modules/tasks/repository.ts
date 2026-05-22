@@ -42,18 +42,18 @@ const INSERT_SQL = `
   INSERT INTO tasks (
     id, title, description, status, priority,
     project_id, parent_task_id, labels, tags,
-    due_date, start_date, scheduled_date, completed_at,
+    due_date, start_date, scheduled_date, scheduled_time, completed_at,
     estimate_minutes, actual_minutes, recurrence,
     dependencies, checklist_items, linked_note_ids, linked_event_ids,
     sort_order, created_at, updated_at
-  ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 `;
 
 const UPDATE_SQL = `
   UPDATE tasks SET
     title=?, description=?, status=?, priority=?,
     project_id=?, parent_task_id=?, labels=?, tags=?,
-    due_date=?, start_date=?, scheduled_date=?, completed_at=?,
+    due_date=?, start_date=?, scheduled_date=?, scheduled_time=?, completed_at=?,
     estimate_minutes=?, actual_minutes=?, recurrence=?,
     dependencies=?, checklist_items=?, linked_note_ids=?, linked_event_ids=?,
     sort_order=?, updated_at=?
@@ -81,6 +81,7 @@ export function rowToTask(raw: Record<string, unknown>): Task {
     dueDate:         r.due_date ?? undefined,
     startDate:       r.start_date ?? undefined,
     scheduledDate:   r.scheduled_date ?? undefined,
+    scheduledTime:   r.scheduled_time ?? undefined,
     completedAt:     r.completed_at ?? undefined,
     estimateMinutes: r.estimate_minutes ?? undefined,
     actualMinutes:   r.actual_minutes ?? undefined,
@@ -102,7 +103,7 @@ function insertParams(t: Task): unknown[] {
     t.id, t.title, t.description ?? null, t.status, t.priority,
     t.projectId ?? null, t.parentTaskId ?? null,
     JSON.stringify(t.labels), JSON.stringify(t.tags),
-    t.dueDate ?? null, t.startDate ?? null, t.scheduledDate ?? null, t.completedAt ?? null,
+    t.dueDate ?? null, t.startDate ?? null, t.scheduledDate ?? null, t.scheduledTime ?? null, t.completedAt ?? null,
     t.estimateMinutes ?? null, t.actualMinutes ?? null,
     t.recurrence ? JSON.stringify(t.recurrence) : null,
     JSON.stringify(t.dependencies), JSON.stringify(t.checklistItems),
@@ -116,7 +117,7 @@ function updateParams(t: Task): unknown[] {
     t.title, t.description ?? null, t.status, t.priority,
     t.projectId ?? null, t.parentTaskId ?? null,
     JSON.stringify(t.labels), JSON.stringify(t.tags),
-    t.dueDate ?? null, t.startDate ?? null, t.scheduledDate ?? null, t.completedAt ?? null,
+    t.dueDate ?? null, t.startDate ?? null, t.scheduledDate ?? null, t.scheduledTime ?? null, t.completedAt ?? null,
     t.estimateMinutes ?? null, t.actualMinutes ?? null,
     t.recurrence ? JSON.stringify(t.recurrence) : null,
     JSON.stringify(t.dependencies), JSON.stringify(t.checklistItems),
@@ -129,22 +130,22 @@ function updateParams(t: Task): unknown[] {
 // ── Public API ────────────────────────────────────────────────
 
 export async function dbFindAllActive(): Promise<Task[]> {
-  const rows = await db.select<Record<string, unknown>[]>(SELECT_ACTIVE_SQL);
+  const rows = await db.select<Record<string, unknown>>(SELECT_ACTIVE_SQL);
   return rows.map(rowToTask);
 }
 
 export async function dbFindById(id: string): Promise<Task | null> {
-  const rows = await db.select<Record<string, unknown>[]>(SELECT_BY_ID_SQL, [id]);
+  const rows = await db.select<Record<string, unknown>>(SELECT_BY_ID_SQL, [id]);
   return rows.length ? rowToTask(rows[0]) : null;
 }
 
 export async function dbFindByProject(projectId: string): Promise<Task[]> {
-  const rows = await db.select<Record<string, unknown>[]>(SELECT_BY_PROJECT_SQL, [projectId]);
+  const rows = await db.select<Record<string, unknown>>(SELECT_BY_PROJECT_SQL, [projectId]);
   return rows.map(rowToTask);
 }
 
 export async function dbFindPurgeCandidates(cutoffIso: string): Promise<{ id: string }[]> {
-  return db.select<{ id: string }[]>(SELECT_PURGE_CANDIDATES_SQL, [cutoffIso]);
+  return db.select<{ id: string }>(SELECT_PURGE_CANDIDATES_SQL, [cutoffIso]);
 }
 
 /**
@@ -165,7 +166,7 @@ export async function dbFindScheduledTasks(): Promise<{
     scheduled_date: string;
     scheduled_time: string | null;
     estimate_minutes: number | null;
-  }[]>(SELECT_SCHEDULED_SQL);
+  }>(SELECT_SCHEDULED_SQL);
 
   return rows.map((r) => ({
     id:              r.id,

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import {
   Flag, Calendar, Clock, Trash2,
-  FolderKanban, FileText, CalendarClock, X,
+  FolderKanban, FileText, CalendarClock, X, Play, Square,
 } from "lucide-react";
 import { cn, formatDate, PRIORITY_LABELS, today } from "@/shared/utils";
 import {
@@ -23,6 +23,7 @@ export function TaskDetail() {
     openTaskId, closeTask, getTaskById, updateTask,
     addChecklistItem, toggleChecklistItem, deleteChecklistItem, deleteTask,
     quickAddOpen, quickAddPrefill, closeQuickAdd, createTask,
+    startTimer, stopTimer, activeTimerTaskId,
   } = useTaskStore();
 
   const activeProjects = useProjectStore((s) => s.projects.filter((p) => p.status === "active"));
@@ -458,6 +459,21 @@ export function TaskDetail() {
               >
                 <CalendarClock size={12} />
                 {task?.scheduledDate ? `Scheduled · ${task.scheduledDate}` : "Schedule"}
+              </button>
+              <button
+                onClick={() => task && (activeTimerTaskId === task.id ? stopTimer() : startTimer(task.id))}
+                className={cn(
+                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border transition-fast",
+                  activeTimerTaskId === task?.id
+                    ? "text-blue-500 border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent border-transparent hover:border-border/50",
+                )}
+              >
+                {activeTimerTaskId === task?.id ? (
+                  <><Square size={12} fill="currentColor" /> Stop tracking</>
+                ) : (
+                  <><Play size={12} fill="currentColor" /> Track time</>
+                )}
               </button>
               <div className="flex-1" />
               <span className="text-[10px] text-muted-foreground/25 font-mono select-all">

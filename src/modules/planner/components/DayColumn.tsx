@@ -60,56 +60,34 @@ function DropGhost({ y, height }: { y: number; height: number }) {
 }
 
 // ── ResizeHandle ──────────────────────────────────────────────
-function ResizeHandle({
-  blockId,
-  startY,
-  wrapRef,
-}: {
-  blockId: string;
-  startY: number;
-  wrapRef: React.RefObject<HTMLDivElement | null>;
-}) {
+function ResizeHandle({ blockId, startY }: { blockId: string; startY: number }) {
   const { resizeBlock } = usePlannerStore();
   const rafRef  = useRef<number | null>(null);
-  const rectRef = useRef<DOMRect | null>(null);
-  const scrollAtDownRef = useRef(0);
 
-  const onPointerDown = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      e.stopPropagation();
-      e.preventDefault();
-      const el = e.currentTarget as HTMLElement;
-      el.setPointerCapture(e.pointerId);
+  const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }, []);
 
-      const grid = el.closest(".day-col-grid") as HTMLElement | null
-        ?? document.querySelector(".day-col-grid") as HTMLElement | null;
-      rectRef.current       = grid?.getBoundingClientRect() ?? null;
-      scrollAtDownRef.current = wrapRef.current?.scrollTop ?? 0;
-    },
-    [wrapRef]
-  );
-
-  const onPointerMove = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      if (!rectRef.current) return;
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      rafRef.current = requestAnimationFrame(() => {
-        if (!rectRef.current) return;
-        const currentScroll = wrapRef.current?.scrollTop ?? scrollAtDownRef.current;
-        const scrollDelta   = currentScroll - scrollAtDownRef.current;
-        const y      = Math.max(startY + MIN_BLOCK_HEIGHT_PX, e.clientY - rectRef.current.top + scrollAtDownRef.current + scrollDelta);
-        const newEnd = snapMinutes(yToTime(y));
-        usePlannerStore.setState((s) => ({
-          blocks: s.blocks.map((b) => b.id === blockId ? { ...b, endTime: newEnd } : b),
-        }));
-      });
-    },
-    [blockId, startY, wrapRef]
-  );
-
-  const onPointerUp = useCallback(async () => {
+  const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.buttons === 0) return;
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    rectRef.current = null;
+    rafRef.current = requestAnimationFrame(() => {
+      const grid = document.querySelector(".day-col-grid") as HTMLElement;
+      if (!grid) return;
+      const rect = grid.getBoundingClientRect();
+      const y = Math.max(startY + MIN_BLOCK_HEIGHT_PX, e.clientY - rect.top);
+      const newEnd = snapMinutes(yToTime(y));
+      usePlannerStore.setState((s) => ({
+        blocks: s.blocks.map((b) => b.id === blockId ? { ...b, endTime: newEnd } : b),
+      }));
+    });
+  }, [blockId, startY]);
+
+  const onPointerUp = useCallback(async (e: React.PointerEvent<HTMLDivElement>) => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    e.currentTarget.releasePointerCapture(e.pointerId);
     const b = usePlannerStore.getState().blocks.find((x) => x.id === blockId);
     if (b) await resizeBlock(blockId, b.endTime);
   }, [blockId, resizeBlock]);
@@ -163,7 +141,7 @@ function getBlockDurationMinutes(block: TimeBlock): number {
 
 // ── BlockCard ─────────────────────────────────────────────────
 function BlockCard({
-  block, tasks, projects, compact, onDelete, onEdit, onPointerDownGrip, wrapRef,
+  block, tasks, projects, compact, onDelete, onEdit, onPointerDownGrip,
 }: {
   block:    TimeBlock;
   tasks:    ReturnType<typeof useTaskStore.getState>["tasks"];
@@ -172,7 +150,6 @@ function BlockCard({
   onDelete: () => void;
   onEdit:   () => void;
   onPointerDownGrip: (e: React.PointerEvent) => void;
-  wrapRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const task    = block.taskId ? tasks.find((t) => t.id === block.taskId) : null;
   const project = task?.projectId ? projects.find((p) => p.id === task.projectId) : null;
@@ -239,7 +216,7 @@ function BlockCard({
   return (
     <div
       className={cn(
-        "absolute rounded-lg px-2.5 py-1.5 overflow-hidden",
+        "absolute rounded-lg px-2.5 py-1 overflow-hidden",
         "border-l-[3px] group transition-fast z-10",
         "hover:shadow-md hover:z-20",
         isTaskCompleted && "opacity-50",
@@ -264,7 +241,7 @@ function BlockCard({
           <GripVertical size={11} className="text-muted-foreground/40" />
         </div>
 
-        <div className="flex-1 min-w-0 flex flex-col justify-between h-full pb-3">
+        <div className={cn("flex-1 min-w-0 flex flex-col justify-between h-full", height > 40 ? "pb-3" : "pb-1")}>
           {editing ? (
             <input
               autoFocus
@@ -358,13 +335,13 @@ function BlockCard({
         </div>
       </div>
 
-      <ResizeHandle blockId={block.id} startY={top} wrapRef={wrapRef} />
+      <ResizeHandle blockId={block.id} startY={top} />
     </div>
   );
 }
 
 // ── DayColumn ─────────────────────────────────────────────────
-export function DayColumn({ date, compact = false }: { date: ISODate; compact?: boolean }) {
+export function DayColumn({ date, compact = false, hideGutter = false }: { date: ISODate; compact?: boolean; hideGutter?: boolean }) {
   const {
     getBlocksForDate, createBlock, deleteBlock,
     dragTaskId, setDragTaskId, scheduleTask,
@@ -376,6 +353,7 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
   const calEvents = useCalendarStore((s) => s.getEventsForDay(date));
   const gridRef   = useRef<HTMLDivElement>(null);
   const wrapRef   = useRef<HTMLDivElement>(null);
+  const gutterW   = hideGutter ? 0 : GUTTER_W;
 
   const [ghost, setGhost] = useState<{ y: number; height: number } | null>(null);
 
@@ -383,9 +361,6 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
     blockId:      string;
     offsetY:      number;
     durationPx:   number;
-    gridRect:     DOMRect;
-    scrollAtDown: number;
-    gripEl:       HTMLElement;
     pointerId:    number;
   } | null>(null);
 
@@ -396,25 +371,24 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
   const nowY    = isToday ? timeToY(nowTime) : null;
 
   useEffect(() => {
-    const el = wrapRef.current;
+    const el = wrapRef.current?.closest('.planner-scroll-container');
     if (!el) return;
     const targetY = nowY !== null ? Math.max(0, nowY - 120) : timeToY("08:00") - 60;
     el.scrollTop = targetY;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
 
-  const getGridY = useCallback((clientY: number, overrideRect?: DOMRect, overrideScroll?: number): number => {
-    const rect   = overrideRect   ?? gridRef.current?.getBoundingClientRect();
-    const scroll = overrideScroll ?? wrapRef.current?.scrollTop ?? 0;
+  const getGridY = useCallback((clientY: number): number => {
+    const rect = gridRef.current?.getBoundingClientRect();
     if (!rect) return 0;
-    return Math.max(0, Math.min(clientY - rect.top + scroll, TOTAL_HEIGHT));
+    return Math.max(0, Math.min(clientY - rect.top, TOTAL_HEIGHT));
   }, []);
 
   const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     const y      = getGridY(e.clientY);
-    const snappedY = timeToY(snapMinutes(yToTime(y)));
+    const snappedY = timeToY(snapMinutes(yToTime(Math.max(0, y))));
     const taskId = dragTaskId ?? e.dataTransfer.getData("taskId");
     const task   = tasks.find((t) => t.id === taskId);
     const durPx  = ((task?.estimateMinutes ?? 60) / 60) * HOUR_HEIGHT;
@@ -430,13 +404,14 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
     const startTime = snapMinutes(yToTime(y));
     const taskId    = dragTaskId ?? e.dataTransfer.getData("taskId") ?? undefined;
     if (taskId) {
-      await scheduleTask(taskId, date, startTime, 60);
+      const task = tasks.find((t) => t.id === taskId);
+      await scheduleTask(taskId, task?.title ?? "Task", task?.estimateMinutes ?? 60, date, startTime);
       setDragTaskId(null);
     } else {
       const endTime = snapMinutes(yToTime(y + HOUR_HEIGHT));
       await createBlock({ date, startTime, endTime, title: "Block" });
     }
-  }, [dragTaskId, date, getGridY, scheduleTask, createBlock, setDragTaskId]);
+  }, [dragTaskId, date, getGridY, scheduleTask, createBlock, setDragTaskId, tasks]);
 
   const onPointerDownGrip = useCallback(
     (e: React.PointerEvent, blockId: string) => {
@@ -444,22 +419,13 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
       const block = usePlannerStore.getState().blocks.find((b) => b.id === blockId);
       if (!block) return;
 
-      const gridRect     = gridRef.current?.getBoundingClientRect();
-      const scrollAtDown = wrapRef.current?.scrollTop ?? 0;
-      if (!gridRect) return;
-
       const blockTop = timeToY(block.startTime);
-      const durPx    = timeToY(block.endTime) - blockTop;
-      const startY   = getGridY(e.clientY, gridRect, scrollAtDown);
-      const gripEl   = e.currentTarget as HTMLElement;
+      const startY   = getGridY(e.clientY);
 
       dragMoveRef.current = {
         blockId,
-        offsetY:    startY - blockTop,
-        durationPx: durPx,
-        gridRect,
-        scrollAtDown,
-        gripEl,
+        offsetY: startY - blockTop,
+        durationPx: timeToY(block.endTime) - blockTop,
         pointerId: e.pointerId,
       };
 
@@ -471,9 +437,7 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
   const onGridPointerMove = useCallback((e: React.PointerEvent) => {
     const ref = dragMoveRef.current;
     if (!ref || e.pointerId !== ref.pointerId) return;
-    const currentScroll = wrapRef.current?.scrollTop ?? ref.scrollAtDown;
-    const scrollDelta   = currentScroll - ref.scrollAtDown;
-    const y        = getGridY(e.clientY, ref.gridRect, ref.scrollAtDown + scrollDelta) - ref.offsetY;
+    const y        = getGridY(e.clientY) - ref.offsetY;
     const snappedY = timeToY(snapMinutes(yToTime(Math.max(0, y))));
     setGhost({ y: snappedY, height: ref.durationPx });
   }, [getGridY]);
@@ -484,9 +448,7 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
     setGhost(null);
     if (!ref || e.pointerId !== ref.pointerId) return;
 
-    const currentScroll = wrapRef.current?.scrollTop ?? ref.scrollAtDown;
-    const scrollDelta   = currentScroll - ref.scrollAtDown;
-    const y        = getGridY(e.clientY, ref.gridRect, ref.scrollAtDown + scrollDelta) - ref.offsetY;
+    const y        = getGridY(e.clientY) - ref.offsetY;
     const newStart = snapMinutes(yToTime(Math.max(0, y)));
     const [sh, sm] = newStart.split(":").map(Number);
     const liveBlock = usePlannerStore.getState().blocks.find((b) => b.id === ref.blockId);
@@ -500,7 +462,7 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
   }, [getGridY, rescheduleBlock]);
 
   return (
-    <div ref={wrapRef} className="flex flex-col flex-1 min-w-0 overflow-y-auto overflow-x-hidden">
+    <div ref={wrapRef} className="flex flex-col flex-1 min-w-0 border-r border-border/20 last:border-r-0 relative">
       <div
         ref={gridRef}
         className="day-col-grid relative shrink-0"
@@ -512,10 +474,12 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
         onPointerUp={onGridPointerUp}
       >
         {/* Gutter */}
-        <div
-          className="absolute top-0 bottom-0 left-0 bg-muted/20 border-r border-border/40 pointer-events-none z-0"
-          style={{ width: GUTTER_W }}
-        />
+        {!hideGutter && (
+          <div
+            className="absolute top-0 bottom-0 left-0 bg-muted/20 border-r border-border/40 pointer-events-none z-0"
+            style={{ width: gutterW }}
+          />
+        )}
 
         {/* Hour lines + labels */}
         {HOURS.map((h) => {
@@ -525,17 +489,19 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
             <div key={h} className="absolute left-0 right-0 pointer-events-none" style={{ top: y }}>
               <div
                 className={cn("absolute right-0 border-t", isMajor ? "border-border/50" : "border-border/20")}
-                style={{ left: GUTTER_W }}
+                style={{ left: gutterW }}
               />
-              <span
-                className={cn(
-                  "absolute right-0 -translate-y-1/2 pr-2 tabular-nums select-none leading-none",
-                  isMajor ? "text-[11px] font-semibold text-muted-foreground/80" : "text-[10px] font-normal text-muted-foreground/45"
-                )}
-                style={{ width: GUTTER_W }}
-              >
-                {formatHourLabel(h)}
-              </span>
+              {!hideGutter && (
+                <span
+                  className={cn(
+                    "absolute right-0 -translate-y-1/2 pr-2 tabular-nums select-none leading-none",
+                    isMajor ? "text-[11px] font-semibold text-muted-foreground/80" : "text-[10px] font-normal text-muted-foreground/45"
+                  )}
+                  style={{ width: gutterW }}
+                >
+                  {formatHourLabel(h)}
+                </span>
+              )}
             </div>
           );
         })}
@@ -545,7 +511,7 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
           <div
             key={`${h}:30`}
             className="absolute right-0 border-t border-border/15 pointer-events-none"
-            style={{ top: timeToY(`${String(h).padStart(2, "0")}:30`), left: GUTTER_W }}
+            style={{ top: timeToY(`${String(h).padStart(2, "0")}:30`), left: gutterW }}
           />
         ))}
 
@@ -555,11 +521,11 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
             <div className="relative flex items-center">
               <span
                 className="absolute text-[9px] font-bold tabular-nums text-primary bg-primary/10 px-1 py-0.5 rounded-full leading-none z-10 -translate-y-1/2"
-                style={{ width: GUTTER_W, textAlign: "center", top: "50%" }}
+                style={{ width: gutterW, textAlign: "center", top: "50%", display: hideGutter ? 'none' : 'block' }}
               >
                 {nowTime}
               </span>
-              <div className="w-2 h-2 rounded-full bg-primary shrink-0 z-10" style={{ marginLeft: GUTTER_W - 4 }} />
+              <div className="w-2 h-2 rounded-full bg-primary shrink-0 z-10" style={{ marginLeft: gutterW > 0 ? gutterW - 4 : -4 }} />
               <div className="flex-1 h-px bg-primary/70" />
             </div>
           </div>
@@ -569,17 +535,16 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
         {calEvents.map((ev) => <CalendarEventStrip key={ev.id} event={ev} />)}
 
         {/* Blocks */}
-        {blocks.map((block) => (
+        {blocks.map((b) => (
           <BlockCard
-            key={block.id}
-            block={block}
+            key={b.id}
+            block={b}
             tasks={tasks}
             projects={projects}
             compact={compact}
-            onDelete={() => void deleteBlock(block.id)}
-            onEdit={() => setEditingBlockId(block.id)}
-            onPointerDownGrip={(e) => onPointerDownGrip(e, block.id)}
-            wrapRef={wrapRef}
+            onDelete={() => deleteBlock(b.id)}
+            onEdit={() => setEditingBlockId(b.id)}
+            onPointerDownGrip={(e) => onPointerDownGrip(e, b.id)}
           />
         ))}
 
