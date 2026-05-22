@@ -1,12 +1,18 @@
 // ============================================================
 // FOCUS — EVENT BUS LISTENERS
-// Wire focus module to task events (completed, cancelled, etc.)
-// Call useFocusEventListeners() from the Focus UI component.
+// Two entry points:
+//   registerFocusListeners()   — imperative, call once at boot (main.tsx)
+//   useFocusEventListeners()   — React hook, call from Focus UI component
 // ============================================================
 
 import { useEffect } from "react";
 import { bus } from "@/kernel/event-bus";
 import { useFocusStore } from "./store";
+import {
+  autoCreateTimeEntry,
+  autoTransitionTaskStatus,
+  stopRunningTimer,
+} from "./service";
 
 // ── In-app confirmation dialog (replaces window.confirm) ──────────────────
 // Creates a lightweight modal overlay without freezing the JS thread.
@@ -118,7 +124,38 @@ function showFocusEndPrompt(message: string, onConfirm: () => void): void {
   }
 }
 
-// ── Event listeners ───────────────────────────────────────────
+// ── Imperative boot-time listeners ───────────────────────────
+// Previously lived in taskIntegration.ts but were never registered
+// because registerFocusTaskIntegration() had no callers.
+// Call once from main.tsx after db.init().
+
+let _listenersRegistered = false;
+
+export function registerFocusListeners(): void {
+  if (_listenersRegistered) return;
+  _listenersRegistered = true;
+
+  // On session completed: create time entry + transition task status
+  bus.on("focus:session-completed", async ({ session }) => {
+    await autoCreateTimeEntry(session);
+    await autoTransitionTaskStatus(session);
+  });
+
+  // On session started: stop any running time-tracker timer
+  bus.on("focus:session-started", async ({ session }) => {
+    if (session.type !== "focus") return;
+    await stopRunningTimer();
+  });
+
+  // On start-requested with a taskId: stash it for the Focus UI to pick up
+  bus.on("focus:start-requested", ({ taskId }: { taskId?: string }) => {
+    if (taskId) {
+      try { sessionStorage.setItem("butler:pendingFocusTaskId", taskId); } catch { /* sandboxed */ }
+    }
+  });
+}
+
+// ── React hook listeners (mount inside Focus UI component) ────
 
 export function useFocusEventListeners() {
   const activeSession = useFocusStore((s) => s.activeSession);

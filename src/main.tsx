@@ -17,7 +17,8 @@ import { DATABASE_MIGRATIONS } from '@/modules/database/db';
 import { RESEARCH_MIGRATIONS } from '@/modules/research/db';
 
 // ── Kernel services ───────────────────────────────────────────
-import { startTaskCalendarSync } from "@/kernel/task-calendar-sync";
+import { startTaskCalendarSync }  from "@/kernel/task-calendar-sync";
+import { registerFocusListeners } from "@/modules/focus/events";
 
 import "./styles/globals.css";
 
@@ -49,6 +50,7 @@ async function boot() {
 
     // Start kernel services that depend on the DB being ready
     startTaskCalendarSync();
+    registerFocusListeners();
 
     ReactDOM.createRoot(document.getElementById("root")!).render(
       <React.StrictMode>
