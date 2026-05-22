@@ -8,7 +8,8 @@
 import { useState } from "react";
 import { X, Clock, CalendarDays, Tag, AlignLeft, Link2 } from "lucide-react";
 import { cn } from "@/shared/utils";
-import { usePlannerStore, BLOCK_COLORS } from "../store";
+import { usePlannerStore } from "../store";
+import { BLOCK_COLORS } from "../types";
 import { useTaskStore } from "@/modules/tasks/store";
 
 interface Props {
