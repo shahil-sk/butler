@@ -26,6 +26,18 @@ const SELECT_PURGE_CANDIDATES_SQL = `
     AND completed_at < ?
 `;
 
+/**
+ * Lightweight projection used by the calendar boot-sync path.
+ * Only fetches the columns needed to construct a time-block — avoids
+ * deserialising checklist/dependency JSON for every task on startup.
+ */
+const SELECT_SCHEDULED_SQL = `
+  SELECT id, title, scheduled_date, scheduled_time, estimate_minutes
+  FROM tasks
+  WHERE scheduled_date IS NOT NULL
+    AND status NOT IN ('archived', 'done', 'cancelled')
+`;
+
 const INSERT_SQL = `
   INSERT INTO tasks (
     id, title, description, status, priority,
@@ -48,9 +60,8 @@ const UPDATE_SQL = `
   WHERE id=?
 `;
 
-const DELETE_SQL = "DELETE FROM tasks WHERE id=?";
-
-const REORDER_SQL = "UPDATE tasks SET sort_order=?, updated_at=? WHERE id=?";
+const DELETE_SQL    = "DELETE FROM tasks WHERE id=?";
+const REORDER_SQL   = "UPDATE tasks SET sort_order=?, updated_at=? WHERE id=?";
 
 // ── Row mapper ────────────────────────────────────────────────
 
@@ -134,6 +145,35 @@ export async function dbFindByProject(projectId: string): Promise<Task[]> {
 
 export async function dbFindPurgeCandidates(cutoffIso: string): Promise<{ id: string }[]> {
   return db.select<{ id: string }[]>(SELECT_PURGE_CANDIDATES_SQL, [cutoffIso]);
+}
+
+/**
+ * Lightweight fetch for calendar boot sync — returns only the columns
+ * needed to emit `task:needs-calendar-sync`. Never deserialises checklist
+ * or dependency JSON.
+ */
+export async function dbFindScheduledTasks(): Promise<{
+  id: string;
+  title: string;
+  scheduledDate: string;
+  scheduledTime: string | null;
+  estimateMinutes: number | null;
+}[]> {
+  const rows = await db.select<{
+    id: string;
+    title: string;
+    scheduled_date: string;
+    scheduled_time: string | null;
+    estimate_minutes: number | null;
+  }[]>(SELECT_SCHEDULED_SQL);
+
+  return rows.map((r) => ({
+    id:              r.id,
+    title:           r.title,
+    scheduledDate:   r.scheduled_date,
+    scheduledTime:   r.scheduled_time ?? null,
+    estimateMinutes: r.estimate_minutes ?? null,
+  }));
 }
 
 export async function dbInsertTask(task: Task): Promise<void> {

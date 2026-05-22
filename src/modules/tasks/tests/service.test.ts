@@ -10,15 +10,16 @@ import type { Task } from "@/shared/types";
 // ── Mock repository ───────────────────────────────────────────
 
 vi.mock("../repository", () => ({
-  dbInsertTask:            vi.fn().mockResolvedValue(undefined),
-  dbUpdateTask:            vi.fn().mockResolvedValue(undefined),
-  dbDeleteTask:            vi.fn().mockResolvedValue(undefined),
-  dbDeleteTasks:           vi.fn().mockResolvedValue(undefined),
-  dbReorderTasks:          vi.fn().mockResolvedValue(undefined),
-  dbFindAllActive:         vi.fn().mockResolvedValue([]),
-  dbFindById:              vi.fn().mockResolvedValue(null),
-  dbFindByProject:         vi.fn().mockResolvedValue([]),
-  dbFindPurgeCandidates:   vi.fn().mockResolvedValue([]),
+  dbInsertTask:          vi.fn().mockResolvedValue(undefined),
+  dbUpdateTask:          vi.fn().mockResolvedValue(undefined),
+  dbDeleteTask:          vi.fn().mockResolvedValue(undefined),
+  dbDeleteTasks:         vi.fn().mockResolvedValue(undefined),
+  dbReorderTasks:        vi.fn().mockResolvedValue(undefined),
+  dbFindAllActive:       vi.fn().mockResolvedValue([]),
+  dbFindById:            vi.fn().mockResolvedValue(null),
+  dbFindByProject:       vi.fn().mockResolvedValue([]),
+  dbFindPurgeCandidates: vi.fn().mockResolvedValue([]),
+  dbFindScheduledTasks:  vi.fn().mockResolvedValue([]),
 }));
 
 // ── Mock event bus ────────────────────────────────────────────
@@ -35,6 +36,7 @@ import {
   createTask,
   updateTask,
   deleteTask,
+  deleteTasks,
   completeTask,
   restoreTask,
   archiveTask,
@@ -94,6 +96,17 @@ describe("buildTask", () => {
     const t = buildTask({ title: "   " });
     expect(t.title).toBe("Untitled task");
   });
+
+  it("preserves recurrence when supplied", () => {
+    const rec = { freq: "weekly" as const, interval: 1, byDay: ["MO", "WE"] };
+    const t = buildTask({ title: "Recurring", recurrence: rec });
+    expect(t.recurrence).toEqual(rec);
+  });
+
+  it("preserves projectId when supplied", () => {
+    const t = buildTask({ title: "Proj task", projectId: "proj-42" });
+    expect(t.projectId).toBe("proj-42");
+  });
 });
 
 // ── mergeTaskPatch ────────────────────────────────────────────
@@ -106,9 +119,22 @@ describe("mergeTaskPatch", () => {
     expect(merged.completedAt).toBeTruthy();
   });
 
+  it("stamps completedAt when transitioning to cancelled", () => {
+    const existing = makeTask({ status: "todo" });
+    const merged = mergeTaskPatch(existing, { status: "cancelled" });
+    expect(merged.completedAt).toBeTruthy();
+    expect(merged.status).toBe("cancelled");
+  });
+
   it("clears completedAt when reopening to todo", () => {
     const existing = makeTask({ status: "done", completedAt: "2025-01-01T00:00:00.000Z" });
     const merged = mergeTaskPatch(existing, { status: "todo" });
+    expect(merged.completedAt).toBeUndefined();
+  });
+
+  it("clears completedAt when reopening to in_progress", () => {
+    const existing = makeTask({ status: "done", completedAt: "2025-01-01T00:00:00.000Z" });
+    const merged = mergeTaskPatch(existing, { status: "in_progress" });
     expect(merged.completedAt).toBeUndefined();
   });
 
@@ -118,10 +144,11 @@ describe("mergeTaskPatch", () => {
     expect(merged.completedAt).toBe("2025-01-01T00:00:00.000Z");
   });
 
-  it("stamps completedAt when transitioning to cancelled", () => {
-    const existing = makeTask({ status: "todo" });
-    const merged = mergeTaskPatch(existing, { status: "cancelled" });
-    expect(merged.completedAt).toBeTruthy();
+  it("stamps updatedAt on every patch", () => {
+    const existing = makeTask();
+    const before = existing.updatedAt;
+    const merged = mergeTaskPatch(existing, { title: "new" });
+    expect(merged.updatedAt).not.toBe(before);
   });
 });
 
@@ -136,7 +163,17 @@ describe("createTask", () => {
 
   it("emits search:index-invalidated", async () => {
     const task = await createTask({ title: "My task" });
-    expect(bus.emit).toHaveBeenCalledWith("search:index-invalidated", { entityType: "task", id: task.id });
+    expect(bus.emit).toHaveBeenCalledWith("search:index-invalidated", {
+      entityType: "task",
+      id: task.id,
+    });
+  });
+
+  it("round-trips recurrence through buildTask", async () => {
+    const rec = { freq: "daily" as const };
+    const task = await createTask({ title: "Daily", recurrence: rec });
+    expect(task.recurrence).toEqual(rec);
+    expect(repo.dbInsertTask).toHaveBeenCalledWith(expect.objectContaining({ recurrence: rec }));
   });
 });
 
@@ -147,7 +184,16 @@ describe("updateTask", () => {
     const existing = makeTask();
     const updated = await updateTask("task-1", { title: "New title" }, existing);
     expect(repo.dbUpdateTask).toHaveBeenCalledWith(updated);
-    expect(bus.emit).toHaveBeenCalledWith("task:updated", expect.objectContaining({ task: updated }));
+    expect(bus.emit).toHaveBeenCalledWith("task:updated",
+      expect.objectContaining({ task: updated }));
+  });
+
+  it("includes changed patch in task:updated payload", async () => {
+    const existing = makeTask();
+    const patch    = { priority: "high" as const };
+    await updateTask("task-1", patch, existing);
+    expect(bus.emit).toHaveBeenCalledWith("task:updated",
+      expect.objectContaining({ changed: patch }));
   });
 });
 
@@ -161,6 +207,25 @@ describe("deleteTask", () => {
   });
 });
 
+// ── deleteTasks (batch) ───────────────────────────────────────
+
+describe("deleteTasks", () => {
+  it("calls dbDeleteTasks and emits task:deleted for each id", async () => {
+    await deleteTasks(["t1", "t2", "t3"]);
+    expect(repo.dbDeleteTasks).toHaveBeenCalledWith(["t1", "t2", "t3"]);
+    expect(bus.emit).toHaveBeenCalledWith("task:deleted", { taskId: "t1" });
+    expect(bus.emit).toHaveBeenCalledWith("task:deleted", { taskId: "t2" });
+    expect(bus.emit).toHaveBeenCalledWith("task:deleted", { taskId: "t3" });
+  });
+
+  it("does not call dbDeleteTasks for empty array", async () => {
+    await deleteTasks([]);
+    expect(repo.dbDeleteTasks).toHaveBeenCalledWith([]);
+    // no task:deleted emitted
+    expect(bus.emit).not.toHaveBeenCalledWith("task:deleted", expect.anything());
+  });
+});
+
 // ── completeTask ──────────────────────────────────────────────
 
 describe("completeTask", () => {
@@ -171,6 +236,15 @@ describe("completeTask", () => {
     expect(updated.completedAt).toBeTruthy();
     expect(bus.emit).toHaveBeenCalledWith("task:completed",
       expect.objectContaining({ taskId: "task-1" }));
+  });
+
+  it("completedAt in task:completed payload matches task.completedAt", async () => {
+    const existing = makeTask({ status: "todo" });
+    const updated  = await completeTask("task-1", existing);
+    const [, payload] = vi.mocked(bus.emit).mock.calls.find(
+      ([evt]) => evt === "task:completed",
+    ) as [string, { taskId: string; completedAt: string }];
+    expect(payload.completedAt).toBe(updated.completedAt);
   });
 });
 
@@ -194,6 +268,12 @@ describe("archiveTask", () => {
     const updated = await archiveTask("task-1", existing);
     expect(updated.status).toBe("archived");
   });
+
+  it("does NOT emit task:deleted (archive differs from delete)", async () => {
+    const existing = makeTask();
+    await archiveTask("task-1", existing);
+    expect(bus.emit).not.toHaveBeenCalledWith("task:deleted", expect.anything());
+  });
 });
 
 // ── moveTask ──────────────────────────────────────────────────
@@ -203,7 +283,8 @@ describe("moveTask", () => {
     const existing = makeTask();
     const updated = await moveTask("task-1", "proj-2", existing);
     expect(updated.projectId).toBe("proj-2");
-    expect(bus.emit).toHaveBeenCalledWith("task:moved", { taskId: "task-1", toProjectId: "proj-2" });
+    expect(bus.emit).toHaveBeenCalledWith("task:moved",
+      { taskId: "task-1", toProjectId: "proj-2" });
   });
 
   it("clears projectId when passed null", async () => {
@@ -223,6 +304,13 @@ describe("duplicateTask", () => {
     expect(copy.status).toBe("todo");
     expect(copy.completedAt).toBeUndefined();
     expect(copy.id).not.toBe(src.id);
+  });
+
+  it("copy has a fresh unique id", async () => {
+    const src  = makeTask();
+    const cop1 = await duplicateTask(src);
+    const cop2 = await duplicateTask(src);
+    expect(cop1.id).not.toBe(cop2.id);
   });
 });
 
@@ -260,6 +348,13 @@ describe("addChecklistItem", () => {
     expect(updated.checklistItems[0].checked).toBe(false);
     expect(updated.checklistItems[0].order).toBe(0);
   });
+
+  it("order increments for second item", async () => {
+    const item0 = { id: "ci-0", text: "A", checked: false, order: 0 };
+    const task  = makeTask({ checklistItems: [item0] });
+    const updated = await addChecklistItem(task, "B");
+    expect(updated.checklistItems[1].order).toBe(1);
+  });
 });
 
 describe("toggleChecklistItem", () => {
@@ -279,6 +374,13 @@ describe("toggleChecklistItem", () => {
     const updated = await toggleChecklistItem(task, "ci-1");
     expect(updated.checklistItems[1].checked).toBe(false);
   });
+
+  it("can flip back to unchecked", async () => {
+    const item = { id: "ci-1", text: "Done", checked: true, order: 0 };
+    const task = makeTask({ checklistItems: [item] });
+    const updated = await toggleChecklistItem(task, "ci-1");
+    expect(updated.checklistItems[0].checked).toBe(false);
+  });
 });
 
 describe("deleteChecklistItem", () => {
@@ -291,6 +393,13 @@ describe("deleteChecklistItem", () => {
     const updated = await deleteChecklistItem(task, "ci-1");
     expect(updated.checklistItems).toHaveLength(1);
     expect(updated.checklistItems[0].id).toBe("ci-2");
+  });
+
+  it("is a no-op for unknown id", async () => {
+    const items = [{ id: "ci-1", text: "A", checked: false, order: 0 }];
+    const task  = makeTask({ checklistItems: items });
+    const updated = await deleteChecklistItem(task, "ghost-id");
+    expect(updated.checklistItems).toHaveLength(1);
   });
 });
 
@@ -307,9 +416,21 @@ describe("batchUpdateTasks", () => {
   });
 
   it("skips ids not in map", async () => {
-    const t1 = makeTask({ id: "t1" });
+    const t1  = makeTask({ id: "t1" });
     const map = new Map([["t1", t1]]);
     const results = await batchUpdateTasks(["t1", "ghost"], { priority: "high" }, map);
     expect(results).toHaveLength(1);
+  });
+
+  it("emits task:updated for each processed task", async () => {
+    const t1  = makeTask({ id: "t1" });
+    const t2  = makeTask({ id: "t2" });
+    const map = new Map([["t1", t1], ["t2", t2]]);
+    await batchUpdateTasks(["t1", "t2"], { status: "done" }, map);
+    const emittedEvents = vi.mocked(bus.emit).mock.calls
+      .filter(([evt]) => evt === "task:updated")
+      .map(([, payload]) => (payload as { task: Task }).task.id);
+    expect(emittedEvents).toContain("t1");
+    expect(emittedEvents).toContain("t2");
   });
 });
