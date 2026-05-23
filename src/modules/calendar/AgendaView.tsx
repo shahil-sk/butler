@@ -64,10 +64,14 @@ function LinkedDropdown({ linkedTaskIds, linkedNoteIds }: LinkedDropdownProps) {
                 : <Circle size={11} className="text-muted-foreground/40 shrink-0" />}
               <span className={cn(
                 "text-[11px] flex-1 truncate transition-fast group-hover:text-foreground",
+<<<<<<< HEAD
                 t.status === "done" && "line-through text-muted-foreground/40",
                 t.status === "cancelled" && "line-through text-red-400/70",
                 t.status === "archived" && "text-muted-foreground/30",
                 t.status !== "done" && t.status !== "cancelled" && t.status !== "archived" && "text-muted-foreground"
+=======
+                t.status === "done" ? "line-through text-muted-foreground/40" : "text-muted-foreground"
+>>>>>>> v3.1.0_alpha
               )}>
                 {t.title}
               </span>
