@@ -141,7 +141,7 @@ export interface ButlerEventMap {
   "ui:theme-changed":          { theme: "light" | "dark" | "system" };
   "ui:panel-open":             { panelId: string; props?: Record<string, unknown> };
   "ui:panel-close":            { panelId: string };
-  "ui:notification":           { id: ID; type: "info" | "success" | "warning" | "error"; message: string; durationMs?: number };
+  "ui:notification":           { id?: ID; type: "info" | "success" | "warning" | "error"; message: string; durationMs?: number };
 
   // ── Workspace events ─────────────────────────────────
   /** Fired when the active layout is switched */
@@ -164,9 +164,6 @@ export interface ButlerEventMap {
   // ── AI hooks ─────────────────────────────────────────
   "ai:context-update":         { context: Record<string, unknown> };
   "ai:suggestion":             { type: string; payload: unknown };
-
-  // ── Generic notify (used by planner store for toast) ─────
-  "notify":                    { message: string; type: "info" | "success" | "warning" | "error" };
 }
 
 export type ButlerEventKey = keyof ButlerEventMap;

@@ -35,4 +35,10 @@ export const PLANNER_MIGRATIONS: Migration[] = [
       DROP TABLE IF EXISTS planner_carry_forward;
     `,
   },
+  {
+    version: 31,
+    module: "planner",
+    up: `ALTER TABLE planner_blocks ADD COLUMN is_completed INTEGER NOT NULL DEFAULT 0;`,
+    down: `ALTER TABLE planner_blocks DROP COLUMN is_completed;`
+  }
 ];

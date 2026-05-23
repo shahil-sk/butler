@@ -18,14 +18,7 @@ export function setupJournalEventListeners(): () => void {
     })
   );
 
-  // Autosave on sync:autosave — store is already reactive; this is a no-op
-  // hook for future dirty-tracking if needed.
-  unsubs.push(
-    bus.on("sync:autosave", () => {
-      // Journal auto-saves on every updateEntry call.
-      // No additional action needed here.
-    })
-  );
+  // Autosave is handled directly via debounced store updates in the editor.
 
   return () => unsubs.forEach((fn) => fn());
 }

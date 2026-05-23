@@ -15,6 +15,7 @@ export interface TimeBlock {
   endTime: string;     // "10:30"
   color?: string;
   isBreak: boolean;
+  isCompleted: boolean;
   notes?: string;
   createdAt: string;
   updatedAt: string;
@@ -59,6 +60,7 @@ function rowToBlock(r: Record<string, unknown>): TimeBlock {
     endTime:   r.end_time as string,
     color:     (r.color as string | null) ?? undefined,
     isBreak:   Boolean(r.is_break),
+    isCompleted: Boolean(r.is_completed),
     notes:     (r.notes as string | null) ?? undefined,
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
@@ -67,26 +69,26 @@ function rowToBlock(r: Record<string, unknown>): TimeBlock {
 
 const INSERT_BLOCK_SQL = `
   INSERT INTO planner_blocks
-    (id, date, task_id, title, start_time, end_time, color, is_break, notes, created_at, updated_at)
-  VALUES (?,?,?,?,?,?,?,?,?,?,?)
+    (id, date, task_id, title, start_time, end_time, color, is_break, is_completed, notes, created_at, updated_at)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
 `;
 const UPDATE_BLOCK_SQL = `
   UPDATE planner_blocks SET
     date=?, task_id=?, title=?, start_time=?, end_time=?,
-    color=?, is_break=?, notes=?, updated_at=?
+    color=?, is_break=?, is_completed=?, notes=?, updated_at=?
   WHERE id=?
 `;
 
 function insertBlockParams(b: TimeBlock): unknown[] {
   return [
     b.id, b.date, b.taskId ?? null, b.title, b.startTime, b.endTime,
-    b.color ?? null, b.isBreak ? 1 : 0, b.notes ?? null, b.createdAt, b.updatedAt,
+    b.color ?? null, b.isBreak ? 1 : 0, b.isCompleted ? 1 : 0, b.notes ?? null, b.createdAt, b.updatedAt,
   ];
 }
 function updateBlockParams(b: TimeBlock): unknown[] {
   return [
     b.date, b.taskId ?? null, b.title, b.startTime, b.endTime,
-    b.color ?? null, b.isBreak ? 1 : 0, b.notes ?? null, b.updatedAt,
+    b.color ?? null, b.isBreak ? 1 : 0, b.isCompleted ? 1 : 0, b.notes ?? null, b.updatedAt,
     b.id,
   ];
 }
@@ -144,6 +146,7 @@ interface PlannerActions {
   loadWeekBlocks:     (startDate: ISODate) => Promise<void>;
   createBlock:        (input: Partial<TimeBlock> & { date: ISODate; startTime: string; endTime: string }) => Promise<TimeBlock>;
   updateBlock:        (id: ID, patch: Partial<TimeBlock>) => Promise<void>;
+  completeBlock:      (id: ID) => Promise<void>;
   deleteBlock:        (id: ID) => Promise<void>;
   rescheduleBlock:    (id: ID, newStart: string, newEnd: string) => Promise<void>;
   resizeBlock:        (id: ID, newEnd: string) => Promise<void>;
@@ -240,6 +243,7 @@ export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get
       endTime:   input.endTime,
       color:     input.color,
       isBreak:   input.isBreak ?? false,
+      isCompleted: input.isCompleted ?? false,
       notes:     input.notes,
       createdAt: now(),
       updatedAt: now(),
@@ -251,7 +255,7 @@ export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get
       bus.emit("planner:block-linked-task", { blockId: block.id, taskId: block.taskId, date: block.date });
     }
 
-    bus.emit("notify", { message: `Block "${block.title}" created`, type: "success" } as never);
+    bus.emit("ui:notification", { message: `Block "${block.title}" created`, type: "success" });
     return block;
   },
 
@@ -273,6 +277,14 @@ export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get
     } else if (nextTaskId && updated.date !== existing.date) {
       bus.emit("planner:block-linked-task", { blockId: id, taskId: nextTaskId, date: updated.date });
     }
+  },
+
+  completeBlock: async (id) => {
+    const existing = get().blocks.find((b) => b.id === id);
+    if (!existing) return;
+    const updated: TimeBlock = { ...existing, isCompleted: true, updatedAt: now() };
+    await db.execute(UPDATE_BLOCK_SQL, updateBlockParams(updated));
+    set((s) => ({ blocks: s.blocks.map((b) => b.id === id ? updated : b) }));
   },
 
   deleteBlock: async (id) => {
@@ -377,7 +389,7 @@ export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get
       [template.id, template.name, JSON.stringify(templateBlocks), template.createdAt]
     );
     set((s) => ({ templates: [template, ...s.templates] }));
-    bus.emit("notify", { message: `Template "${name}" saved`, type: "success" } as never);
+    bus.emit("ui:notification", { message: `Template "${name}" saved`, type: "success" });
     return template;
   },
 
@@ -400,7 +412,7 @@ export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get
         notes:     tb.notes,
       });
     }
-    bus.emit("notify", { message: `Applied template "${template.name}"`, type: "success" } as never);
+    bus.emit("ui:notification", { message: `Applied template "${template.name}"`, type: "success" });
   },
 
   setActiveDate:     (date) => set({ activeDate: date }),

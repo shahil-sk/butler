@@ -55,4 +55,17 @@ export const TASK_MIGRATIONS: Migration[] = [
       DROP TABLE IF EXISTS task_labels;
     `,
   },
+  {
+    version: 11,
+    module: "tasks",
+    up: `
+      ALTER TABLE tasks ADD COLUMN linked_planner_block_ids TEXT NOT NULL DEFAULT '[]';
+      ALTER TABLE tasks ADD COLUMN linked_research_ids TEXT NOT NULL DEFAULT '[]';
+    `,
+    down: `
+      -- SQLite doesn't support DROP COLUMN easily in old versions, but modern does.
+      ALTER TABLE tasks DROP COLUMN linked_planner_block_ids;
+      ALTER TABLE tasks DROP COLUMN linked_research_ids;
+    `
+  }
 ];

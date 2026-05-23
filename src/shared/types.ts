@@ -41,6 +41,8 @@ export interface Task {
   checklistItems: ChecklistItem[];
   linkedNoteIds: ID[];
   linkedEventIds: ID[];
+  linkedPlannerBlockIds: ID[];
+  linkedResearchIds: ID[];
   order: number;               // for manual sorting
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
@@ -95,6 +97,7 @@ export interface Note {
   linkedTaskIds: ID[];
   linkedProjectIds: ID[];
   linkedEventIds: ID[];
+  linkedResearchIds: ID[];
   backlinks: ID[];             // note IDs that link to this note
   tags: string[];
   isPinned: boolean;

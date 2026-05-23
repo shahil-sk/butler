@@ -15,23 +15,9 @@ import { cn } from "@/shared/utils";
 import { format } from "date-fns";
 import type { ModuleManifest } from "@/shared/types";
 
-const manifest: ModuleManifest = {
-  id: "notes",
-  name: "Notes",
-  icon: "FileText",
-  sidebarOrder: 4,
-  isEnabled: true,
-  routes: [{ path: "/notes", label: "Notes" }],
-  commands: [
-    { id: "note.new",   label: "New note",         group: "Notes", action: "navigate:to" },
-    { id: "note.today", label: "Open today's note", group: "Notes", action: "navigate:to" },
-  ],
-  shortcuts: [
-    { keys: "g n", action: "navigate:to", description: "Go to Notes", global: false },
-  ],
-};
+import { NOTES_MANIFEST } from "./manifest";
 
-registry.register(manifest);
+registry.register(NOTES_MANIFEST);
 
 const FILTER_TABS = [
   { id: "all",     icon: AlignLeft, label: "All"    },
@@ -39,6 +25,8 @@ const FILTER_TABS = [
   { id: "daily",   icon: Calendar,  label: "Daily"  },
   { id: "pinned",  icon: Pin,       label: "Pinned" },
 ] as const;
+
+import { setupNotesEventListeners } from "./events";
 
 // ── Module ───────────────────────────────────────────────────
 export function NotesModule() {
@@ -48,7 +36,11 @@ export function NotesModule() {
     activeFilter, setActiveFilter,
   } = useNoteStore();
 
-  useEffect(() => { void loadNotes(); }, [loadNotes]);
+  useEffect(() => {
+    void loadNotes();
+    const cleanup = setupNotesEventListeners();
+    return cleanup;
+  }, [loadNotes]);
 
   const openedNote = openNoteId ? getNoteById(openNoteId) : null;
   const isDaily    = openedNote?.type === "daily";

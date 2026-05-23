@@ -14,12 +14,18 @@ import { useCalendarStore } from "@/modules/calendar/store";
 import { useJournalStore } from "@/modules/journal/store";
 import { useFocusStore } from "@/modules/focus/store";
 import { useTimeStore } from "@/modules/time-tracking/store";
+import { usePlannerStore } from "@/modules/planner/store";
 import { useShellStore } from "@/shell/store";
 
 export function IntegrationLayer() {
   useEffect(() => {
     const unsubs: Array<() => void> = [];
     const notify = useShellStore.getState().notify;
+
+    // Standardise ui:notification globally
+    unsubs.push(bus.on("ui:notification", ({ type, message, durationMs }) => {
+      notify({ type, message, durationMs: durationMs ?? 3000 });
+    }));
 
     // =========================================================
     // TASKS ↔ PROJECTS
@@ -77,6 +83,21 @@ export function IntegrationLayer() {
       if (daily && !daily.linkedTaskIds.includes(taskId)) {
         void useJournalStore.getState().linkTask(daily.id, taskId);
       }
+    }));
+
+    // =========================================================
+    // TASKS ↔ PLANNER
+    // =========================================================
+
+    unsubs.push(bus.on("task:schedule-in-planner", ({ task, date, startTime }) => {
+      void usePlannerStore.getState().createBlock({
+        taskId: task.id,
+        title: task.title,
+        date: date ?? new Date().toISOString().slice(0, 10),
+        startTime: startTime ?? "09:00",
+        endTime: "10:00", // Will be clamped automatically in store based on duration
+      });
+      notify({ type: "info", message: `"${task.title}" added to Planner`, durationMs: 2000 });
     }));
 
     // =========================================================
@@ -168,6 +189,35 @@ export function IntegrationLayer() {
           linkedNoteIds: [...event.linkedNoteIds, note.id],
         });
       });
+    }));
+
+    // =========================================================
+    // PLANNER ↔ TASKS / CALENDAR
+    // =========================================================
+
+    unsubs.push(bus.on("planner:block-linked-task", ({ blockId, taskId, date }) => {
+      // 1. Update task
+      const task = useTaskStore.getState().tasks.find((t) => t.id === taskId);
+      if (task) {
+        if (!task.linkedPlannerBlockIds.includes(blockId)) {
+          void useTaskStore.getState().updateTask(taskId, {
+            linkedPlannerBlockIds: [...task.linkedPlannerBlockIds, blockId],
+          });
+        }
+      }
+
+      // 2. Add to calendar
+      const block = usePlannerStore.getState().blocks.find(b => b.id === blockId);
+      if (block && block.startTime) {
+        void useCalendarStore.getState().createEvent({
+          title: block.title,
+          startAt: `${date}T${block.startTime}`,
+          endAt: `${date}T${block.endTime}`,
+          linkedTaskIds: [taskId],
+          isTimeBlock: true,
+          calendarId: "default", // It will use the primary active calendar automatically if not provided, but types might require it, so we leave it as partial if calendar store handles it. Actually let's assume it defaults or we fetch default.
+        });
+      }
     }));
 
     // =========================================================
@@ -283,6 +333,21 @@ export function IntegrationLayer() {
     }));
 
     // =========================================================
+    // FOCUS ↔ PLANNER
+    // =========================================================
+
+    unsubs.push(bus.on("focus:session-completed", ({ session }) => {
+      if (!session.taskId) return;
+      const dateStr = session.startedAt?.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
+      const block = usePlannerStore.getState().blocks.find(
+        (b) => b.taskId === session.taskId && b.date === dateStr
+      );
+      if (block) {
+        void usePlannerStore.getState().completeBlock(block.id);
+      }
+    }));
+
+    // =========================================================
     // FOCUS ↔ PROJECTS
     // =========================================================
 
@@ -385,6 +450,28 @@ export function IntegrationLayer() {
         durationMinutes: session.actualMinutes,
         isBillable:      false,
         tags:            ["focus"],
+      });
+    }));
+
+    // =========================================================
+    // RESEARCH ↔ TASKS / NOTES
+    // =========================================================
+
+    unsubs.push(bus.on("research:linked-to-note", ({ noteId, researchEntityId }) => {
+      const note = useNoteStore.getState().notes.find(n => n.id === noteId);
+      if (!note) return;
+      if (note.linkedResearchIds.includes(researchEntityId)) return;
+      void useNoteStore.getState().updateNote(noteId, {
+        linkedResearchIds: [...note.linkedResearchIds, researchEntityId],
+      });
+    }));
+
+    unsubs.push(bus.on("research:linked-to-task", ({ taskId, researchEntityId }) => {
+      const task = useTaskStore.getState().tasks.find(t => t.id === taskId);
+      if (!task) return;
+      if (task.linkedResearchIds.includes(researchEntityId)) return;
+      void useTaskStore.getState().updateTask(taskId, {
+        linkedResearchIds: [...task.linkedResearchIds, researchEntityId],
       });
     }));
 

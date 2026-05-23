@@ -39,4 +39,10 @@ export const NOTE_MIGRATIONS: Migration[] = [
       DROP TABLE IF EXISTS notes;
     `,
   },
+  {
+    version: 41,
+    module: "notes",
+    up: `ALTER TABLE notes ADD COLUMN linked_research_ids TEXT NOT NULL DEFAULT '[]';`,
+    down: `ALTER TABLE notes DROP COLUMN linked_research_ids;`
+  }
 ];

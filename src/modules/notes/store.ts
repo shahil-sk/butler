@@ -16,6 +16,7 @@ function rowToNote(r: Record<string, unknown>): Note {
     linkedTaskIds:    JSON.parse((r.linked_task_ids as string) || "[]"),
     linkedProjectIds: JSON.parse((r.linked_project_ids as string) || "[]"),
     linkedEventIds:   JSON.parse((r.linked_event_ids as string) || "[]"),
+    linkedResearchIds: JSON.parse((r.linked_research_ids as string) || "[]"),
     backlinks:        JSON.parse((r.backlinks as string) || "[]"),
     tags:             JSON.parse((r.tags as string) || "[]"),
     isPinned:         Boolean(r.is_pinned),
@@ -27,13 +28,13 @@ function rowToNote(r: Record<string, unknown>): Note {
 const INSERT_SQL = `
   INSERT INTO notes
     (id, title, content, type, date, linked_task_ids, linked_project_ids,
-     linked_event_ids, backlinks, tags, is_pinned, created_at, updated_at)
-  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+     linked_event_ids, linked_research_ids, backlinks, tags, is_pinned, created_at, updated_at)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 `;
 const UPDATE_SQL = `
   UPDATE notes SET
     title=?, content=?, type=?, date=?,
-    linked_task_ids=?, linked_project_ids=?, linked_event_ids=?,
+    linked_task_ids=?, linked_project_ids=?, linked_event_ids=?, linked_research_ids=?,
     backlinks=?, tags=?, is_pinned=?, updated_at=?
   WHERE id=?
 `;
@@ -42,7 +43,8 @@ function insertParams(n: Note): unknown[] {
   return [
     n.id, n.title, n.content, n.type, n.date ?? null,
     JSON.stringify(n.linkedTaskIds), JSON.stringify(n.linkedProjectIds),
-    JSON.stringify(n.linkedEventIds), JSON.stringify(n.backlinks),
+    JSON.stringify(n.linkedEventIds), JSON.stringify(n.linkedResearchIds),
+    JSON.stringify(n.backlinks),
     JSON.stringify(n.tags), n.isPinned ? 1 : 0,
     n.createdAt, n.updatedAt,
   ];
@@ -51,7 +53,8 @@ function updateParams(n: Note): unknown[] {
   return [
     n.title, n.content, n.type, n.date ?? null,
     JSON.stringify(n.linkedTaskIds), JSON.stringify(n.linkedProjectIds),
-    JSON.stringify(n.linkedEventIds), JSON.stringify(n.backlinks),
+    JSON.stringify(n.linkedEventIds), JSON.stringify(n.linkedResearchIds),
+    JSON.stringify(n.backlinks),
     JSON.stringify(n.tags), n.isPinned ? 1 : 0, n.updatedAt,
     n.id,
   ];
@@ -110,6 +113,7 @@ export const useNoteStore = create<NoteState & NoteActions>()((set, get) => ({
       linkedTaskIds:    input.linkedTaskIds    ?? [],
       linkedProjectIds: input.linkedProjectIds ?? [],
       linkedEventIds:   input.linkedEventIds   ?? [],
+      linkedResearchIds: input.linkedResearchIds ?? [],
       backlinks:        input.backlinks        ?? [],
       tags:             input.tags             ?? [],
       isPinned:         input.isPinned         ?? false,

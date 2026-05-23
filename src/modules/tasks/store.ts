@@ -33,6 +33,8 @@ function rowToTask(r: Record<string, unknown>): Task {
     checklistItems:   JSON.parse((r.checklist_items as string) || "[]"),
     linkedNoteIds:    JSON.parse((r.linked_note_ids as string) || "[]"),
     linkedEventIds:   JSON.parse((r.linked_event_ids as string) || "[]"),
+    linkedPlannerBlockIds: JSON.parse((r.linked_planner_block_ids as string) || "[]"),
+    linkedResearchIds: JSON.parse((r.linked_research_ids as string) || "[]"),
     order:            r.sort_order as number,
     createdAt:        r.created_at as string,
     updatedAt:        r.updated_at as string,
@@ -48,8 +50,9 @@ const INSERT_SQL = `
     due_date, start_date, scheduled_date, completed_at,
     estimate_minutes, actual_minutes, recurrence,
     dependencies, checklist_items, linked_note_ids, linked_event_ids,
+    linked_planner_block_ids, linked_research_ids,
     sort_order, created_at, updated_at
-  ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 `;
 
 const UPDATE_SQL = `
@@ -59,6 +62,7 @@ const UPDATE_SQL = `
     due_date=?, start_date=?, scheduled_date=?, completed_at=?,
     estimate_minutes=?, actual_minutes=?, recurrence=?,
     dependencies=?, checklist_items=?, linked_note_ids=?, linked_event_ids=?,
+    linked_planner_block_ids=?, linked_research_ids=?,
     sort_order=?, updated_at=?
   WHERE id=?
 `;
@@ -73,6 +77,7 @@ function insertParams(t: Task): unknown[] {
     t.recurrence ? JSON.stringify(t.recurrence) : null,
     JSON.stringify(t.dependencies), JSON.stringify(t.checklistItems),
     JSON.stringify(t.linkedNoteIds), JSON.stringify(t.linkedEventIds),
+    JSON.stringify(t.linkedPlannerBlockIds), JSON.stringify(t.linkedResearchIds),
     t.order, t.createdAt, t.updatedAt,
   ];
 }
@@ -88,6 +93,7 @@ function updateParams(t: Task): unknown[] {
     t.recurrence ? JSON.stringify(t.recurrence) : null,
     JSON.stringify(t.dependencies), JSON.stringify(t.checklistItems),
     JSON.stringify(t.linkedNoteIds), JSON.stringify(t.linkedEventIds),
+    JSON.stringify(t.linkedPlannerBlockIds), JSON.stringify(t.linkedResearchIds),
     t.order, t.updatedAt,
     t.id, // WHERE
   ];
