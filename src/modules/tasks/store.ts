@@ -1,6 +1,6 @@
 // ============================================================
-// TASKS MODULE — STORE  (fixed)
-// All SQL uses explicit column lists. No slice() tricks.
+// TASKS MODULE — STORE
+// Added: sort applied inside getFilteredTasks()
 // ============================================================
 
 import { create } from "zustand";
@@ -39,7 +39,7 @@ function rowToTask(r: Record<string, unknown>): Task {
   };
 }
 
-// ── Task → INSERT params (23 values, matches 23 columns) ──────
+// ── SQL ───────────────────────────────────────────────────────
 
 const INSERT_SQL = `
   INSERT INTO tasks (
@@ -78,7 +78,6 @@ function insertParams(t: Task): unknown[] {
 }
 
 function updateParams(t: Task): unknown[] {
-  // 21 SET params + 1 WHERE id = 22 total
   return [
     t.title, t.description ?? null, t.status, t.priority,
     t.projectId ?? null, t.parentTaskId ?? null,
@@ -89,9 +88,14 @@ function updateParams(t: Task): unknown[] {
     JSON.stringify(t.dependencies), JSON.stringify(t.checklistItems),
     JSON.stringify(t.linkedNoteIds), JSON.stringify(t.linkedEventIds),
     t.order, t.updatedAt,
-    t.id, // WHERE
+    t.id,
   ];
 }
+
+// ── Priority weight for sort ──────────────────────────────────
+const PRIORITY_WEIGHT: Record<string, number> = {
+  urgent: 0, high: 1, medium: 2, low: 3, none: 4,
+};
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -123,38 +127,38 @@ interface TaskState {
 }
 
 interface TaskActions {
-  loadTasks:          () => Promise<void>;
-  createTask:         (input: Partial<Task>) => Promise<Task>;
-  updateTask:         (id: ID, patch: Partial<Task>) => Promise<void>;
-  deleteTask:         (id: ID) => Promise<void>;
-  completeTask:       (id: ID) => Promise<void>;
-  restoreTask:        (id: ID) => Promise<void>;
-  archiveTask:        (id: ID) => Promise<void>;
-  duplicateTask:      (id: ID) => Promise<Task>;
-  moveTask:           (id: ID, toProjectId: ID | null) => Promise<void>;
-  reorderTasks:       (ids: ID[]) => Promise<void>;
-  batchUpdate:        (ids: ID[], patch: Partial<Task>) => Promise<void>;
-  batchDelete:        (ids: ID[]) => Promise<void>;
-  addChecklistItem:   (taskId: ID, text: string) => Promise<void>;
-  toggleChecklistItem:(taskId: ID, itemId: ID) => Promise<void>;
-  deleteChecklistItem:(taskId: ID, itemId: ID) => Promise<void>;
-  openQuickAdd:       (prefill?: Partial<Task>) => void;
-  closeQuickAdd:      () => void;
-  openTask:           (id: ID) => void;
-  closeTask:          () => void;
-  selectTask:         (id: ID, multi?: boolean) => void;
-  clearSelection:     () => void;
-  setView:            (v: TaskView) => void;
-  setGroupBy:         (g: TaskGroupBy) => void;
-  setSortBy:          (s: TaskSortBy) => void;
-  setFilter:          (f: Partial<TaskFilter>) => void;
-  setActiveRoute:     (r: string) => void;
-  getFilteredTasks:   () => Task[];
-  getSubtasks:        (parentId: ID) => Task[];
-  getTaskById:        (id: ID) => Task | undefined;
-  getTodayTasks:      () => Task[];
-  getUpcomingTasks:   () => Task[];
-  getOverdueTasks:    () => Task[];
+  loadTasks:           () => Promise<void>;
+  createTask:          (input: Partial<Task>) => Promise<Task>;
+  updateTask:          (id: ID, patch: Partial<Task>) => Promise<void>;
+  deleteTask:          (id: ID) => Promise<void>;
+  completeTask:        (id: ID) => Promise<void>;
+  restoreTask:         (id: ID) => Promise<void>;
+  archiveTask:         (id: ID) => Promise<void>;
+  duplicateTask:       (id: ID) => Promise<Task>;
+  moveTask:            (id: ID, toProjectId: ID | null) => Promise<void>;
+  reorderTasks:        (ids: ID[]) => Promise<void>;
+  batchUpdate:         (ids: ID[], patch: Partial<Task>) => Promise<void>;
+  batchDelete:         (ids: ID[]) => Promise<void>;
+  addChecklistItem:    (taskId: ID, text: string) => Promise<void>;
+  toggleChecklistItem: (taskId: ID, itemId: ID) => Promise<void>;
+  deleteChecklistItem: (taskId: ID, itemId: ID) => Promise<void>;
+  openQuickAdd:        (prefill?: Partial<Task>) => void;
+  closeQuickAdd:       () => void;
+  openTask:            (id: ID) => void;
+  closeTask:           () => void;
+  selectTask:          (id: ID, multi?: boolean) => void;
+  clearSelection:      () => void;
+  setView:             (v: TaskView) => void;
+  setGroupBy:          (g: TaskGroupBy) => void;
+  setSortBy:           (s: TaskSortBy) => void;
+  setFilter:           (f: Partial<TaskFilter>) => void;
+  setActiveRoute:      (r: string) => void;
+  getFilteredTasks:    () => Task[];
+  getSubtasks:         (parentId: ID) => Task[];
+  getTaskById:         (id: ID) => Task | undefined;
+  getTodayTasks:       () => Task[];
+  getUpcomingTasks:    () => Task[];
+  getOverdueTasks:     () => Task[];
 }
 
 const DEFAULT_FILTER: TaskFilter = { statuses: [], priorities: [], projectIds: [], labels: [] };
@@ -196,7 +200,7 @@ export const useTaskStore = create<TaskState & TaskActions>()((set, get) => ({
       startDate:      input.startDate,
       scheduledDate:  input.scheduledDate,
       completedAt:    undefined,
-      estimateMinutes:input.estimateMinutes,
+      estimateMinutes: input.estimateMinutes,
       actualMinutes:  undefined,
       recurrence:     input.recurrence,
       dependencies:   input.dependencies   ?? [],
@@ -224,16 +228,13 @@ export const useTaskStore = create<TaskState & TaskActions>()((set, get) => ({
   updateTask: async (id, patch) => {
     const existing = get().tasks.find((t) => t.id === id);
     if (!existing) { console.warn("[Tasks] updateTask: task not found", id); return; }
-
     const updated: Task = { ...existing, ...patch, updatedAt: now() };
-
     try {
       await db.execute(UPDATE_SQL, updateParams(updated));
     } catch (err) {
       console.error("[Tasks] updateTask DB error:", err);
       throw err;
     }
-
     set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? updated : t)) }));
     bus.emit("task:updated", { task: updated, changed: patch });
     bus.emit("search:index-invalidated", { entityType: "task", id });
@@ -352,7 +353,7 @@ export const useTaskStore = create<TaskState & TaskActions>()((set, get) => ({
   // ── Derived ───────────────────────────────────────────────
 
   getFilteredTasks: () => {
-    const { tasks, filter, activeRoute } = get();
+    const { tasks, filter, activeRoute, sortBy } = get();
     const t = today();
     let result = tasks.filter((task) => task.parentTaskId == null);
 
@@ -375,6 +376,25 @@ export const useTaskStore = create<TaskState & TaskActions>()((set, get) => ({
       const q = filter.search.toLowerCase();
       result = result.filter((t) => t.title.toLowerCase().includes(q) || t.description?.toLowerCase().includes(q));
     }
+
+    // ── Apply sort ───────────────────────────────────────
+    result = [...result];
+    if (sortBy === "dueDate") {
+      result.sort((a, b) => {
+        if (!a.dueDate && !b.dueDate) return 0;
+        if (!a.dueDate) return 1;
+        if (!b.dueDate) return -1;
+        return a.dueDate.localeCompare(b.dueDate);
+      });
+    } else if (sortBy === "priority") {
+      result.sort((a, b) => (PRIORITY_WEIGHT[a.priority] ?? 4) - (PRIORITY_WEIGHT[b.priority] ?? 4));
+    } else if (sortBy === "createdAt") {
+      result.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    } else if (sortBy === "title") {
+      result.sort((a, b) => a.title.localeCompare(b.title));
+    }
+    // "manual" → keep DB order (sort_order ASC from loadTasks)
+
     return result;
   },
 

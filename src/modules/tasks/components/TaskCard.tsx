@@ -1,13 +1,13 @@
 // ============================================================
 // TASKS MODULE — TaskCard
-// Grid card + compact list row variants.
+// Added: inline due-date edit popover on due date click
 // ============================================================
 
 import { useRef, useState } from "react";
 import {
   MoreHorizontal, Calendar, Circle, CheckCircle2,
   Copy, Trash2, Archive, ExternalLink,
-  Flag, Clock,
+  Flag, Clock, X,
 } from "lucide-react";
 import { cn, formatDate } from "@/shared/utils";
 import { Popover, PopoverItem, PopoverDivider, ProjectDot } from "@/shared/ui";
@@ -51,6 +51,111 @@ function StatusBadge({ status }: { status: string }) {
       <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", cfg.dot)} />
       {cfg.label}
     </span>
+  );
+}
+
+// ── Inline due date editor ────────────────────────────────────
+function InlineDueDateEditor({
+  taskId, dueDate, isOverdue, isDone,
+  className,
+}: {
+  taskId: string;
+  dueDate?: string;
+  isOverdue: boolean;
+  isDone: boolean;
+  className?: string;
+}) {
+  const { updateTask } = useTaskStore();
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState(dueDate ?? "");
+  const popRef = useRef<HTMLDivElement>(null);
+
+  function handleApply() {
+    void updateTask(taskId, { dueDate: value || undefined });
+    setOpen(false);
+  }
+
+  function handleClear() {
+    void updateTask(taskId, { dueDate: undefined });
+    setValue("");
+    setOpen(false);
+  }
+
+  return (
+    <div className="relative" ref={popRef}>
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        className={cn(
+          "flex items-center gap-1 text-[11px] tabular-nums transition-colors",
+          isOverdue
+            ? "text-red-500 font-semibold hover:text-red-600"
+            : isDone
+              ? "text-muted-foreground/25"
+              : "text-muted-foreground/55 hover:text-foreground",
+          className
+        )}
+        title="Click to change due date"
+      >
+        <Calendar size={10} strokeWidth={1.75} />
+        {dueDate ? formatDate(dueDate) : <span className="italic opacity-50">Set date</span>}
+      </button>
+
+      {open && (
+        <div
+          className="absolute bottom-full mb-1.5 right-0 z-50 w-56 rounded-xl border border-border bg-popover shadow-xl p-3 flex flex-col gap-2"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
+        >
+          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Due date</p>
+          <input
+            type="date"
+            value={value}
+            autoFocus
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleApply(); if (e.key === "Escape") setOpen(false); }}
+            className="w-full bg-background border border-border rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40"
+          />
+          {/* Quick picks */}
+          <div className="flex flex-wrap gap-1">
+            {[
+              { label: "Today",    offset: 0 },
+              { label: "Tomorrow", offset: 1 },
+              { label: "In 3 days", offset: 3 },
+              { label: "Next week", offset: 7 },
+            ].map(({ label, offset }) => {
+              const d = new Date();
+              d.setDate(d.getDate() + offset);
+              const iso = d.toISOString().slice(0, 10);
+              return (
+                <button
+                  key={label}
+                  onClick={() => { setValue(iso); }}
+                  className="px-2 py-0.5 text-[10px] rounded-full bg-muted text-muted-foreground hover:bg-accent hover:text-foreground transition-colors font-medium"
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex gap-1.5">
+            {dueDate && (
+              <button
+                onClick={handleClear}
+                className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[12px] text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+              >
+                <X size={10} /> Clear
+              </button>
+            )}
+            <button
+              onClick={handleApply}
+              className="flex-1 py-1.5 rounded-lg bg-primary text-primary-foreground text-[12px] font-semibold hover:opacity-90 transition-opacity"
+            >
+              Apply
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -117,14 +222,12 @@ export function TaskCard({ task, view }: TaskCardProps) {
       <div
         onClick={() => openTask(task.id)}
         className={cn(
-          // Row shape: no border-box, use bottom separator pattern instead
           "group relative flex items-center gap-2.5 px-3 py-[11px] cursor-pointer select-none",
           "rounded-lg transition-all duration-150",
           "hover:bg-accent/40",
           isDone && "opacity-55"
         )}
       >
-        {/* Left priority stripe — 2px, inset from top/bottom */}
         {task.priority && task.priority !== "none" && (
           <span
             className={cn(
@@ -134,7 +237,6 @@ export function TaskCard({ task, view }: TaskCardProps) {
           />
         )}
 
-        {/* Complete toggle */}
         <button
           onClick={(e) => { e.stopPropagation(); isDone ? restoreTask(task.id) : completeTask(task.id); }}
           className={cn(
@@ -142,17 +244,13 @@ export function TaskCard({ task, view }: TaskCardProps) {
             isDone ? "text-emerald-500 hover:text-muted-foreground/40" : "text-muted-foreground/30 hover:text-primary"
           )}
         >
-          {isDone
-            ? <CheckCircle2 size={15} strokeWidth={2} />
-            : <Circle size={15} strokeWidth={1.5} />}
+          {isDone ? <CheckCircle2 size={15} strokeWidth={2} /> : <Circle size={15} strokeWidth={1.5} />}
         </button>
 
-        {/* Priority dot — always visible, tiny */}
         {task.priority && task.priority !== "none" && (
           <span className={cn("w-1.5 h-1.5 rounded-full shrink-0 opacity-70", PRIORITY_DOT[task.priority])} />
         )}
 
-        {/* Title */}
         <span className={cn(
           "flex-1 text-[13px] font-[450] leading-snug truncate min-w-0",
           (isDone || isCancelled) && "line-through text-muted-foreground/40"
@@ -160,10 +258,7 @@ export function TaskCard({ task, view }: TaskCardProps) {
           {task.title}
         </span>
 
-        {/* Meta cluster — right-aligned */}
         <div className="flex items-center gap-2.5 shrink-0">
-
-          {/* Subtask counter */}
           {subtasks.length > 0 && (
             <span className={cn(
               "text-[10px] tabular-nums px-1.5 py-0.5 rounded-full font-medium",
@@ -175,14 +270,12 @@ export function TaskCard({ task, view }: TaskCardProps) {
             </span>
           )}
 
-          {/* Tags (first one only) */}
           {task.tags.length > 0 && (
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground/60 font-medium opacity-0 group-hover:opacity-100 transition-fast">
               {task.tags[0]}
             </span>
           )}
 
-          {/* Project */}
           {project && (
             <button
               onClick={(e) => {
@@ -197,25 +290,17 @@ export function TaskCard({ task, view }: TaskCardProps) {
             </button>
           )}
 
-          {/* Status badge */}
           <StatusBadge status={task.status} />
 
-          {/* Due date */}
-          {task.dueDate && (
-            <span className={cn(
-              "flex items-center gap-1 text-[11px] tabular-nums min-w-[64px] justify-end",
-              isOverdue
-                ? "text-red-500 font-semibold"
-                : isDone
-                  ? "text-muted-foreground/25"
-                  : "text-muted-foreground/55"
-            )}>
-              <Calendar size={10} strokeWidth={1.75} />
-              {formatDate(task.dueDate)}
-            </span>
-          )}
+          {/* Inline due date editor — replaces plain text */}
+          <InlineDueDateEditor
+            taskId={task.id}
+            dueDate={task.dueDate}
+            isOverdue={isOverdue}
+            isDone={isDone}
+            className="min-w-[64px] justify-end"
+          />
 
-          {/* Estimate — hover only */}
           {task.estimateMinutes && (
             <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground/35 opacity-0 group-hover:opacity-100 transition-fast">
               <Clock size={10} strokeWidth={1.75} />
@@ -267,9 +352,7 @@ export function TaskCard({ task, view }: TaskCardProps) {
               isDone ? "text-emerald-500 hover:text-muted-foreground/50" : "text-muted-foreground/25 hover:text-primary"
             )}
           >
-            {isDone
-              ? <CheckCircle2 size={15} strokeWidth={2} />
-              : <Circle size={15} strokeWidth={1.5} />}
+            {isDone ? <CheckCircle2 size={15} strokeWidth={2} /> : <Circle size={15} strokeWidth={1.5} />}
           </button>
           <div className="flex-1 min-w-0">
             <h3 className={cn(
@@ -337,15 +420,13 @@ export function TaskCard({ task, view }: TaskCardProps) {
                 {task.estimateMinutes >= 60 ? `${Math.round((task.estimateMinutes / 60) * 10) / 10}h` : `${task.estimateMinutes}m`}
               </span>
             )}
-            {task.dueDate && (
-              <span className={cn(
-                "flex items-center gap-1 text-[10px] tabular-nums",
-                isOverdue ? "text-red-500 font-semibold" : isDone ? "text-muted-foreground/25" : "text-muted-foreground/50"
-              )}>
-                <Calendar size={9} strokeWidth={1.75} />
-                {formatDate(task.dueDate)}
-              </span>
-            )}
+            {/* Inline due date editor on grid card too */}
+            <InlineDueDateEditor
+              taskId={task.id}
+              dueDate={task.dueDate}
+              isOverdue={isOverdue}
+              isDone={isDone}
+            />
           </div>
         </div>
       </div>
