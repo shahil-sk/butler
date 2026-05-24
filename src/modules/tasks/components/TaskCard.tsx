@@ -7,7 +7,7 @@ import { useRef, useState } from "react";
 import {
   MoreHorizontal, Calendar, Circle, CheckCircle2,
   Copy, Trash2, Archive, ExternalLink,
-  Flag, Clock, X,
+  Flag, Clock, X, Play,
 } from "lucide-react";
 import { cn, formatDate } from "@/shared/utils";
 import { Popover, PopoverItem, PopoverDivider, ProjectDot } from "@/shared/ui";
@@ -310,6 +310,34 @@ export function TaskCard({ task, view }: TaskCardProps) {
             </span>
           )}
 
+          {/* Focus play button */}
+          {!isDone && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                bus.emit("focus:start-requested", { taskId: task.id });
+              }}
+              className="shrink-0 p-1 rounded hover:bg-muted text-muted-foreground/35 hover:text-primary transition-fast opacity-0 group-hover:opacity-100"
+              title="Start Focus Session"
+            >
+              <Play size={10} className="fill-current" />
+            </button>
+          )}
+
+          {/* Schedule in Planner button */}
+          {!task.scheduledDate && !isDone && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                bus.emit("task:schedule-in-planner", { task });
+              }}
+              className="shrink-0 p-1 rounded hover:bg-muted text-muted-foreground/35 hover:text-primary transition-fast opacity-0 group-hover:opacity-100"
+              title="Schedule in Planner"
+            >
+              <Calendar size={10} />
+            </button>
+          )}
+
           <CardMenu task={task} />
         </div>
       </div>
@@ -420,6 +448,35 @@ export function TaskCard({ task, view }: TaskCardProps) {
                 {task.estimateMinutes >= 60 ? `${Math.round((task.estimateMinutes / 60) * 10) / 10}h` : `${task.estimateMinutes}m`}
               </span>
             )}
+
+            {/* Focus play button */}
+            {!isDone && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  bus.emit("focus:start-requested", { taskId: task.id });
+                }}
+                className="shrink-0 p-1 rounded hover:bg-muted text-muted-foreground/35 hover:text-primary transition-fast opacity-0 group-hover:opacity-100"
+                title="Start Focus Session"
+              >
+                <Play size={10} className="fill-current" />
+              </button>
+            )}
+
+            {/* Schedule in Planner button */}
+            {!task.scheduledDate && !isDone && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  bus.emit("task:schedule-in-planner", { task });
+                }}
+                className="shrink-0 p-1 rounded hover:bg-muted text-muted-foreground/35 hover:text-primary transition-fast opacity-0 group-hover:opacity-100"
+                title="Schedule in Planner"
+              >
+                <Calendar size={10} />
+              </button>
+            )}
+
             {/* Inline due date editor on grid card too */}
             <InlineDueDateEditor
               taskId={task.id}

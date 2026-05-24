@@ -7,7 +7,7 @@
 // ============================================================
 
 import { useRef, useState, useCallback, useEffect } from "react";
-import { X, GripVertical, Pencil, CheckCircle2, Circle } from "lucide-react";
+import { X, GripVertical, Pencil, CheckCircle2, Circle, Play } from "lucide-react";
 import { cn, toISODate } from "@/shared/utils";
 import { usePlannerStore, type TimeBlock, snapMinutes, clampTime } from "../store";
 import { useTaskStore } from "@/modules/tasks/store";
@@ -248,6 +248,20 @@ function BlockCard({
         </div>
 
         <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0 transition-fast">
+          {/* Focus play button */}
+          {block.taskId && !block.isCompleted && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                bus.emit("focus:start-requested", { taskId: block.taskId });
+              }}
+              className="p-0.5 rounded text-muted-foreground hover:text-primary transition-fast"
+              title="Start Focus Session"
+            >
+              <Play size={9} className="fill-current" />
+            </button>
+          )}
+
           {/* Completion toggle */}
           <button
             onClick={(e) => { e.stopPropagation(); void handleComplete(); }}
