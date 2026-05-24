@@ -92,6 +92,13 @@ export async function syncTaskToCalendar(task: Task): Promise<void> {
   if (!task.scheduledDate) return;
 
   try {
+    // Skip if this task is already scheduled in the Planner
+    const plannerBlocks = await db.select<{ id: string }>(
+      `SELECT id FROM planner_blocks WHERE task_id = ?`,
+      [task.id]
+    );
+    if (plannerBlocks.length > 0) return;
+
     // Check if a linked event already exists
     const existing = await db.select<{ id: string }>(
       `SELECT id FROM calendar_events WHERE linked_task_ids LIKE ?`,
@@ -135,6 +142,13 @@ export async function syncAllTasks(): Promise<void> {
 
     for (const row of tasks) {
       const taskId = row.id as string;
+
+      // Skip if this task is already scheduled in the Planner
+      const plannerBlocks = await db.select<{ id: string }>(
+        `SELECT id FROM planner_blocks WHERE task_id = ?`,
+        [taskId]
+      );
+      if (plannerBlocks.length > 0) continue;
 
       // Skip if already linked
       const existing = await db.select<{ id: string }>(

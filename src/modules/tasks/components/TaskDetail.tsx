@@ -334,7 +334,7 @@ export function TaskDetail() {
               {task?.status !== "done" && (
                 <button
                   onClick={() => {
-                    bus.emit("focus:start-requested", { taskId: task.id });
+                    bus.emit("focus:start-requested", { taskId: task!.id });
                     closeTask();
                   }}
                   className="p-1.5 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-fast"
@@ -348,7 +348,7 @@ export function TaskDetail() {
               {!task?.scheduledDate && task?.status !== "done" && (
                 <button
                   onClick={() => {
-                    bus.emit("task:schedule-in-planner", { task });
+                    bus.emit("task:schedule-in-planner", { task: task! });
                   }}
                   className="p-1.5 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-fast"
                   title="Schedule in Planner"
