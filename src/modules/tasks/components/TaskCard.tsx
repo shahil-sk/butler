@@ -322,7 +322,7 @@ export function TaskCard({ task, view }: TaskCardProps) {
       onClick={() => openTask(task.id)}
       className={cn(
         "group relative flex flex-col rounded-xl border border-border bg-card",
-        "hover:shadow-md hover:border-border/80 transition-all duration-150 cursor-pointer overflow-hidden",
+        "hover:shadow-md hover:border-border/80 transition-all duration-150 cursor-pointer",
         isDone && "opacity-60"
       )}
     >
