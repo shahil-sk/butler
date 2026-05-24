@@ -1,5 +1,12 @@
-import { useRef, useState, useCallback } from "react";
-import { X, GripVertical, Pencil } from "lucide-react";
+// ============================================================
+// PLANNER — DayColumn
+// New: pulsing now-indicator with time label, half-hour grid
+//      lines, block completion toggle on check icon,
+//      drag-enter column highlight
+// ============================================================
+
+import { useRef, useState, useCallback, useEffect } from "react";
+import { X, GripVertical, Pencil, CheckCircle2, Circle } from "lucide-react";
 import { cn, toISODate } from "@/shared/utils";
 import { usePlannerStore, type TimeBlock, snapMinutes, clampTime } from "../store";
 import { useTaskStore } from "@/modules/tasks/store";
@@ -8,7 +15,7 @@ import { useCalendarStore } from "@/modules/calendar/store";
 import type { ISODate } from "@/shared/types";
 import { BlockEditModal } from "./BlockEditModal";
 
-export const HOUR_HEIGHT = 64; // px per hour
+export const HOUR_HEIGHT = 64;
 const START_HOUR   = 6;
 const END_HOUR     = 22;
 const HOURS        = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i);
@@ -34,7 +41,7 @@ function formatHour(h: number): string {
   return h < 12 ? `${h} AM` : `${h - 12} PM`;
 }
 
-// ── Drop preview ghost ─────────────────────────────────────────
+// ── Drop preview ghost ──────────────────────────────────────────────
 function DropGhost({ y, height }: { y: number; height: number }) {
   return (
     <div
@@ -44,7 +51,7 @@ function DropGhost({ y, height }: { y: number; height: number }) {
   );
 }
 
-// ── Single ResizeHandle ────────────────────────────────────────
+// ── ResizeHandle ──────────────────────────────────────────────────
 function ResizeHandle({ blockId, startY }: { blockId: string; startY: number }) {
   const { resizeBlock } = usePlannerStore();
   const rafRef = useRef<number | null>(null);
@@ -53,12 +60,9 @@ function ResizeHandle({ blockId, startY }: { blockId: string; startY: number }) 
     (e: React.PointerEvent) => {
       e.stopPropagation();
       e.preventDefault();
-
-      // Walk up to find the nearest .day-col-grid ancestor
       const grid = (e.target as HTMLElement).closest(".day-col-grid") as HTMLElement | null
         ?? document.querySelector(".day-col-grid") as HTMLElement | null;
       if (!grid) return;
-
       const gridRect = grid.getBoundingClientRect();
 
       const onMove = (ev: PointerEvent) => {
@@ -66,11 +70,8 @@ function ResizeHandle({ blockId, startY }: { blockId: string; startY: number }) 
         rafRef.current = requestAnimationFrame(() => {
           const y      = Math.max(startY + HOUR_HEIGHT / 4, ev.clientY - gridRect.top);
           const newEnd = snapMinutes(yToTime(y));
-          // Optimistic in-memory update for smooth feel
           usePlannerStore.setState((s) => ({
-            blocks: s.blocks.map((b) =>
-              b.id === blockId ? { ...b, endTime: newEnd } : b
-            ),
+            blocks: s.blocks.map((b) => b.id === blockId ? { ...b, endTime: newEnd } : b),
           }));
         });
       };
@@ -99,9 +100,9 @@ function ResizeHandle({ blockId, startY }: { blockId: string; startY: number }) 
   );
 }
 
-// ── CalendarEventStrip — read-only overlay from calendar module ──
+// ── CalendarEventStrip ─────────────────────────────────────────
 function CalendarEventStrip({ event }: { event: { id: string; title: string; startAt: string; endAt: string; color?: string } }) {
-  const startTime = event.startAt.slice(11, 16); // "HH:MM" from ISO
+  const startTime = event.startAt.slice(11, 16);
   const endTime   = event.endAt.slice(11, 16);
   const top       = timeToY(clampTime(startTime));
   const bottom    = timeToY(clampTime(endTime));
@@ -111,19 +112,11 @@ function CalendarEventStrip({ event }: { event: { id: string; title: string; sta
   return (
     <div
       className="absolute left-1 w-9 rounded-sm overflow-hidden pointer-events-none z-5"
-      style={{
-        top,
-        height,
-        backgroundColor: `${color}22`,
-        borderLeft: `2px solid ${color}99`,
-      }}
+      style={{ top, height, backgroundColor: `${color}22`, borderLeft: `2px solid ${color}99` }}
       title={event.title}
     >
       {height > 20 && (
-        <p
-          className="text-[8px] font-medium px-0.5 pt-0.5 leading-tight truncate"
-          style={{ color }}
-        >
+        <p className="text-[8px] font-medium px-0.5 pt-0.5 leading-tight truncate" style={{ color }}>
           {event.title}
         </p>
       )}
@@ -131,7 +124,7 @@ function CalendarEventStrip({ event }: { event: { id: string; title: string; sta
   );
 }
 
-// ── BlockCard ──────────────────────────────────────────────────
+// ── BlockCard ─────────────────────────────────────────────────────
 function BlockCard({
   block, tasks, projects, compact, onDelete, onEdit, onPointerDownGrip,
 }: {
@@ -143,6 +136,7 @@ function BlockCard({
   onEdit:   () => void;
   onPointerDownGrip: (e: React.PointerEvent) => void;
 }) {
+  const { completeBlock } = usePlannerStore();
   const task    = block.taskId ? tasks.find((t) => t.id === block.taskId) : null;
   const project = task?.projectId ? projects.find((p) => p.id === task.projectId) : null;
 
@@ -150,15 +144,24 @@ function BlockCard({
   const height = Math.max(timeToY(block.endTime) - top, 24);
   const color  = block.color ?? project?.color ?? (block.isBreak ? "#6b7280" : "#3b82f6");
 
+  // Completion progress bar: fraction of block elapsed vs now
+  const nowTime = new Date();
+  const nowMins = nowTime.getHours() * 60 + nowTime.getMinutes();
+  const [sh, sm] = block.startTime.split(":").map(Number);
+  const [eh, em] = block.endTime.split(":").map(Number);
+  const startMins = sh * 60 + sm;
+  const endMins   = eh * 60 + em;
+  const duration  = Math.max(endMins - startMins, 1);
+  const elapsed   = Math.min(Math.max(nowMins - startMins, 0), duration);
+  const progressPct = block.isCompleted ? 100 : (elapsed / duration) * 100;
+
   const [editing, setEditing] = useState(false);
   const [title, setTitle]     = useState(task?.title ?? block.title);
   const { updateBlock }       = usePlannerStore();
 
   const commitTitle = () => {
     setEditing(false);
-    if (title.trim() && title !== block.title) {
-      void updateBlock(block.id, { title: title.trim() });
-    }
+    if (title.trim() && title !== block.title) void updateBlock(block.id, { title: title.trim() });
   };
 
   return (
@@ -166,19 +169,27 @@ function BlockCard({
       className={cn(
         "absolute left-11 right-1 rounded-md px-2 py-1 overflow-hidden",
         "border-l-[3px] group transition-fast z-10",
-        "hover:shadow-md hover:z-20"
+        "hover:shadow-md hover:z-20",
+        block.isCompleted && "opacity-50"
       )}
       style={{
-        top,
-        height,
+        top, height,
         backgroundColor: `${color}18`,
         borderLeftColor: color,
         cursor: editing ? "text" : "default",
       }}
       onDoubleClick={onEdit}
     >
+      {/* Time-elapsed progress bar at bottom */}
+      {!block.isCompleted && progressPct > 0 && progressPct < 100 && (
+        <div
+          className="absolute bottom-0 left-0 h-[2px] rounded-full opacity-40 transition-all duration-1000"
+          style={{ width: `${progressPct}%`, backgroundColor: color }}
+        />
+      )}
+
       <div className="flex items-start gap-1 h-full">
-        {/* Grip — pointer drag handle */}
+        {/* Grip */}
         <div
           className="shrink-0 mt-0.5 cursor-grab active:cursor-grabbing touch-none"
           onPointerDown={onPointerDownGrip}
@@ -203,7 +214,10 @@ function BlockCard({
             />
           ) : (
             <p
-              className="text-xs font-medium truncate leading-tight"
+              className={cn(
+                "text-xs font-medium truncate leading-tight",
+                block.isCompleted && "line-through"
+              )}
               style={{ color }}
               onClick={() => !compact && setEditing(true)}
             >
@@ -213,13 +227,23 @@ function BlockCard({
 
           {!compact && height > 44 && (
             <p className="text-[10px] text-muted-foreground/60 tabular-nums">
-              {block.startTime} – {block.endTime}
+              {block.startTime}–{block.endTime}
               {task && <span className="ml-1 opacity-50">· {task.estimateMinutes ?? 0}m</span>}
             </p>
           )}
         </div>
 
         <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0 transition-fast">
+          {/* Completion toggle */}
+          <button
+            onClick={(e) => { e.stopPropagation(); void completeBlock(block.id); }}
+            className="p-0.5 rounded text-muted-foreground hover:text-emerald-500 transition-fast"
+            title={block.isCompleted ? "Completed" : "Mark complete"}
+          >
+            {block.isCompleted
+              ? <CheckCircle2 size={9} className="text-emerald-500" />
+              : <Circle size={9} />}
+          </button>
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(); }}
             className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-fast"
@@ -240,26 +264,42 @@ function BlockCard({
   );
 }
 
-// ── DayColumn ──────────────────────────────────────────────────
+// ── DayColumn ─────────────────────────────────────────────────────────
 export function DayColumn({ date, compact = false }: { date: ISODate; compact?: boolean }) {
   const {
     getBlocksForDate, createBlock, deleteBlock,
     dragTaskId, setDragTaskId, scheduleTask,
     rescheduleBlock, editingBlockId, setEditingBlockId,
   } = usePlannerStore();
-  const tasks    = useTaskStore((s) => s.tasks);
-  const projects = useProjectStore((s) => s.projects);
+  const tasks     = useTaskStore((s) => s.tasks);
+  const projects  = useProjectStore((s) => s.projects);
   const calEvents = useCalendarStore((s) => s.getEventsForDay(date));
-  const gridRef  = useRef<HTMLDivElement>(null);
+  const gridRef   = useRef<HTMLDivElement>(null);
 
-  const [ghost, setGhost] = useState<{ y: number; height: number } | null>(null);
+  const [ghost,        setGhost]        = useState<{ y: number; height: number } | null>(null);
+  const [dragOver,     setDragOver]     = useState(false);
+  const [nowY,         setNowY]         = useState<number | null>(null);
+  const [nowLabel,     setNowLabel]     = useState("");
   const dragMoveRef = useRef<{ blockId: string; offsetY: number; durationPx: number } | null>(null);
 
   const blocks  = getBlocksForDate(date);
-  const nowObj  = new Date();
-  const nowTime = `${String(nowObj.getHours()).padStart(2, "0")}:${String(nowObj.getMinutes()).padStart(2, "0")}`;
-  const isToday = date === toISODate(nowObj);
-  const nowY    = isToday ? timeToY(nowTime) : null;
+  const isToday = date === toISODate(new Date());
+
+  // ── Live now-indicator tick ──────────────────────────────────
+  useEffect(() => {
+    if (!isToday) { setNowY(null); return; }
+    function tick() {
+      const n = new Date();
+      const t = `${String(n.getHours()).padStart(2, "0")}:${String(n.getMinutes()).padStart(2, "0")}`;
+      setNowY(timeToY(t));
+      setNowLabel(
+        n.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+      );
+    }
+    tick();
+    const id = setInterval(tick, 60_000);
+    return () => clearInterval(id);
+  }, [isToday]);
 
   const getGridY = useCallback((clientY: number): number => {
     const rect = gridRef.current?.getBoundingClientRect();
@@ -267,10 +307,11 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
     return Math.max(0, Math.min(clientY - rect.top, TOTAL_HEIGHT));
   }, []);
 
-  // ── Task drag-over / drop ──────────────────────────────────────
+  // ── Drag-over / drop ───────────────────────────────────────
   const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
+    setDragOver(true);
     const y        = getGridY(e.clientY);
     const snappedY = timeToY(snapMinutes(yToTime(y)));
     const taskId   = dragTaskId ?? e.dataTransfer.getData("taskId");
@@ -279,11 +320,12 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
     setGhost({ y: snappedY, height: durPx });
   }, [dragTaskId, tasks, getGridY]);
 
-  const onDragLeave = useCallback(() => setGhost(null), []);
+  const onDragLeave = useCallback(() => { setGhost(null); setDragOver(false); }, []);
 
   const onDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     setGhost(null);
+    setDragOver(false);
     const y         = getGridY(e.clientY);
     const startTime = snapMinutes(yToTime(y));
     const taskId    = dragTaskId ?? e.dataTransfer.getData("taskId") ?? undefined;
@@ -297,7 +339,7 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
     }
   }, [dragTaskId, date, getGridY, scheduleTask, createBlock, setDragTaskId]);
 
-  // ── Block pointer-drag (move) ─────────────────────────────────
+  // ── Block pointer-drag (move) ───────────────────────────────
   const onPointerDownGrip = useCallback(
     (e: React.PointerEvent, blockId: string) => {
       e.preventDefault();
@@ -324,8 +366,9 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
         const y        = getGridY(ev.clientY) - ref.offsetY;
         const newStart = snapMinutes(yToTime(Math.max(0, y)));
         const [sh, sm] = newStart.split(":").map(Number);
-        const [eh, em] = block.endTime.split(":").map(Number);
-        const dur      = (eh * 60 + em) - (block.startTime.split(":").map(Number)[0] * 60 + block.startTime.split(":").map(Number)[1]);
+        const [bsh, bsm] = block.startTime.split(":").map(Number);
+        const [beh, bem] = block.endTime.split(":").map(Number);
+        const dur      = (beh * 60 + bem) - (bsh * 60 + bsm);
         const em2      = sh * 60 + sm + dur;
         const newEnd   = clampTime(`${String(Math.floor(em2 / 60)).padStart(2, "0")}:${String(em2 % 60).padStart(2, "0")}`);
         await rescheduleBlock(blockId, newStart, newEnd);
@@ -341,16 +384,18 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
 
   return (
     <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-      {/* Grid */}
       <div
         ref={gridRef}
-        className="day-col-grid relative flex-1 overflow-y-auto"
+        className={cn(
+          "day-col-grid relative flex-1 overflow-y-auto transition-colors duration-150",
+          dragOver && "bg-primary/[0.03]"
+        )}
         style={{ height: TOTAL_HEIGHT }}
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
       >
-        {/* Hour lines */}
+        {/* Whole-hour lines */}
         {HOURS.map((h) => (
           <div
             key={h}
@@ -363,20 +408,35 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
           </div>
         ))}
 
-        {/* Now indicator */}
+        {/* Half-hour lines */}
+        {HOURS.map((h) => (
+          <div
+            key={`${h}-half`}
+            className="absolute left-11 right-0 border-t border-border/10 pointer-events-none"
+            style={{ top: timeToY(`${String(h).padStart(2, "0")}:30`) }}
+          />
+        ))}
+
+        {/* Now indicator — pulsing dot + time label */}
         {nowY !== null && (
           <div
             className="absolute left-0 right-0 z-20 pointer-events-none"
             style={{ top: nowY }}
           >
             <div className="relative flex items-center">
-              <div className="w-2 h-2 rounded-full bg-primary ml-9 shrink-0" />
+              {/* Pulse ring */}
+              <span className="absolute left-9 w-3 h-3 rounded-full bg-primary opacity-30 animate-ping" />
+              <span className="w-2.5 h-2.5 rounded-full bg-primary ml-[34px] shrink-0 z-10" />
               <div className="flex-1 h-px bg-primary" />
+              {/* Time label */}
+              <span className="absolute right-2 -top-3 text-[9px] font-semibold tabular-nums text-primary bg-background/80 px-1 rounded">
+                {nowLabel}
+              </span>
             </div>
           </div>
         )}
 
-        {/* Calendar event strips — read-only, behind blocks */}
+        {/* Calendar event strips */}
         {calEvents.map((ev) => (
           <CalendarEventStrip key={ev.id} event={ev} />
         ))}
@@ -397,9 +457,17 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
 
         {/* Drop ghost */}
         {ghost && <DropGhost y={ghost.y} height={ghost.height} />}
+
+        {/* Drag-over label */}
+        {dragOver && !ghost && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
+            <span className="text-[11px] font-medium text-primary/60 bg-primary/5 px-3 py-1.5 rounded-full border border-primary/20">
+              Drop to schedule
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* Block edit modal */}
       {editingBlockId && (
         <BlockEditModal
           blockId={editingBlockId}

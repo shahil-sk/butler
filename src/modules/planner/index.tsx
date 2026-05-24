@@ -1,7 +1,14 @@
+// ============================================================
+// PLANNER MODULE — index.tsx
+// New: week utilisation bar, today-column highlight ring,
+//      block count badges on view tabs, drag-hint tooltip
+// ============================================================
+
 import { useEffect, useState } from "react";
 import {
   ChevronLeft, ChevronRight, CalendarDays, LayoutGrid, Columns3,
   Clock, Coffee, Layers, BookTemplate, Plus, Save, Trash2, CheckSquare,
+  Percent,
 } from "lucide-react";
 import { registry } from "@/kernel/router";
 import { usePlannerStore, type PlannerView } from "./store";
@@ -35,15 +42,76 @@ const VIEW_OPTIONS = [
 ];
 
 const WEEK_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const WORK_HOURS = 8 * 60; // 480 min = target work day
 
-// ── Helpers ──────────────────────────────────────────────────
+// ── Helpers ─────────────────────────────────────────────────
 
 function fmtMins(m: number) {
   const h = Math.floor(m / 60), r = m % 60;
   return h > 0 ? (r > 0 ? `${h}h ${r}m` : `${h}h`) : `${m}m`;
 }
 
-// ── Stats bar (unified: planner blocks + time entries + focus) ─
+function toMin(t: string) {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+}
+
+// ── Week utilisation bar ──────────────────────────────────────
+
+function WeekUtilBar({ weekDates }: { weekDates: string[] }) {
+  const blocks = usePlannerStore((s) => s.blocks);
+
+  const days = weekDates.map((date) => {
+    const dayBlocks = blocks.filter((b) => b.date === date && !b.isBreak);
+    const plannedMins = dayBlocks.reduce(
+      (acc, b) => acc + (toMin(b.endTime) - toMin(b.startTime)), 0
+    );
+    const pct = Math.min(100, Math.round((plannedMins / WORK_HOURS) * 100));
+    const isToday = date === toISODate(new Date());
+    return { date, pct, plannedMins, isToday };
+  });
+
+  const totalMins = days.reduce((a, d) => a + d.plannedMins, 0);
+  const weekPct   = Math.min(100, Math.round((totalMins / (WORK_HOURS * 5)) * 100));
+
+  return (
+    <div className="flex items-center gap-3 px-6 py-2 border-b border-border/30 shrink-0">
+      <div className="flex items-center gap-1 text-[11px] text-muted-foreground/60">
+        <Percent size={9} />
+        <span className="font-medium tabular-nums">{weekPct}%</span>
+        <span className="opacity-60">week</span>
+      </div>
+      <div className="flex flex-1 items-end gap-1" style={{ height: 20 }}>
+        {days.map(({ date, pct, isToday }) => (
+          <div key={date} className="flex-1 flex flex-col items-center gap-0.5">
+            <div className="w-full rounded-sm overflow-hidden bg-muted/50" style={{ height: 12 }}>
+              <div
+                className={cn(
+                  "h-full rounded-sm transition-all duration-500",
+                  pct >= 80 ? "bg-primary" :
+                  pct >= 50 ? "bg-primary/60" :
+                  "bg-primary/25"
+                )}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <span className={cn(
+              "text-[8px] tabular-nums",
+              isToday ? "text-primary font-semibold" : "text-muted-foreground/30"
+            )}>
+              {WEEK_DAYS[(new Date(date).getDay() + 6) % 7].slice(0, 1)}
+            </span>
+          </div>
+        ))}
+      </div>
+      <span className="text-[11px] tabular-nums text-muted-foreground/50 font-medium shrink-0">
+        {fmtMins(totalMins)}
+      </span>
+    </div>
+  );
+}
+
+// ── StatsBar ───────────────────────────────────────────────────
 function StatsBar({ date }: { date: string }) {
   const { getDayStats }  = usePlannerStore();
   const timeEntries      = useTimeStore((s) => s.entries);
@@ -51,12 +119,10 @@ function StatsBar({ date }: { date: string }) {
 
   const s = getDayStats(date);
 
-  // Tracked minutes from time-tracking entries for this date
   const trackedMins = timeEntries
     .filter((e) => e.endAt && e.startAt.startsWith(date))
     .reduce((a, e) => a + (e.durationMinutes ?? 0), 0);
 
-  // Focus minutes from completed focus sessions for this date
   const focusMins = focusSessions
     .filter((fs) => fs.type === "focus" && fs.completedAt && fs.startedAt?.startsWith(date))
     .reduce((a, fs) => a + (fs.actualMinutes ?? 0), 0);
@@ -66,46 +132,27 @@ function StatsBar({ date }: { date: string }) {
 
   return (
     <div className="flex items-center gap-3 px-6 py-2.5 border-b border-border/40 bg-surface-1/40 shrink-0 backdrop-blur-sm flex-wrap">
-      {s.totalBlocks > 0 && (
-        <StatPill icon={<Layers size={9} />} label={`${s.totalBlocks} blocks`} />
-      )}
+      {s.totalBlocks > 0 && <StatPill icon={<Layers size={9} />} label={`${s.totalBlocks} blocks`} />}
       {s.taskCount > 0 && (
-        <>
-          <div className="w-px h-3 bg-border/40" />
-          <StatPill icon={<CheckSquare size={9} />} label={`${s.taskCount} tasks`} />
-        </>
-      )}
+        <><div className="w-px h-3 bg-border/40" />
+        <StatPill icon={<CheckSquare size={9} />} label={`${s.taskCount} tasks`} /></>)}
       {s.focusMinutes > 0 && (
-        <>
-          <div className="w-px h-3 bg-border/40" />
-          <StatPill icon={<Clock size={9} />} label={`${fmtMins(s.focusMinutes)} planned`} accent />
-        </>
-      )}
+        <><div className="w-px h-3 bg-border/40" />
+        <StatPill icon={<Clock size={9} />} label={`${fmtMins(s.focusMinutes)} planned`} accent /></>)}
       {s.breakMinutes > 0 && (
-        <>
-          <div className="w-px h-3 bg-border/40" />
-          <StatPill icon={<Coffee size={9} />} label={`${s.breakMinutes}m breaks`} />
-        </>
-      )}
+        <><div className="w-px h-3 bg-border/40" />
+        <StatPill icon={<Coffee size={9} />} label={`${s.breakMinutes}m breaks`} /></>)}
       {trackedMins > 0 && (
-        <>
-          <div className="w-px h-3 bg-border/40" />
-          <StatPill icon={<Clock size={9} />} label={`${fmtMins(trackedMins)} tracked`} color="text-emerald-500" />
-        </>
-      )}
+        <><div className="w-px h-3 bg-border/40" />
+        <StatPill icon={<Clock size={9} />} label={`${fmtMins(trackedMins)} tracked`} color="text-emerald-500" /></>)}
       {focusMins > 0 && (
-        <>
-          <div className="w-px h-3 bg-border/40" />
-          <StatPill icon={<Clock size={9} />} label={`${fmtMins(focusMins)} focus`} color="text-amber-500" />
-        </>
-      )}
+        <><div className="w-px h-3 bg-border/40" />
+        <StatPill icon={<Clock size={9} />} label={`${fmtMins(focusMins)} focus`} color="text-amber-500" /></>)}
     </div>
   );
 }
 
-function StatPill({
-  icon, label, accent = false, color,
-}: { icon: React.ReactNode; label: string; accent?: boolean; color?: string }) {
+function StatPill({ icon, label, accent = false, color }: { icon: React.ReactNode; label: string; accent?: boolean; color?: string }) {
   return (
     <div className={cn(
       "flex items-center gap-1.5 text-[11px] font-medium tabular-nums",
@@ -117,21 +164,13 @@ function StatPill({
   );
 }
 
-// ── Custom Plan Modal ─────────────────────────────────────────
-
+// ── Custom Plan Modal ────────────────────────────────────────────
 function CustomPlanModal({ onClose }: { onClose: () => void }) {
-  const {
-    activeDate, templates,
-    loadTemplates, savePlanTemplate, deleteTemplate, applyTemplate,
-    getBlocksForDate,
-  } = usePlannerStore();
-
-  const [newName,  setNewName]  = useState("");
-  const [saving,   setSaving]   = useState(false);
+  const { activeDate, templates, loadTemplates, savePlanTemplate, deleteTemplate, applyTemplate, getBlocksForDate } = usePlannerStore();
+  const [newName, setNewName]   = useState("");
+  const [saving, setSaving]     = useState(false);
   const [applying, setApplying] = useState<string | null>(null);
-
   useEffect(() => { void loadTemplates(); }, [loadTemplates]);
-
   const todayBlocks = getBlocksForDate(activeDate);
 
   async function handleSave() {
@@ -150,28 +189,17 @@ function CustomPlanModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
-
       <div className="relative w-full max-w-md mx-4 rounded-xl bg-card border border-border shadow-xl flex flex-col max-h-[80vh]">
-        {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
           <div className="flex items-center gap-2">
             <BookTemplate size={14} className="text-primary" />
             <h3 className="text-sm font-semibold">Custom Plan Templates</h3>
           </div>
-          <button onClick={onClose}
-            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-fast">
-            ✕
-          </button>
+          <button onClick={onClose} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-fast">✕</button>
         </div>
-
         <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
-
-          {/* Save today as template */}
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Save today as template</p>
             {todayBlocks.length === 0 ? (
@@ -179,73 +207,49 @@ function CustomPlanModal({ onClose }: { onClose: () => void }) {
             ) : (
               <div className="flex gap-2">
                 <input
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
+                  value={newName} onChange={(e) => setNewName(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && void handleSave()}
                   placeholder={`e.g. "Deep Work Day" (${todayBlocks.length} blocks)`}
                   className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring/40"
                 />
-                <button
-                  onClick={() => void handleSave()}
-                  disabled={!newName.trim() || saving}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 transition-opacity disabled:opacity-40"
-                >
-                  <Save size={12} />
-                  {saving ? "Saving…" : "Save"}
+                <button onClick={() => void handleSave()} disabled={!newName.trim() || saving}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 transition-opacity disabled:opacity-40">
+                  <Save size={12} />{saving ? "Saving…" : "Save"}
                 </button>
               </div>
             )}
           </div>
-
-          {/* Templates list */}
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Saved templates</p>
             {templates.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-8 text-center">
                 <BookTemplate size={24} className="text-muted-foreground/20" />
-                <p className="text-xs text-muted-foreground/60">No templates yet.<br />Save today's plan to reuse it later.</p>
+                <p className="text-xs text-muted-foreground/60">No templates yet.<br />Save today’s plan to reuse it later.</p>
               </div>
             ) : (
               <div className="flex flex-col gap-2">
                 {templates.map((t) => (
-                  <div key={t.id}
-                    className="flex items-center gap-3 p-3 rounded-xl border border-border bg-background hover:border-primary/30 transition-colors group">
+                  <div key={t.id} className="flex items-center gap-3 p-3 rounded-xl border border-border bg-background hover:border-primary/30 transition-colors group">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{t.name}</p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
-                        {t.blocks.length} blocks · {format(parseISO(t.createdAt), "MMM d, yyyy")}
-                      </p>
-                      {/* Block time preview */}
+                      <p className="text-[11px] text-muted-foreground mt-0.5">{t.blocks.length} blocks · {format(parseISO(t.createdAt), "MMM d, yyyy")}</p>
                       <div className="flex flex-wrap gap-1 mt-1.5">
                         {t.blocks.slice(0, 5).map((b, i) => (
-                          <span key={i}
-                            className="text-[9px] px-1.5 py-0.5 rounded font-medium"
-                            style={{
-                              background: b.color ? `${b.color}20` : "hsl(var(--muted))",
-                              color:      b.color ?? "hsl(var(--muted-foreground))",
-                            }}>
+                          <span key={i} className="text-[9px] px-1.5 py-0.5 rounded font-medium"
+                            style={{ background: b.color ? `${b.color}20` : "hsl(var(--muted))", color: b.color ?? "hsl(var(--muted-foreground))" }}>
                             {b.startTime} {b.title}
                           </span>
                         ))}
-                        {t.blocks.length > 5 && (
-                          <span className="text-[9px] text-muted-foreground">+{t.blocks.length - 5} more</span>
-                        )}
+                        {t.blocks.length > 5 && <span className="text-[9px] text-muted-foreground">+{t.blocks.length - 5} more</span>}
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        onClick={() => void handleApply(t.id)}
-                        disabled={applying === t.id}
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors disabled:opacity-50"
-                      >
-                        <Plus size={10} />
-                        {applying === t.id ? "Applying…" : "Apply"}
+                      <button onClick={() => void handleApply(t.id)} disabled={applying === t.id}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors disabled:opacity-50">
+                        <Plus size={10} />{applying === t.id ? "Applying…" : "Apply"}
                       </button>
-                      <button
-                        onClick={() => void deleteTemplate(t.id)}
-                        className="p-1.5 rounded-lg text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors opacity-0 group-hover:opacity-100"
-                        title="Delete template"
-                      >
+                      <button onClick={() => void deleteTemplate(t.id)}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors opacity-0 group-hover:opacity-100">
                         <Trash2 size={12} />
                       </button>
                     </div>
@@ -261,7 +265,6 @@ function CustomPlanModal({ onClose }: { onClose: () => void }) {
 }
 
 // ── Module root ───────────────────────────────────────────────
-
 export function PlannerModule() {
   const {
     activeDate, view, setView,
@@ -272,12 +275,9 @@ export function PlannerModule() {
 
   const tasks = useTaskStore((s) => s.tasks);
   const { loadTasks } = useTaskStore();
-
   const [showPlanModal, setShowPlanModal] = useState(false);
 
-  useEffect(() => {
-    if (tasks.length === 0) void loadTasks();
-  }, []);
+  useEffect(() => { if (tasks.length === 0) void loadTasks(); }, []);
 
   useEffect(() => {
     if (view === "day") {
@@ -297,8 +297,8 @@ export function PlannerModule() {
   const threeDates = Array.from({ length: 3 }, (_, i) => toISODate(addDays(parseISO(activeDate), i)));
   const isToday    = activeDate === toISODate(new Date());
 
-  const prev = (view === "week") ? goPrevWeek : goPrevDay;
-  const next = (view === "week") ? goNextWeek : goNextDay;
+  const prev = view === "week" ? goPrevWeek : goPrevDay;
+  const next = view === "week" ? goNextWeek : goNextDay;
 
   let rangeLabel = dateLabel;
   if (view === "week") {
@@ -313,76 +313,82 @@ export function PlannerModule() {
   return (
     <div className="flex flex-col h-full overflow-hidden bg-background">
 
-      {/* ── Row 1: Title + actions ────────────────────────── */}
+      {/* Row 1: Title + actions */}
       <div className="flex items-center justify-between px-6 pt-6 pb-3 shrink-0">
         <div>
           <h1 className="text-[18px] font-bold leading-tight tracking-tight">Planner</h1>
           <p className="text-[12px] text-muted-foreground mt-0.5 leading-tight">{rangeLabel}</p>
         </div>
-
         <div className="flex items-center gap-2">
-          {/* Nav cluster */}
           <div className="flex items-center gap-0.5">
-            <button onClick={prev}
-              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+            <button onClick={prev} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
               <ChevronLeft size={14} />
             </button>
             <button onClick={goToday}
               className={cn(
                 "px-2.5 py-1 rounded-md text-[12px] font-semibold transition-colors",
-                isToday
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                isToday ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-accent"
               )}>
               Today
             </button>
-            <button onClick={next}
-              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+            <button onClick={next} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
               <ChevronRight size={14} />
             </button>
           </div>
-
           <div className="w-px h-4 bg-border" />
-
-          {/* Custom Plan button */}
           <button
             onClick={() => setShowPlanModal(true)}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
           >
-            <BookTemplate size={13} />
-            Templates
+            <BookTemplate size={13} /> Templates
           </button>
         </div>
       </div>
 
-      {/* ── Row 2: View switcher tabs ─────────────────────── */}
+      {/* Row 2: View tabs with block count badges */}
       <div className="flex items-center px-6 border-b border-border shrink-0">
-        {VIEW_OPTIONS.map(({ value, icon: Icon, label }) => (
-          <button
-            key={value}
-            onClick={() => setView(value)}
-            className={cn(
-              "inline-flex items-center gap-1.5 px-3 py-3 text-[13px] font-medium",
-              "border-b-2 -mb-px transition-colors",
-              view === value
-                ? "border-foreground text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground hover:border-border",
-            )}
-          >
-            <Icon size={13} />
-            {label}
-          </button>
-        ))}
+        {VIEW_OPTIONS.map(({ value, icon: Icon, label }) => {
+          const dateSet = value === "week" ? weekDates : value === "3day" ? threeDates : [activeDate];
+          const blockCount = dateSet.reduce((a, d) => a + getBlocksForDate(d).length, 0);
+          return (
+            <button
+              key={value}
+              onClick={() => setView(value)}
+              className={cn(
+                "inline-flex items-center gap-1.5 px-3 py-3 text-[13px] font-medium",
+                "border-b-2 -mb-px transition-colors",
+                view === value
+                  ? "border-foreground text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground hover:border-border",
+              )}
+            >
+              <Icon size={13} />
+              {label}
+              {blockCount > 0 && (
+                <span className={cn(
+                  "text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded-full",
+                  view === value
+                    ? "bg-foreground/10 text-foreground"
+                    : "bg-muted text-muted-foreground/60"
+                )}>
+                  {blockCount}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Stats bar (day view only) */}
       {view === "day" && <StatsBar date={activeDate} />}
 
+      {/* Week utilisation bar (week/3day view) */}
+      {view !== "day" && <WeekUtilBar weekDates={displayDates} />}
+
       <div className="flex flex-1 overflow-hidden">
         <TaskSidebar visibleDates={displayDates} />
 
         <div className="flex flex-col flex-1 overflow-hidden">
-
           {/* Multi-day column headers */}
           {view !== "day" && (
             <div className="flex border-b border-border/50 shrink-0 bg-surface-1/20">
@@ -393,58 +399,44 @@ export function PlannerModule() {
                 const weekDayIdx = view === "week" ? i : (d.getDay() + 6) % 7;
                 const blockCount = getBlocksForDate(date).length;
                 const taskCount  = tasks.filter((t) => t.scheduledDate === date && t.status !== "done").length;
-                const timeEntries = useTimeStore.getState().entries;
-                const trackedMins = timeEntries
+                const trackedMins = useTimeStore.getState().entries
                   .filter((e) => e.endAt && e.startAt.startsWith(date))
                   .reduce((a, e) => a + (e.durationMinutes ?? 0), 0);
                 return (
                   <button key={date}
-                    onClick={() => {
-                      usePlannerStore.getState().setActiveDate(date);
-                      setView("day");
-                    }}
+                    onClick={() => { usePlannerStore.getState().setActiveDate(date); setView("day"); }}
                     className={cn(
                       "flex-1 flex flex-col items-center py-3 text-xs transition-colors hover:bg-accent/40 group",
                       isDay && "text-primary"
                     )}
                   >
-                    {/* Day label */}
                     <span className={cn(
                       "text-[10px] font-semibold tracking-widest uppercase mb-1.5",
                       isDay ? "text-primary/70" : "text-muted-foreground/40"
                     )}>
                       {WEEK_DAYS[weekDayIdx]}
                     </span>
-
-                    {/* Date circle */}
+                    {/* Today highlight ring */}
                     <span className={cn(
                       "w-7 h-7 flex items-center justify-center rounded-full text-[13px] font-semibold transition-colors",
                       isDay
-                        ? "bg-primary text-primary-foreground"
+                        ? "bg-primary text-primary-foreground ring-2 ring-primary/30 ring-offset-1"
                         : "text-foreground/80 group-hover:bg-accent"
                     )}>
                       {format(d, "d")}
                     </span>
-
-                    {/* Chips */}
                     <div className="mt-2 flex items-center gap-1 flex-wrap justify-center min-h-[16px]">
                       {blockCount > 0 && (
                         <span className={cn(
                           "text-[9px] font-medium tabular-nums px-1.5 py-0.5 rounded",
                           isDay ? "text-primary/80 bg-primary/10" : "text-muted-foreground/50 bg-muted/60"
-                        )}>
-                          {blockCount}b
-                        </span>
+                        )}>{blockCount}b</span>
                       )}
                       {taskCount > 0 && (
-                        <span className="text-[9px] font-medium tabular-nums px-1.5 py-0.5 rounded text-amber-600 bg-amber-500/10">
-                          {taskCount}t
-                        </span>
+                        <span className="text-[9px] font-medium tabular-nums px-1.5 py-0.5 rounded text-amber-600 bg-amber-500/10">{taskCount}t</span>
                       )}
                       {trackedMins > 0 && (
-                        <span className="text-[9px] font-medium tabular-nums px-1.5 py-0.5 rounded text-emerald-600 bg-emerald-500/10">
-                          {fmtMins(trackedMins)}
-                        </span>
+                        <span className="text-[9px] font-medium tabular-nums px-1.5 py-0.5 rounded text-emerald-600 bg-emerald-500/10">{fmtMins(trackedMins)}</span>
                       )}
                     </div>
                   </button>
@@ -455,11 +447,9 @@ export function PlannerModule() {
 
           {/* Scrollable grid */}
           <div className="flex flex-1 overflow-y-auto overflow-x-hidden">
-            {/* Hour labels — must match 16 * 64px = 1024px total height */}
             <div className="w-10 shrink-0 relative select-none" style={{ height: 1024 }}>
               {Array.from({ length: 16 }, (_, i) => i + 6).map((h) => (
-                <div key={h} className="absolute left-0 right-0 flex justify-end pr-2"
-                  style={{ top: (h - 6) * 64 - 8 }}>
+                <div key={h} className="absolute left-0 right-0 flex justify-end pr-2" style={{ top: (h - 6) * 64 - 8 }}>
                   <span className={cn(
                     "text-[9px] font-medium tabular-nums leading-none",
                     h === 12 ? "text-muted-foreground/60" : "text-muted-foreground/30"
@@ -470,14 +460,19 @@ export function PlannerModule() {
               ))}
             </div>
 
-            {/* Day columns — stretch to fill, min-height anchors scroll */}
-            <div className={cn("flex flex-1 min-h-full")} style={{ minHeight: 1024 }}>
+            <div className="flex flex-1 min-h-full" style={{ minHeight: 1024 }}>
               {view === "day" ? (
                 <DayColumn date={activeDate} />
               ) : (
                 <>
                   {displayDates.map((date) => (
-                    <div key={date} className="flex-1 border-l border-border/40 first:border-l-0">
+                    <div
+                      key={date}
+                      className={cn(
+                        "flex-1 border-l border-border/40 first:border-l-0",
+                        date === toISODate(new Date()) && "bg-primary/[0.015]"
+                      )}
+                    >
                       <DayColumn date={date} compact={view === "week"} />
                     </div>
                   ))}
