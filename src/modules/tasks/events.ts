@@ -1,13 +1,10 @@
 // ============================================================
 // TASKS MODULE — EVENTS
-// What this module emits and listens to via the event bus.
-// Never import other module stores directly.
+// Added: focus:cancel wire when active task is completed
 // ============================================================
 
 import { bus } from "@/kernel/event-bus";
 import { useTaskStore } from "./store";
-
-// ── Setup listeners (call once at module mount) ──────────────
 
 export function setupTaskEventListeners(): () => void {
   const unsubs: Array<() => void> = [];
@@ -38,21 +35,19 @@ export function setupTaskEventListeners(): () => void {
     })
   );
 
-  // ── Planner → Task: block linked back to a task ─────────
-  // When user links a planner block to a task, sync scheduledDate onto the task.
+  // Planner → Task: block linked back to a task
   unsubs.push(
     bus.on("planner:block-linked-task", ({ taskId, date }) => {
       const store = useTaskStore.getState();
       const task  = store.tasks.find((t) => t.id === taskId);
       if (!task) return;
-      // Only update scheduledDate if not already set to this date
       if (task.scheduledDate !== date) {
         store.updateTask(taskId, { scheduledDate: date });
       }
     })
   );
 
-  // When a planner block is unlinked, clear scheduledDate if it came from planner
+  // Planner block unlinked → clear scheduledDate
   unsubs.push(
     bus.on("planner:block-unlinked-task", ({ previousTaskId }) => {
       const store = useTaskStore.getState();
@@ -68,6 +63,15 @@ export function setupTaskEventListeners(): () => void {
       const store = useTaskStore.getState();
       const affected = store.tasks.filter((t) => t.projectId === projectId);
       affected.forEach((t) => store.updateTask(t.id, { projectId: undefined }));
+    })
+  );
+
+  // ── NEW: task:completed → if Focus has this task active, cancel session ──
+  // Focus module will listen to this and cancel the active session.
+  unsubs.push(
+    bus.on("task:completed", ({ taskId }) => {
+      // Emit a targeted event — Focus module's store checks if activeSession.taskId matches
+      bus.emit("focus:cancel-if-task", { taskId });
     })
   );
 
