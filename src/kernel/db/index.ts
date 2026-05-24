@@ -156,7 +156,15 @@ async function runMigrations(db: DbAdapter, migrations: Migration[]): Promise<vo
   for (const migration of pending) {
     console.log(`[DB] Applying migration v${migration.version}: ${migration.module}`);
     await db.transaction(async (tx) => {
-      await tx.execute(migration.up);
+      const statements = migration.up
+        .split(";")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0 && !s.startsWith("--"));
+        
+      for (const stmt of statements) {
+        await tx.execute(stmt);
+      }
+
       await tx.execute(
         "INSERT INTO _migrations (version, module, applied_at) VALUES (?, ?, ?)",
         [migration.version, migration.module, new Date().toISOString()]

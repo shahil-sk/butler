@@ -354,7 +354,7 @@ export function ProjectDetail() {
                         "flex-1 text-[13px]",
                         m.completedAt && "line-through text-muted-foreground/40"
                       )}>
-                        {m.title}
+                        {typeof m.title === "string" ? m.title : (m.title as any)?.title || String(m.title)}
                       </span>
                       {m.dueDate && (
                         <span className="text-[11px] text-muted-foreground/50 tabular-nums shrink-0">
@@ -377,7 +377,7 @@ export function ProjectDetail() {
                   onChange={(e) => setNewMilestone(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && newMilestone.trim()) {
-                      void addMilestone(project.id, { title: newMilestone.trim(), dueDate: milestoneDue || undefined });
+                      void addMilestone(project.id, newMilestone.trim(), milestoneDue || undefined);
                       setNewMilestone("");
                       setMilestoneDue("");
                     }

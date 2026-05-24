@@ -71,13 +71,13 @@ function insertParams(t: Task): unknown[] {
   return [
     t.id, t.title, t.description ?? null, t.status, t.priority,
     t.projectId ?? null, t.parentTaskId ?? null,
-    JSON.stringify(t.labels), JSON.stringify(t.tags),
+    JSON.stringify(t.labels ?? []), JSON.stringify(t.tags ?? []),
     t.dueDate ?? null, t.startDate ?? null, t.scheduledDate ?? null, t.completedAt ?? null,
     t.estimateMinutes ?? null, t.actualMinutes ?? null,
     t.recurrence ? JSON.stringify(t.recurrence) : null,
-    JSON.stringify(t.dependencies), JSON.stringify(t.checklistItems),
-    JSON.stringify(t.linkedNoteIds), JSON.stringify(t.linkedEventIds),
-    JSON.stringify(t.linkedPlannerBlockIds), JSON.stringify(t.linkedResearchIds),
+    JSON.stringify(t.dependencies ?? []), JSON.stringify(t.checklistItems ?? []),
+    JSON.stringify(t.linkedNoteIds ?? []), JSON.stringify(t.linkedEventIds ?? []),
+    JSON.stringify(t.linkedPlannerBlockIds ?? []), JSON.stringify(t.linkedResearchIds ?? []),
     t.order, t.createdAt, t.updatedAt,
   ];
 }
@@ -87,13 +87,13 @@ function updateParams(t: Task): unknown[] {
   return [
     t.title, t.description ?? null, t.status, t.priority,
     t.projectId ?? null, t.parentTaskId ?? null,
-    JSON.stringify(t.labels), JSON.stringify(t.tags),
+    JSON.stringify(t.labels ?? []), JSON.stringify(t.tags ?? []),
     t.dueDate ?? null, t.startDate ?? null, t.scheduledDate ?? null, t.completedAt ?? null,
     t.estimateMinutes ?? null, t.actualMinutes ?? null,
     t.recurrence ? JSON.stringify(t.recurrence) : null,
-    JSON.stringify(t.dependencies), JSON.stringify(t.checklistItems),
-    JSON.stringify(t.linkedNoteIds), JSON.stringify(t.linkedEventIds),
-    JSON.stringify(t.linkedPlannerBlockIds), JSON.stringify(t.linkedResearchIds),
+    JSON.stringify(t.dependencies ?? []), JSON.stringify(t.checklistItems ?? []),
+    JSON.stringify(t.linkedNoteIds ?? []), JSON.stringify(t.linkedEventIds ?? []),
+    JSON.stringify(t.linkedPlannerBlockIds ?? []), JSON.stringify(t.linkedResearchIds ?? []),
     t.order, t.updatedAt,
     t.id, // WHERE
   ];
@@ -209,6 +209,8 @@ export const useTaskStore = create<TaskState & TaskActions>()((set, get) => ({
       checklistItems: input.checklistItems ?? [],
       linkedNoteIds:  input.linkedNoteIds  ?? [],
       linkedEventIds: input.linkedEventIds ?? [],
+      linkedPlannerBlockIds: input.linkedPlannerBlockIds ?? [],
+      linkedResearchIds: input.linkedResearchIds ?? [],
       order:          Date.now(),
       createdAt:      now(),
       updatedAt:      now(),

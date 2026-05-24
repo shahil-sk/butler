@@ -132,9 +132,9 @@ async function syncAllTasks() {
     );
     if (calRows.length === 0) {
       await db.execute(
-        `INSERT INTO calendars (id, name, color, is_default, is_visible, source)
-         VALUES (?,?,?,0,1,'local')`,
-        [TASKS_CAL_ID, "Tasks", "#8b5cf6"]
+        `INSERT INTO calendars (id, name, color, is_default, is_visible, source, created_at)
+         VALUES (?,?,?,0,1,'local',?)`,
+        [TASKS_CAL_ID, "Tasks", "#8b5cf6", now()]
       );
     }
 

@@ -7,6 +7,7 @@ import {
   CheckSquare, FolderKanban, CalendarDays, FileText,
   BookOpen, Timer, Zap, Database, Search, FileSearch,
   Settings, Plus, ArrowRight, Clock,
+  Moon, Sun, Monitor, Columns, XSquare,
 } from "lucide-react";
 import { cn } from "@/shared/utils";
 
@@ -15,6 +16,11 @@ const STATIC_COMMANDS = [
   { id: "new-note",  label: "New note",   group: "Create", icon: Plus,     action: () => bus.emit("navigate:to", { path: "/notes/new" }) },
   { id: "settings",  label: "Settings",   group: "App",    icon: Settings, action: () => bus.emit("navigate:to", { path: "/settings" }) },
   { id: "search",    label: "Search all", group: "App",    icon: Search,   action: () => bus.emit("search:open", {}) },
+  { id: "theme-dark",   label: "Dark mode",     group: "App", icon: Moon,     action: () => useShellStore.getState().updateSettings({ theme: "dark" }) },
+  { id: "theme-light",  label: "Light mode",    group: "App", icon: Sun,      action: () => useShellStore.getState().updateSettings({ theme: "light" }) },
+  { id: "theme-system", label: "System theme",  group: "App", icon: Monitor,  action: () => useShellStore.getState().updateSettings({ theme: "system" }) },
+  { id: "split-panel",  label: "Split panel",   group: "App", icon: Columns,  action: () => useShellStore.getState().activePanelId && useShellStore.getState().splitPanel(useShellStore.getState().activePanelId!) },
+  { id: "close-panel",  label: "Close panel",   group: "App", icon: XSquare,  action: () => useShellStore.getState().activePanelId && useShellStore.getState().closePanel(useShellStore.getState().activePanelId!) },
 ];
 
 const NAV_COMMANDS = [

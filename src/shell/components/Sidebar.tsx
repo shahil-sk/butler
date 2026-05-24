@@ -1,7 +1,8 @@
+import { useState } from "react";
 import { cn } from "@/shared/utils";
 import { useShellStore } from "@/shell/store";
 import { useTheme } from "@/shell/components/ThemeProvider";
-import { bus } from "@/kernel/event-bus";
+import { bus, useBusEvent } from "@/kernel/event-bus";
 import {
   CheckSquare, FolderKanban, CalendarDays, FileText,
   BookOpen, Timer, Focus, Database, Search, FileSearch,
@@ -211,6 +212,7 @@ export function Sidebar() {
                     {!collapsed && (
                       <>
                         <span className="flex-1 text-left truncate">{item.label}</span>
+                        {item.id === "tasks" && <OverdueBadge />}
                         <ChevronRight
                           size={11}
                           className="opacity-0 group-hover:opacity-40 shrink-0 transition-fast"
@@ -224,6 +226,8 @@ export function Sidebar() {
           </div>
         ))}
       </nav>
+
+      <FocusMiniPlayer collapsed={collapsed} />
 
       {/* ── Footer ───────────────────────────────────────────────── */}
       <div
@@ -427,5 +431,75 @@ function QuickAction({
         </>
       )}
     </button>
+  );
+}
+
+// ── OverdueBadge ───────────────────────────────────────────────
+function OverdueBadge() {
+  const [count, setCount] = useState(0);
+
+  // Per requirements: Live sidebar badges updated via bus events.
+  useBusEvent("task:created", () => setCount(c => c + 1));
+  useBusEvent("task:completed", () => setCount(c => Math.max(0, c - 1)));
+  useBusEvent("task:deleted", () => setCount(c => Math.max(0, c - 1)));
+
+  if (count === 0) return null;
+
+  return (
+    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-destructive text-destructive-foreground">
+      {count}
+    </span>
+  );
+}
+
+// ── FocusMiniPlayer ────────────────────────────────────────────
+function FocusMiniPlayer({ collapsed }: { collapsed: boolean }) {
+  const [active, setActive] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [type, setType] = useState<"focus" | "short_break" | "long_break">("focus");
+  const onNavigate = useShellStore((s) => s.onNavigate);
+
+  useBusEvent("focus:session-started", ({ session }) => {
+    setActive(true);
+    setType(session.type);
+    setTimeLeft(session.plannedMinutes * 60);
+  });
+  useBusEvent("focus:session-completed", () => {
+    setActive(false);
+  });
+  useBusEvent("focus:tick", ({ remainingSeconds }) => {
+    setTimeLeft(remainingSeconds);
+    setActive(true);
+  });
+
+  if (!active) return null;
+
+  const m = Math.floor(timeLeft / 60);
+  const s = timeLeft % 60;
+  const timeStr = `${m}:${s.toString().padStart(2, "0")}`;
+
+  return (
+    <div
+      onClick={() => {
+        onNavigate("/focus", "Focus", "focus");
+        bus.emit("navigate:to", { path: "/focus" });
+      }}
+      className={cn(
+        "mx-2 mb-2 p-2 rounded-md border cursor-pointer transition-fast",
+        "bg-primary/10 border-primary/20 text-primary hover:bg-primary/20",
+        collapsed ? "flex justify-center" : "flex items-center justify-between"
+      )}
+      title="Active Focus Session"
+    >
+      <div className="flex items-center gap-2">
+        <Timer size={14} className="animate-pulse" />
+        {!collapsed && <span className="text-[12px] font-semibold">{timeStr}</span>}
+      </div>
+      {!collapsed && (
+        <span className="text-[10px] uppercase tracking-wider font-semibold opacity-80">
+          {type === "focus" ? "Focusing" : "Break"}
+        </span>
+      )}
+    </div>
   );
 }

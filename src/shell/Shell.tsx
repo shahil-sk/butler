@@ -1,8 +1,9 @@
-import { useEffect, lazy, Suspense } from "react";
+import { useEffect } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { Sidebar } from "./components/Sidebar";
 import { TabBar } from "./components/TabBar";
 import { CommandPalette } from "./components/CommandPalette";
+import { GlobalSearch } from "./components/GlobalSearch";
 import { Notifications } from "./components/Notifications";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { useShellStore } from "./store";
@@ -15,16 +16,16 @@ import { useTaskStore } from "@/modules/tasks/store";
 import { cn } from "@/shared/utils";
 import { ErrorBoundary } from "@/shared/ErrorBoundary";
 
-const TasksModule        = lazy(() => import("@/modules/tasks").then((m) => ({ default: m.TasksModule })));
-const ProjectsModule     = lazy(() => import("@/modules/projects").then((m) => ({ default: m.ProjectsModule })));
-const PlannerModule      = lazy(() => import("@/modules/planner").then((m) => ({ default: m.PlannerModule })));
-const NotesModule        = lazy(() => import("@/modules/notes").then((m) => ({ default: m.NotesModule })));
-const CalendarModule     = lazy(() => import("@/modules/calendar").then((m) => ({ default: m.CalendarModule })));
-const JournalModule      = lazy(() => import("@/modules/journal"));
-const FocusModule        = lazy(() => import("@/modules/focus"));
-const TimeTrackingModule = lazy(() => import("@/modules/time-tracking"));
-const DatabaseModule     = lazy(() => import("@/modules/database"));
-const ResearchModule     = lazy(() => import("@/modules/research").then((m) => ({ default: m.ResearchModule })));
+import { TasksModule } from "@/modules/tasks";
+import { ProjectsModule } from "@/modules/projects";
+import { PlannerModule } from "@/modules/planner";
+import { NotesModule } from "@/modules/notes";
+import { CalendarModule } from "@/modules/calendar";
+import JournalModule from "@/modules/journal";
+import FocusModule from "@/modules/focus";
+import TimeTrackingModule from "@/modules/time-tracking";
+import DatabaseModule from "@/modules/database";
+import { ResearchModule } from "@/modules/research";
 
 function ModulePlaceholder({ name }: { name: string }) {
   return (
@@ -114,23 +115,21 @@ export function Shell() {
               <TabBar panel={panel} />
               <div className="flex-1 overflow-hidden">
                 <ErrorBoundary name="module">
-                  <Suspense fallback={<ModuleLoader />}>
-                    <Routes>
-                      <Route path="/"             element={<Navigate to="/tasks" replace />} />
-                      <Route path="/tasks/*"      element={<TasksModule />} />
-                      <Route path="/projects/*"   element={<ProjectsModule />} />
-                      <Route path="/planner/*"    element={<PlannerModule />} />
-                      <Route path="/notes/*"      element={<NotesModule />} />
-                      <Route path="/calendar/*"   element={<CalendarModule />} />
-                      <Route path="/journal/*"    element={<JournalModule />} />
-                      <Route path="/focus/*"      element={<FocusModule />} />
-                      <Route path="/time/*"       element={<TimeTrackingModule />} />
-                      <Route path="/database/*"   element={<DatabaseModule />} />
-                      <Route path="/research/*"   element={<ResearchModule />} />
-                      <Route path="/settings/*"   element={<ModulePlaceholder name="Settings" />} />
-                      <Route path="*"             element={<Navigate to="/tasks" replace />} />
-                    </Routes>
-                  </Suspense>
+                  <Routes>
+                    <Route path="/"             element={<Navigate to="/tasks" replace />} />
+                    <Route path="/tasks/*"      element={<TasksModule />} />
+                    <Route path="/projects/*"   element={<ProjectsModule />} />
+                    <Route path="/planner/*"    element={<PlannerModule />} />
+                    <Route path="/notes/*"      element={<NotesModule />} />
+                    <Route path="/calendar/*"   element={<CalendarModule />} />
+                    <Route path="/journal/*"    element={<JournalModule />} />
+                    <Route path="/focus/*"      element={<FocusModule />} />
+                    <Route path="/time/*"       element={<TimeTrackingModule />} />
+                    <Route path="/database/*"   element={<DatabaseModule />} />
+                    <Route path="/research/*"   element={<ResearchModule />} />
+                    <Route path="/settings/*"   element={<ModulePlaceholder name="Settings" />} />
+                    <Route path="*"             element={<Navigate to="/tasks" replace />} />
+                  </Routes>
                 </ErrorBoundary>
               </div>
             </div>
@@ -138,6 +137,7 @@ export function Shell() {
         </div>
 
         <CommandPalette />
+        <GlobalSearch />
         <Notifications />
         <GlobalQuickAdd />
         <GlobalTaskDetail />

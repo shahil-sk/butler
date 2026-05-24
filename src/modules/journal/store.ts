@@ -146,18 +146,37 @@ export const useJournalStore = create<JournalState>((set, get) => ({
       updatedAt:        now(),
     };
 
-    await db.execute(INSERT_SQL, insertParams(entry));
-    set((s) => ({ entries: [entry, ...s.entries], activeEntryId: entry.id }));
 
-    bus.emit("journal:entry-created", { entry });
-    bus.emit("ui:notification", {
-      id: generateId(),
-      type: "success",
-      message: "Journal entry created",
-      durationMs: 2000,
-    });
-
-    return entry;
+    try {
+      await db.execute(INSERT_SQL, insertParams(entry));
+      set((s) => ({ entries: [entry, ...s.entries], activeEntryId: entry.id }));
+      
+      bus.emit("journal:entry-created", { entry });
+      bus.emit("ui:notification", {
+        id: generateId(),
+        type: "success",
+        message: "Journal entry created",
+        durationMs: 2000,
+      });
+      
+      return entry;
+    } catch (err) {
+      if (String(err).includes("UNIQUE constraint failed")) {
+        const rows = await db.select<Record<string, unknown>>(
+          "SELECT * FROM journal_entries WHERE date=? AND type=?",
+          [entry.date, entry.type]
+        );
+        if (rows.length > 0) {
+          const existing = rowToEntry(rows[0]);
+          set((s) => ({
+            entries: [existing, ...s.entries.filter((e) => e.id !== existing.id)],
+            activeEntryId: existing.id,
+          }));
+          return existing;
+        }
+      }
+      throw err;
+    }
   },
 
   updateEntry: async (id, changes) => {

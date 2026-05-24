@@ -241,6 +241,30 @@ export function IntegrationLayer() {
       }
     }));
 
+    unsubs.push(bus.on("journal:entry-created", ({ entry }) => {
+      if (entry.type !== "weekly") return;
+      
+      const weekStart = new Date(entry.date);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 7);
+      const weekEndStr = weekEnd.toISOString().slice(0, 10);
+      
+      const completedThisWeek = useTaskStore.getState().tasks.filter(t =>
+        t.completedAt && t.completedAt >= entry.date && t.completedAt < weekEndStr
+      );
+      completedThisWeek.forEach(t => void useJournalStore.getState().linkTask(entry.id, t.id));
+
+      const focusHours = useFocusStore.getState().sessions
+        .filter(s => s.type === "focus" && s.startedAt && s.startedAt >= entry.date && s.startedAt < weekEndStr)
+        .reduce((sum, s) => sum + (s.actualMinutes ?? 0), 0) / 60;
+        
+      notify({
+        type: "info",
+        message: `Weekly review populated — ${focusHours.toFixed(1)}h focused, ${completedThisWeek.length} tasks done`,
+        durationMs: 5000,
+      });
+    }));
+
     // =========================================================
     // JOURNAL ↔ PROJECTS
     // =========================================================

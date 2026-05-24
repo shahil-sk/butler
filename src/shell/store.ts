@@ -45,6 +45,7 @@ export interface ShellState {
   commandPaletteOpen: boolean;
   commandPaletteQuery: string;
   globalSearchOpen: boolean;
+  globalSearchQuery: string;
   notifications: Notification[];
   settings: AppSettings;
   rightPanelOpen: boolean;
@@ -66,8 +67,9 @@ export interface ShellActions {
   openCommandPalette: (query?: string) => void;
   closeCommandPalette: () => void;
   setCommandPaletteQuery: (q: string) => void;
-  openGlobalSearch: () => void;
+  openGlobalSearch: (query?: string) => void;
   closeGlobalSearch: () => void;
+  setGlobalSearchQuery: (q: string) => void;
   notify: (n: Omit<Notification, "id" | "createdAt">) => void;
   dismissNotification: (id: ID) => void;
   openRightPanel: (content: { type: string; props: Record<string, unknown> }) => void;
@@ -109,6 +111,7 @@ export const useShellStore = create<ShellState & ShellActions>()(
       commandPaletteOpen: false,
       commandPaletteQuery: "",
       globalSearchOpen: false,
+      globalSearchQuery: "",
       notifications: [],
       settings: DEFAULT_SETTINGS,
       rightPanelOpen: false,
@@ -190,8 +193,9 @@ export const useShellStore = create<ShellState & ShellActions>()(
       closeCommandPalette: () => set({ commandPaletteOpen: false, commandPaletteQuery: "" }),
       setCommandPaletteQuery: (q) => set({ commandPaletteQuery: q }),
 
-      openGlobalSearch: () => set({ globalSearchOpen: true }),
-      closeGlobalSearch: () => set({ globalSearchOpen: false }),
+      openGlobalSearch: (query = "") => set({ globalSearchOpen: true, globalSearchQuery: query }),
+      closeGlobalSearch: () => set({ globalSearchOpen: false, globalSearchQuery: "" }),
+      setGlobalSearchQuery: (q) => set({ globalSearchQuery: q }),
 
       notify: (n) => {
         const notification: Notification = { ...n, id: generateId(), createdAt: now() };
