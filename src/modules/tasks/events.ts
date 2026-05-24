@@ -66,14 +66,5 @@ export function setupTaskEventListeners(): () => void {
     })
   );
 
-  // ── NEW: task:completed → if Focus has this task active, cancel session ──
-  // Focus module will listen to this and cancel the active session.
-  unsubs.push(
-    bus.on("task:completed", ({ taskId }) => {
-      // Emit a targeted event — Focus module's store checks if activeSession.taskId matches
-      bus.emit("focus:cancel-if-task", { taskId });
-    })
-  );
-
   return () => unsubs.forEach((u) => u());
 }

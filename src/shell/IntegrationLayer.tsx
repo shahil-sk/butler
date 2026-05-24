@@ -83,6 +83,16 @@ export function IntegrationLayer() {
       if (daily && !daily.linkedTaskIds.includes(taskId)) {
         void useJournalStore.getState().linkTask(daily.id, taskId);
       }
+
+      // ④ Auto-stop running time entry if it is tracking this completed task
+      const timeStore = useTimeStore.getState();
+      if (timeStore.activeEntryId) {
+        const activeEntry = timeStore.entries.find((e) => e.id === timeStore.activeEntryId);
+        if (activeEntry?.taskId === taskId) {
+          void timeStore.stopTimer();
+          notify({ type: "info", message: `Time tracking stopped for completed task.`, durationMs: 2500 });
+        }
+      }
     }));
 
     // =========================================================
@@ -218,6 +228,28 @@ export function IntegrationLayer() {
           calendarId: "default", // It will use the primary active calendar automatically if not provided, but types might require it, so we leave it as partial if calendar store handles it. Actually let's assume it defaults or we fetch default.
         });
       }
+    }));
+
+    unsubs.push(bus.on("planner:block-unlinked-task", ({ blockId, previousTaskId }) => {
+      // 1. Update task: remove blockId from task.linkedPlannerBlockIds
+      const task = useTaskStore.getState().tasks.find((t) => t.id === previousTaskId);
+      if (task) {
+        const filtered = task.linkedPlannerBlockIds.filter((id) => id !== blockId);
+        if (filtered.length !== task.linkedPlannerBlockIds.length) {
+          void useTaskStore.getState().updateTask(previousTaskId, {
+            linkedPlannerBlockIds: filtered,
+          });
+        }
+      }
+
+      // 2. Remove mirrored calendar event
+      const calendarEvents = useCalendarStore.getState().events.filter(
+        (e) => e.isTimeBlock && e.linkedTaskIds.includes(previousTaskId)
+      );
+      calendarEvents.forEach((e) => {
+        void useCalendarStore.getState().deleteEvent(e.id);
+      });
+      notify({ type: "info", message: "Time block removed from Calendar.", durationMs: 2000 });
     }));
 
     // =========================================================
@@ -496,6 +528,19 @@ export function IntegrationLayer() {
       if (task.linkedResearchIds.includes(researchEntityId)) return;
       void useTaskStore.getState().updateTask(taskId, {
         linkedResearchIds: [...task.linkedResearchIds, researchEntityId],
+      });
+    }));
+
+    unsubs.push(bus.on("research:source-imported", ({ source }) => {
+      void useNoteStore.getState().createNote({
+        title: `Notes: ${source.title}`,
+        content: `Auto-generated notes template for research: ${source.url ?? source.filePath ?? ""}`,
+        linkedResearchIds: [source.id],
+      });
+      notify({
+        type: "success",
+        message: `Linked Note created for "${source.title}"`,
+        durationMs: 4000,
       });
     }));
 

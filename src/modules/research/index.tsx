@@ -417,9 +417,9 @@ function SourcesView() {
   const filtered = sources.filter((s) => {
     const matchesFilter =
       filter === "all"     ? true :
-      filter === "pending" ? ["pending", "processing"].includes(s.processingStatus) :
-      filter === "error"   ? s.processingStatus === "error" :
-      s.type === filter;
+      filter === "pending" ? !["completed", "failed"].includes(s.processingStatus) :
+      filter === "error"   ? s.processingStatus === "failed" :
+      s.type === (filter === "url" ? "web" : filter);
     const matchesSearch = !searchQ || s.title.toLowerCase().includes(searchQ.toLowerCase());
     return matchesFilter && matchesSearch;
   });
@@ -427,10 +427,10 @@ function SourcesView() {
   const tabs = [
     { id: "all",     label: "All",     count: sources.length },
     { id: "pdf",     label: "PDF",     count: sources.filter((s) => s.type === "pdf").length },
-    { id: "url",     label: "Web",     count: sources.filter((s) => s.type === "url").length },
+    { id: "url",     label: "Web",     count: sources.filter((s) => s.type === "web").length },
     { id: "text",    label: "Text",    count: sources.filter((s) => s.type === "text").length },
-    { id: "pending", label: "Pending", count: sources.filter((s) => ["pending","processing"].includes(s.processingStatus)).length },
-    { id: "error",   label: "Error",   count: sources.filter((s) => s.processingStatus === "error").length },
+    { id: "pending", label: "Pending", count: sources.filter((s) => !["completed", "failed"].includes(s.processingStatus)).length },
+    { id: "error",   label: "Error",   count: sources.filter((s) => s.processingStatus === "failed").length },
   ] satisfies { id: SourceFilter; label: string; count: number }[];
 
   return (
@@ -479,7 +479,7 @@ function SourcesView() {
               onOpen={() => { setActiveSource(src.id); setActiveView("document"); }}
               onDelete={() => void deleteSource(src.id)}
               onRetry={
-                src.processingStatus === "error"
+                src.processingStatus === "failed"
                   ? () => void updateSourceStatus(src.id, "pending")
                   : undefined
               }
@@ -518,8 +518,8 @@ function SourceCard({
   const { updateSource } = useResearchStore();
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(source.title);
-  const isError   = source.processingStatus === "error";
-  const isPending = source.processingStatus === "pending" || source.processingStatus === "processing";
+  const isError   = source.processingStatus === "failed";
+  const isPending = !["completed", "failed"].includes(source.processingStatus);
 
   const saveEdit = async () => {
     if (editTitle.trim() && editTitle.trim() !== source.title) {
@@ -1158,7 +1158,7 @@ function ImportModal({
 
   const pickPdf = async () => {
     try {
-      // Tauri v2: @tauri-apps/plugin-dialog
+      // @ts-ignore - plugin-dialog is optionally loaded by Tauri
       const { open: tauriOpen } = await import("@tauri-apps/plugin-dialog");
       const selected = await tauriOpen({
         filters: [{ name: "PDF", extensions: ["pdf"] }],

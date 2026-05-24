@@ -216,6 +216,20 @@ export const RESEARCH_MIGRATIONS: Migration[] = [
         tokenize = 'unicode61'
       );
     `,
+    down: `
+      DROP TABLE IF EXISTS research_links;
+      DROP TABLE IF EXISTS research_fts;
+      DROP TABLE IF EXISTS research_insights;
+      DROP TABLE IF EXISTS research_questions;
+      DROP TABLE IF EXISTS research_ai_jobs;
+      DROP TABLE IF EXISTS research_citations;
+      DROP TABLE IF EXISTS research_annotations;
+      DROP TABLE IF EXISTS research_highlights;
+      DROP TABLE IF EXISTS research_chunks;
+      DROP TABLE IF EXISTS research_documents;
+      DROP TABLE IF EXISTS research_sources;
+      DROP TABLE IF EXISTS research_threads;
+    `,
   },
 ];
 

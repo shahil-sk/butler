@@ -15,13 +15,16 @@ const TYPE_ICONS: Record<string, React.ElementType> = {
   template: Star,
 };
 
-export function NoteList() {
+export function NoteList({ tagFilter }: { tagFilter?: string | null } = {}) {
   const {
     searchQuery, setSearchQuery,
     getFilteredNotes, openNote, openNoteId,
   } = useNoteStore();
 
-  const notes = getFilteredNotes();
+  let notes = getFilteredNotes();
+  if (tagFilter) {
+    notes = notes.filter((n) => n.tags.includes(tagFilter));
+  }
 
   return (
     <div className="flex flex-col h-full min-h-0 bg-[hsl(var(--surface-1))]">

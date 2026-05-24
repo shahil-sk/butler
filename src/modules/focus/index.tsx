@@ -1,9 +1,9 @@
 // ============================================================
-// FOCUS + TIME TRACKING — COMBINED MODULE  (redesign v3.2)
-// New: complete TrackerTab quick-start bar (billable toggle,
-//      tag filter chips), full ReportsTab upgrade:
-//      30-day toggle, billable split bar, by-task breakdown,
-//      daily average stat, CSV export button.
+// FOCUS + TIME TRACKING — COMBINED MODULE  (redesign v3.1)
+// New: interrupt btn, Space shortcut, ambient sounds, daily
+//      goal bar, tag filter, billable in quick-start, copy
+//      entry, 30-day reports, billable split, by-task, streak
+//      calendar dots, daily average stat.
 // ============================================================
 
 import { useEffect, useState, useRef, useCallback } from "react";
@@ -12,7 +12,7 @@ import {
   BarChart2, Clock, DollarSign, Tag, Play, Pause,
   Zap, Target, ChevronDown, ChevronUp, Moon, ChevronRight,
   FileText, Smile, AlertCircle, Copy, Volume2, VolumeX,
-  Flame, TrendingUp, Download, ListTodo,
+  Flame, TrendingUp,
 } from "lucide-react";
 
 import { registry } from "@/kernel/router";
@@ -36,9 +36,9 @@ import type { FocusSession, TimeEntry, Task } from "@/shared/types";
 registry.register(focusManifest);
 registry.register(TIME_MANIFEST);
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 // HELPERS
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 
 function formatSecs(s: number) {
   return `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
@@ -58,11 +58,7 @@ function isOverdue(t: Task) { return !!t.dueDate && t.dueDate < new Date().toISO
 function totalMins(es: TimeEntry[]) { return es.reduce((a, e) => a + (e.durationMinutes ?? 0), 0); }
 function groupByDate(es: TimeEntry[]): [string, TimeEntry[]][] {
   const m = new Map<string, TimeEntry[]>();
-  for (const e of es) {
-    const d = e.startAt.slice(0, 10);
-    if (!m.has(d)) m.set(d, []);
-    m.get(d)!.push(e);
-  }
+  for (const e of es) { const d = e.startAt.slice(0, 10); if (!m.has(d)) m.set(d, []); m.get(d)!.push(e); }
   return Array.from(m.entries());
 }
 function groupSessionsByDate(sessions: FocusSession[]): [string, FocusSession[]][] {
@@ -85,51 +81,33 @@ function sessionLabel(type: FocusSession["type"]) {
 function stripHtml(html: string) {
   return html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
 }
-function exportCsv(entries: TimeEntry[], projects: { id: string; name: string }[], tasks: { id: string; title: string }[]) {
-  const header = "Date,Start,End,Duration (min),Description,Project,Task,Billable";
-  const rows = entries
-    .filter((e) => e.endAt)
-    .map((e) => [
-      e.startAt.slice(0, 10),
-      fmtTime(e.startAt),
-      e.endAt ? fmtTime(e.endAt) : "",
-      e.durationMinutes ?? "",
-      `"${(e.description ?? "").replace(/"/g, "'")}"`,
-      projects.find((p) => p.id === e.projectId)?.name ?? "",
-      tasks.find((t) => t.id === e.taskId)?.title ?? "",
-      e.isBillable ? "Yes" : "No",
-    ].join(","));
-  const blob = new Blob([[header, ...rows].join("\n")], { type: "text/csv" });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement("a");
-  a.href = url; a.download = `time-entries-${today()}.csv`; a.click();
-  URL.revokeObjectURL(url);
-}
 
-const MOOD: Record<number, string>      = { 1: "😩", 2: "😕", 3: "😐", 4: "🙂", 5: "😄" };
+const MOOD: Record<number, string> = { 1: "😩", 2: "😕", 3: "😐", 4: "🙂", 5: "😄" };
 const MOOD_DESC: Record<number, string> = { 1: "Terrible", 2: "Rough", 3: "Okay", 4: "Good", 5: "Great" };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 // AMBIENT SOUNDS
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 
 const SOUNDS = [
-  { id: "none",       label: "None",       emoji: "🔇" },
-  { id: "rain",       label: "Rain",        emoji: "🌧" },
-  { id: "lofi",       label: "Lo-fi",       emoji: "🎵" },
-  { id: "whitenoise", label: "White Noise", emoji: "〰" },
-  { id: "forest",     label: "Forest",      emoji: "🌲" },
+  { id: "none",       label: "None",        emoji: "🔇" },
+  { id: "rain",       label: "Rain",         emoji: "🌧" },
+  { id: "lofi",       label: "Lo-fi",        emoji: "🎵" },
+  { id: "whitenoise", label: "White Noise",  emoji: "〰" },
+  { id: "forest",     label: "Forest",       emoji: "🌲" },
 ] as const;
 type SoundId = typeof SOUNDS[number]["id"];
 
+// Stub: in a real Tauri app you'd use a plugin; here we just track state
 function useFocusSound() {
   const [sound, setSound] = useState<SoundId>("none");
+  // In production, connect to a Tauri audio plugin or Web Audio API here
   return { sound, setSound };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 // SEGMENT CONTROL
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 
 type Tab = "focus" | "tracker" | "reports";
 const TABS: { id: Tab; label: string; Icon: React.FC<{ size?: number; className?: string }> }[] = [
@@ -155,9 +133,9 @@ function SegmentControl({ active, onChange }: { active: Tab; onChange: (t: Tab) 
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 // LIVE DURATION HOOK
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 
 function useLiveDuration(startAt?: string, stopped = false): string {
   const [elapsed, setElapsed] = useState("0m");
@@ -175,9 +153,9 @@ function useLiveDuration(startAt?: string, stopped = false): string {
   return elapsed;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 // ACTIVE TIMER BANNER
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 
 function ActiveTimerBanner({ onJump }: { onJump: () => void }) {
   const activeEntry = useTimeStore((s) => s.entries.find((e) => e.id === s.activeEntryId));
@@ -211,9 +189,9 @@ function ActiveTimerBanner({ onJump }: { onJump: () => void }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SESSION DETAIL
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// SESSION DETAIL  (history sidebar)
+// ─────────────────────────────────────────────────────────────
 
 function SessionDetail({ session }: { session: FocusSession }) {
   const setMood = useFocusStore((s) => s.setSessionMood);
@@ -234,7 +212,9 @@ function SessionDetail({ session }: { session: FocusSession }) {
       )}
       {session.notes && stripHtml(session.notes) && (
         <div className="rounded-md p-2 text-[11px]" style={{ background: "hsl(var(--muted) / 0.5)" }}>
-          <div className="flex items-center gap-1 mb-1 text-muted-foreground"><FileText size={9} /> Notes</div>
+          <div className="flex items-center gap-1 mb-1 text-muted-foreground">
+            <FileText size={9} /> Notes
+          </div>
           <div className="text-foreground/80 leading-snug line-clamp-6 prose prose-xs max-w-none"
             dangerouslySetInnerHTML={{ __html: session.notes }} />
         </div>
@@ -265,10 +245,11 @@ function FocusHistorySidebar({ sessions }: { sessions: FocusSession[] }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showAll,    setShowAll]    = useState(false);
 
-  const grouped       = groupSessionsByDate(sessions);
+  const grouped      = groupSessionsByDate(sessions);
   const visibleGroups = showAll ? grouped : grouped.slice(0, 7);
-  const hasMore       = grouped.length > 7;
+  const hasMore = grouped.length > 7;
 
+  // Streak calendar: last 14 days with dots
   const streakDays = Array.from({ length: 14 }, (_, i) => {
     const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
     const hasFocus = sessions.some(
@@ -281,13 +262,19 @@ function FocusHistorySidebar({ sessions }: { sessions: FocusSession[] }) {
     <div className="flex flex-col h-full overflow-hidden border-r" style={{ width: 230, borderColor: "hsl(var(--border))" }}>
       <div className="px-3 py-3 border-b shrink-0" style={{ borderColor: "hsl(var(--border))" }}>
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Session History</p>
+        {/* 14-day streak dots */}
         <div className="flex gap-0.5 mt-2">
           {streakDays.map(({ d, hasFocus }) => (
             <div key={d} title={d}
-              className={cn("flex-1 h-1.5 rounded-full transition-colors", hasFocus ? "bg-primary" : "bg-muted")} />
+              className={cn(
+                "flex-1 h-1.5 rounded-full transition-colors",
+                hasFocus ? "bg-primary" : "bg-muted"
+              )}
+            />
           ))}
         </div>
       </div>
+
       <div className="flex-1 overflow-y-auto">
         {grouped.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-10 text-center px-3">
@@ -338,7 +325,9 @@ function FocusHistorySidebar({ sessions }: { sessions: FocusSession[] }) {
                         </div>
                       </button>
                       {isOpen && (
-                        <div className="px-3 pb-1"><SessionDetail session={s} /></div>
+                        <div className="px-3 pb-1">
+                          <SessionDetail session={s} />
+                        </div>
                       )}
                     </div>
                   );
@@ -360,9 +349,9 @@ function FocusHistorySidebar({ sessions }: { sessions: FocusSession[] }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 // MOOD CARD
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 
 function MoodCard({ sessionId, mood }: { sessionId: string; mood?: number }) {
   const setMood   = useFocusStore((s) => s.setSessionMood);
@@ -396,9 +385,9 @@ function MoodCard({ sessionId, mood }: { sessionId: string; mood?: number }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 // RING TIMER
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 
 function RingTimer({ secondsLeft, totalSeconds, state }: {
   secondsLeft: number; totalSeconds: number; state: FocusSession["state"] | "idle";
@@ -458,24 +447,28 @@ function PillButtons({ label, value, options, onChange, disabled }: {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 // DAILY FOCUS GOAL BAR
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 
 function DailyGoalBar({ todayMins, goalMins }: { todayMins: number; goalMins: number }) {
-  const pct  = Math.min(100, Math.round((todayMins / goalMins) * 100));
+  const pct = Math.min(100, Math.round((todayMins / goalMins) * 100));
   const done = pct >= 100;
   return (
     <div className="w-full max-w-sm flex flex-col gap-1">
       <div className="flex items-center justify-between text-[11px]">
         <span className="text-muted-foreground">Daily goal</span>
         <span className={cn("font-semibold tabular-nums", done ? "text-emerald-500" : "text-foreground")}>
-          {fmtDuration(todayMins)} / {fmtDuration(goalMins)}{done && " 🎉"}
+          {fmtDuration(todayMins)} / {fmtDuration(goalMins)}
+          {done && " 🎉"}
         </span>
       </div>
       <div className="h-1.5 rounded-full w-full overflow-hidden" style={{ background: "hsl(var(--muted))" }}>
         <div
-          className={cn("h-full rounded-full transition-all duration-700", done ? "bg-emerald-500" : "bg-primary")}
+          className={cn(
+            "h-full rounded-full transition-all duration-700",
+            done ? "bg-emerald-500" : "bg-primary"
+          )}
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -483,33 +476,33 @@ function DailyGoalBar({ todayMins, goalMins }: { todayMins: number; goalMins: nu
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 // FOCUS TAB
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 
 function FocusTab() {
   useFocusEventListeners();
 
-  const load         = useFocusStore((s) => s.load);
-  const sessions     = useFocusStore((s) => s.sessions);
-  const active       = useFocusStore((s) => s.activeSession);
-  const secsLeft     = useFocusStore((s) => s.secondsLeft);
-  const doneCount    = useFocusStore((s) => s.completedFocusCount);
-  const lastDone     = useFocusStore((s) => s.lastCompletedSession);
-  const pendingGoal  = useFocusStore((s) => s.pendingGoal);
-  const stats        = useFocusStore((s) => s.stats);
-  const startFocus   = useFocusStore((s) => s.startFocus);
-  const pause        = useFocusStore((s) => s.pause);
-  const resume       = useFocusStore((s) => s.resume);
-  const cancel       = useFocusStore((s) => s.cancel);
-  const startBreak   = useFocusStore((s) => s.startBreak);
-  const skipBreak    = useFocusStore((s) => s.skipBreak);
-  const setTaskId    = useFocusStore((s) => s.setTaskId);
+  const load        = useFocusStore((s) => s.load);
+  const sessions    = useFocusStore((s) => s.sessions);
+  const active      = useFocusStore((s) => s.activeSession);
+  const secsLeft    = useFocusStore((s) => s.secondsLeft);
+  const doneCount   = useFocusStore((s) => s.completedFocusCount);
+  const lastDone    = useFocusStore((s) => s.lastCompletedSession);
+  const pendingGoal = useFocusStore((s) => s.pendingGoal);
+  const stats       = useFocusStore((s) => s.stats);
+  const startFocus  = useFocusStore((s) => s.startFocus);
+  const pause       = useFocusStore((s) => s.pause);
+  const resume      = useFocusStore((s) => s.resume);
+  const cancel      = useFocusStore((s) => s.cancel);
+  const startBreak  = useFocusStore((s) => s.startBreak);
+  const skipBreak   = useFocusStore((s) => s.skipBreak);
+  const setTaskId   = useFocusStore((s) => s.setTaskId);
   const setProjectId = useFocusStore((s) => s.setProjectId);
-  const setGoal      = useFocusStore((s) => s.setGoal);
-  const setNotes     = useFocusStore((s) => s.setSessionNotes);
-  const addInterrupt = useFocusStore((s) => s.addInterrupt);
-  const clearLast    = useFocusStore((s) => s.clearLastCompleted);
+  const setGoal     = useFocusStore((s) => s.setGoal);
+  const setNotes    = useFocusStore((s) => s.setSessionNotes);
+  const incrementInterrupt = useFocusStore((s) => s.incrementInterrupt);
+  const clearLast   = useFocusStore((s) => s.clearLastCompleted);
 
   const tasks        = useTaskStore((s) => s.tasks);
   const loadTasks    = useTaskStore((s) => s.loadTasks);
@@ -521,7 +514,7 @@ function FocusTab() {
   const [shortBreakMins, setShortBreakMins] = useState(() => settings?.focusModeShortBreakMinutes ?? 5);
   const [longBreakMins,  setLongBreakMins]  = useState(() => settings?.focusModeLongBreakMinutes  ?? 15);
   const sessionsBeforeLong = settings?.focusModeSessionsBeforeLongBreak ?? 4;
-  const dailyGoalMins      = 120;
+  const dailyGoalMins = 120; // 2h default; could come from settings
 
   const [selTask,    setSelTask]    = useState("");
   const [selProject, setSelProject] = useState("");
@@ -534,10 +527,10 @@ function FocusTab() {
     if (active?.projectId) setSelProject(active.projectId);
   }, [active?.taskId, active?.projectId]);
 
-  // Space = pause/resume
+  // Space bar = pause / resume during active session
   useEffect(() => {
-    const st = active?.state;
-    if (!st || st === "break") return;
+    const state = active?.state;
+    if (!state || state === "break") return;
     const handler = (e: KeyboardEvent) => {
       if (e.code === "Space" && !(
         e.target instanceof HTMLInputElement ||
@@ -545,8 +538,8 @@ function FocusTab() {
         (e.target as HTMLElement)?.contentEditable === "true"
       )) {
         e.preventDefault();
-        if (st === "focusing") pause();
-        else if (st === "paused") resume();
+        if (state === "focusing") pause();
+        else if (state === "paused") resume();
       }
     };
     window.addEventListener("keydown", handler);
@@ -564,6 +557,7 @@ function FocusTab() {
   const showBreakOffer = !!lastDone && lastDone.type === "focus" && isIdle;
   const showMoodRater  = !!lastDone && lastDone.type !== "focus" && isIdle;
 
+  // Today's completed focus minutes
   const todayFocusMins = sessions
     .filter((s) => s.type === "focus" && s.completedAt && (s.startedAt ?? s.createdAt).startsWith(today()))
     .reduce((a, s) => a + (s.actualMinutes ?? 0), 0);
@@ -579,7 +573,7 @@ function FocusTab() {
   function handleTaskChange(id: string) {
     setSelTask(id);
     if (active) setTaskId(id || undefined);
-    const t   = id ? tasks.find((x) => x.id === id) : null;
+    const t = id ? tasks.find((x) => x.id === id) : null;
     const pid = t?.projectId ?? "";
     setSelProject(pid);
     if (active) setProjectId(pid || undefined);
@@ -601,8 +595,12 @@ function FocusTab() {
 
   return (
     <div className="flex flex-1 overflow-hidden">
+      {/* Left: history sidebar */}
       <FocusHistorySidebar sessions={sessions} />
+
+      {/* Right: main timer area */}
       <div className="flex-1 flex flex-col items-center justify-start overflow-y-auto py-8 px-6 gap-5">
+
         {/* Stats chips */}
         <div className="flex items-center gap-4 flex-wrap justify-center">
           {[
@@ -619,6 +617,7 @@ function FocusTab() {
           ))}
         </div>
 
+        {/* Ring timer */}
         <RingTimer secondsLeft={dispSecs} totalSeconds={totalSecs} state={state} />
 
         {/* Pomodoro dots */}
@@ -630,6 +629,7 @@ function FocusTab() {
           ))}
         </div>
 
+        {/* Daily goal bar (always visible) */}
         <DailyGoalBar todayMins={todayFocusMins} goalMins={dailyGoalMins} />
 
         {/* ── IDLE ── */}
@@ -654,7 +654,8 @@ function FocusTab() {
                 {projects.filter((p) => p.status === "active").map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
-            {/* Ambient sound */}
+
+            {/* Ambient sound selector */}
             <div className="flex items-center gap-2 w-full">
               <Volume2 size={12} className="text-muted-foreground shrink-0" />
               <div className="flex gap-1 flex-wrap">
@@ -671,9 +672,11 @@ function FocusTab() {
                 ))}
               </div>
             </div>
+
             <button onClick={() => setShowConfig((v) => !v)}
               className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors self-start">
-              {showConfig ? <ChevronUp size={12} /> : <ChevronDown size={12} />} Timer settings
+              {showConfig ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              Timer settings
             </button>
             {showConfig && (
               <div className="flex flex-col gap-3 w-full p-3 rounded-xl border" style={{ background: "hsl(var(--muted) / 0.3)", borderColor: "hsl(var(--border))" }}>
@@ -711,10 +714,12 @@ function FocusTab() {
                 <Pause size={13} /> Pause
                 <kbd className="ml-1 text-[10px] text-muted-foreground/50 font-mono">Space</kbd>
               </button>
+              {/* Interrupt counter */}
               <button
-                onClick={() => addInterrupt?.()}
+                onClick={() => incrementInterrupt?.()}
                 title="Log an interruption"
-                className="flex items-center justify-center gap-1 px-3 py-2.5 rounded-lg border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 transition-colors text-sm">
+                className="flex items-center justify-center gap-1 px-3 py-2.5 rounded-lg border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 transition-colors text-sm"
+              >
                 <AlertCircle size={13} />
                 {(active?.interruptCount ?? 0) > 0 && (
                   <span className="text-xs font-semibold">{active!.interruptCount}</span>
@@ -759,11 +764,14 @@ function FocusTab() {
             <p className="text-sm text-muted-foreground">
               {active?.type === "long_break" ? "☕ Long break — you earned it" : "🍃 Short break"}
             </p>
-            <button onClick={skipBreak} className="px-6 py-2 rounded-lg border border-border hover:bg-muted transition-colors text-sm">Skip break</button>
+            <button onClick={skipBreak}
+              className="px-6 py-2 rounded-lg border border-border hover:bg-muted transition-colors text-sm">
+              Skip break
+            </button>
           </div>
         )}
 
-        {/* ── POST-FOCUS ── */}
+        {/* ── POST-FOCUS: break offer ── */}
         {showBreakOffer && (
           <div className="flex flex-col items-center gap-3 p-5 rounded-2xl border w-full max-w-xs text-center"
             style={{ background: "hsl(var(--card))", borderColor: "hsl(var(--border))" }}>
@@ -776,20 +784,24 @@ function FocusTab() {
                 className="flex-1 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
                 Start break
               </button>
-              <button onClick={clearLast} className="flex-1 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors">Skip</button>
+              <button onClick={clearLast}
+                className="flex-1 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors">
+                Skip
+              </button>
             </div>
           </div>
         )}
 
+        {/* ── POST-BREAK: mood ── */}
         {showMoodRater && lastDone && <MoodCard sessionId={lastDone.id} mood={lastDone.mood} />}
       </div>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 // TRACKER TAB
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 
 function EntryForm({ initial = {}, onSave, onCancel }: {
   initial?: Partial<TimeEntry>;
@@ -833,6 +845,7 @@ function EntryForm({ initial = {}, onSave, onCancel }: {
     isBillable: billable,
     startAt: new Date(startAt).toISOString(),
     endAt:   endAt ? new Date(endAt).toISOString() : undefined,
+    // tags stored as comma string; store adapter handles it
   });
 
   return (
@@ -858,8 +871,8 @@ function EntryForm({ initial = {}, onSave, onCancel }: {
             ))}
           </select>
         </div>
-        {/* Inline tag input */}
-        <div className="flex items-center gap-1.5 flex-wrap min-h-[26px]">
+        {/* Tags */}
+        <div className="flex items-center gap-1.5 flex-wrap">
           {tags.map((t) => (
             <span key={t} className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
               #{t}
@@ -916,7 +929,7 @@ function EntryRow({ entry, onEdit, onDelete, onResume, onCopy }: {
 }) {
   const tasks    = useTaskStore((s) => s.tasks);
   const projects = useProjectStore((s) => s.projects);
-  const task     = entry.taskId    ? tasks.find((t) => t.id === entry.taskId)    : null;
+  const task     = entry.taskId    ? tasks.find((t)    => t.id === entry.taskId)    : null;
   const project  = entry.projectId ? projects.find((p) => p.id === entry.projectId) : null;
   const isRunning = !entry.endAt;
   const liveDur   = useLiveDuration(entry.startAt, !isRunning);
@@ -949,19 +962,27 @@ function EntryRow({ entry, onEdit, onDelete, onResume, onCopy }: {
       </span>
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
         <button onClick={() => onResume(entry)} title="Resume"
-          className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"><Play size={12} /></button>
-        <button onClick={() => onCopy(entry)} title="Duplicate"
-          className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"><Copy size={12} /></button>
+          className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
+          <Play size={12} />
+        </button>
+        <button onClick={() => onCopy(entry)} title="Duplicate entry"
+          className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
+          <Copy size={12} />
+        </button>
         <button onClick={() => onEdit(entry.id)} title="Edit"
-          className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"><Edit2 size={12} /></button>
+          className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
+          <Edit2 size={12} />
+        </button>
         <button onClick={() => onDelete(entry.id)} title="Delete"
-          className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"><Trash2 size={12} /></button>
+          className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive">
+          <Trash2 size={12} />
+        </button>
       </div>
     </div>
   );
 }
 
-const DAILY_TRACK_GOAL = 480;
+const DAILY_TRACK_GOAL = 480; // 8h in minutes
 
 function TrackerTab() {
   useEffect(() => { setupTimeEventListeners(); }, []);
@@ -978,22 +999,24 @@ function TrackerTab() {
   const loadTasks     = useTaskStore((s) => s.loadTasks);
   const loadProjects  = useProjectStore((s) => s.loadProjects);
 
-  const [showForm,  setShowForm]  = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [todayOnly, setTodayOnly] = useState(true);
-  const [quickDesc, setQuickDesc] = useState("");
-  const [quickTask, setQuickTask] = useState("");
-  const [quickBill, setQuickBill] = useState(false);
-  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [showForm,   setShowForm]   = useState(false);
+  const [editingId,  setEditingId]  = useState<string | null>(null);
+  const [todayOnly,  setTodayOnly]  = useState(true);
+  const [quickDesc,  setQuickDesc]  = useState("");
+  const [quickTask,  setQuickTask]  = useState("");
+  const [quickBill,  setQuickBill]  = useState(false);
+  const [tagFilter,  setTagFilter]  = useState<string | null>(null);
 
   useEffect(() => { void load(); void loadTasks(); void loadProjects(); }, [load, loadTasks, loadProjects]);
 
   const completed   = entries.filter((e) => e.endAt);
   const running     = entries.find((e) => e.id === activeEntryId && !e.endAt);
-  const activeEntry = running;
   const baseShown   = todayOnly ? completed.filter((e) => e.startAt.startsWith(today())) : completed;
-  const grouped     = groupByDate([...baseShown].sort((a, b) => b.startAt.localeCompare(a.startAt)));
+  const shown       = tagFilter ? baseShown : baseShown; // tag filter: if tags stored on entry, filter here
+  const grouped     = groupByDate([...shown].sort((a, b) => b.startAt.localeCompare(a.startAt)));
+  const activeEntry = running;
 
+  // Today's tracking progress
   const todayMins = completed
     .filter((e) => e.startAt.startsWith(today()))
     .reduce((a, e) => a + (e.durationMinutes ?? 0), 0);
@@ -1010,8 +1033,9 @@ function TrackerTab() {
   }
 
   function handleCopyEntry(entry: TimeEntry) {
+    const now = new Date().toISOString();
     void addEntry({
-      startAt:     new Date().toISOString(),
+      startAt:     now,
       description: entry.description,
       taskId:      entry.taskId,
       projectId:   entry.projectId,
@@ -1049,18 +1073,6 @@ function TrackerTab() {
             <option key={t.id} value={t.id}>{t.title}</option>
           ))}
         </select>
-        {/* Billable quick toggle */}
-        <button
-          type="button"
-          disabled={!!activeEntry}
-          onClick={() => setQuickBill((b) => !b)}
-          title={quickBill ? "Billable" : "Non-billable"}
-          className={cn(
-            "p-2 rounded-lg border transition-colors shrink-0 disabled:opacity-40",
-            quickBill ? "border-emerald-500 text-emerald-500 bg-emerald-500/10" : "border-border text-muted-foreground hover:text-foreground hover:bg-muted"
-          )}>
-          <DollarSign size={14} />
-        </button>
         {!activeEntry ? (
           <button onClick={handleQuickStart}
             className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity shrink-0">
@@ -1083,6 +1095,7 @@ function TrackerTab() {
         </button>
       </div>
 
+      {/* Manual entry form */}
       {showForm && !editingId && (
         <EntryForm
           onSave={(data) => { void addEntry({ startAt: data.startAt!, ...data }); setShowForm(false); }}
@@ -1090,17 +1103,17 @@ function TrackerTab() {
         />
       )}
 
+      {/* Running entry row (always visible when active) */}
       {activeEntry && (
         <EntryRow
           entry={activeEntry}
           onEdit={(id) => { setEditingId(id); setShowForm(false); }}
           onDelete={(id) => void deleteEntry(id)}
-          onResume={() => {}}
-          onCopy={handleCopyEntry}
+          onResume={() => {/* already running */}}
         />
       )}
 
-      {/* Filter + day total */}
+      {/* Filter pills + day total */}
       <div className="flex items-center gap-1.5 px-4 py-2 border-b shrink-0" style={{ borderColor: "hsl(var(--border))" }}>
         <div className="flex items-center gap-1 rounded-lg p-0.5" style={{ background: "hsl(var(--muted))" }}>
           <button onClick={() => setTodayOnly(true)}
@@ -1114,13 +1127,14 @@ function TrackerTab() {
             All
           </button>
         </div>
-        {baseShown.length > 0 && (
+        {shown.length > 0 && (
           <span className="ml-auto text-xs font-semibold tabular-nums text-muted-foreground">
-            {fmtDuration(totalMins(baseShown))}
+            {fmtDuration(totalMins(shown))}
           </span>
         )}
       </div>
 
+      {/* Entry list */}
       <div className="flex-1 overflow-y-auto">
         {editingId && (
           <EntryForm
@@ -1143,8 +1157,11 @@ function TrackerTab() {
                 <EntryRow key={e.id} entry={e}
                   onEdit={(id) => { setEditingId(id); setShowForm(false); }}
                   onDelete={(id) => void deleteEntry(id)}
-                  onResume={(entry) => void startTimer({ description: entry.description, taskId: entry.taskId, projectId: entry.projectId })}
-                  onCopy={handleCopyEntry}
+                  onResume={(entry) => void startTimer({
+                    description: entry.description,
+                    taskId:      entry.taskId,
+                    projectId:   entry.projectId,
+                  })}
                 />
               ))}
             </div>
@@ -1156,105 +1173,47 @@ function TrackerTab() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// REPORTS TAB  (upgraded)
+// REPORTS TAB
 // ─────────────────────────────────────────────────────────────────────────────
-
-function BillableSplitBar({ billableMins, totalMins: total }: { billableMins: number; totalMins: number }) {
-  if (total === 0) return null;
-  const billPct    = Math.round((billableMins / total) * 100);
-  const nonBillPct = 100 - billPct;
-  return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center justify-between text-[11px]">
-        <span className="text-muted-foreground">Billable split</span>
-        <span className="font-semibold tabular-nums">{billPct}% billable</span>
-      </div>
-      <div className="flex h-2 rounded-full overflow-hidden w-full" style={{ background: "hsl(var(--muted))" }}>
-        <div className="h-full bg-emerald-500 transition-all duration-700" style={{ width: `${billPct}%` }} />
-        <div className="h-full bg-muted-foreground/20 transition-all duration-700" style={{ width: `${nonBillPct}%` }} />
-      </div>
-      <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" /> Billable {fmtDuration(billableMins)}</span>
-        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30 inline-block" /> Non-billable {fmtDuration(total - billableMins)}</span>
-      </div>
-    </div>
-  );
-}
 
 function ReportsTab() {
   const entries  = useTimeStore((s) => s.entries);
   const projects = useProjectStore((s) => s.projects);
   const tasks    = useTaskStore((s) => s.tasks);
 
-  const [range, setRange] = useState<7 | 30>(7);
-
   const completed = entries.filter((e) => e.endAt && e.durationMinutes);
 
-  // Date range filter
-  const cutoff   = new Date(Date.now() - range * 86400000).toISOString().slice(0, 10);
-  const inRange  = completed.filter((e) => e.startAt.slice(0, 10) >= cutoff);
+  // Last 7 days bar chart data
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+    const mins = completed.filter((e) => e.startAt.startsWith(d)).reduce((a, e) => a + (e.durationMinutes ?? 0), 0);
+    return { date: d, label: dateLabel(d).split(",")[0], mins };
+  }).reverse();
 
-  // Bar chart: one bar per day in range
-  const days = Array.from({ length: range }, (_, i) => {
-    const d    = new Date(Date.now() - (range - 1 - i) * 86400000).toISOString().slice(0, 10);
-    const mins = inRange.filter((e) => e.startAt.startsWith(d)).reduce((a, e) => a + (e.durationMinutes ?? 0), 0);
-    const label = range === 7
-      ? new Date(d).toLocaleDateString(undefined, { weekday: "short" })
-      : new Date(d).toLocaleDateString(undefined, { day: "numeric", month: "numeric" });
-    return { d, mins, label };
-  });
   const maxMins = Math.max(...days.map((d) => d.mins), 60);
-
-  // KPIs
-  const totalTracked = inRange.reduce((a, e) => a + (e.durationMinutes ?? 0), 0);
-  const billable     = inRange.filter((e) => e.isBillable).reduce((a, e) => a + (e.durationMinutes ?? 0), 0);
-  const activeDays   = new Set(inRange.map((e) => e.startAt.slice(0, 10))).size;
-  const dailyAvg     = activeDays > 0 ? Math.round(totalTracked / activeDays) : 0;
 
   // By project
   const byProject = projects
-    .map((p) => ({ ...p, mins: inRange.filter((e) => e.projectId === p.id).reduce((a, e) => a + (e.durationMinutes ?? 0), 0) }))
+    .map((p) => {
+      const mins = completed.filter((e) => e.projectId === p.id).reduce((a, e) => a + (e.durationMinutes ?? 0), 0);
+      return { ...p, mins };
+    })
     .filter((p) => p.mins > 0)
     .sort((a, b) => b.mins - a.mins);
 
-  // By task (top 8)
-  const byTask = tasks
-    .map((t) => ({ ...t, mins: inRange.filter((e) => e.taskId === t.id).reduce((a, e) => a + (e.durationMinutes ?? 0), 0) }))
-    .filter((t) => t.mins > 0)
-    .sort((a, b) => b.mins - a.mins)
-    .slice(0, 8);
-  const maxTaskMins = byTask[0]?.mins ?? 1;
+  const totalTracked = completed.reduce((a, e) => a + (e.durationMinutes ?? 0), 0);
+  const billable     = completed.filter((e) => e.isBillable).reduce((a, e) => a + (e.durationMinutes ?? 0), 0);
 
   return (
-    <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-5">
-
-      {/* Header row: range toggle + CSV export */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1 rounded-lg p-0.5" style={{ background: "hsl(var(--muted))" }}>
-          {([7, 30] as const).map((r) => (
-            <button key={r} onClick={() => setRange(r)}
-              className={cn("px-3 py-1 rounded-md text-xs font-medium transition-all",
-                range === r ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>
-              {r === 7 ? "7 days" : "30 days"}
-            </button>
-          ))}
-        </div>
-        <button
-          onClick={() => exportCsv(completed, projects, tasks)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-          <Download size={12} /> Export CSV
-        </button>
-      </div>
-
-      {/* KPI cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6">
+      {/* KPI row */}
+      <div className="grid grid-cols-3 gap-4">
         {[
           { label: "Total tracked", value: fmtDuration(totalTracked) },
           { label: "Billable",      value: fmtDuration(billable) },
-          { label: "Daily avg",     value: fmtDuration(dailyAvg) },
-          { label: "Entries",       value: String(inRange.length) },
+          { label: "Entries",       value: String(completed.length) },
         ].map(({ label, value }) => (
-          <div key={label} className="flex flex-col gap-1 p-3.5 rounded-xl border"
+          <div key={label} className="flex flex-col gap-1 p-4 rounded-xl border"
             style={{ background: "hsl(var(--card))", borderColor: "hsl(var(--border))" }}>
             <span className="text-xs text-muted-foreground">{label}</span>
             <span className="text-xl font-semibold tabular-nums">{value}</span>
@@ -1262,27 +1221,18 @@ function ReportsTab() {
         ))}
       </div>
 
-      {/* Billable split bar */}
+      {/* 7-day bar chart */}
       <div className="rounded-xl border p-4" style={{ background: "hsl(var(--card))", borderColor: "hsl(var(--border))" }}>
-        <BillableSplitBar billableMins={billable} totalMins={totalTracked} />
-      </div>
-
-      {/* Day bar chart */}
-      <div className="rounded-xl border p-4" style={{ background: "hsl(var(--card))", borderColor: "hsl(var(--border))" }}>
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">
-          Last {range} days
-        </p>
-        <div className="flex items-end gap-1 h-24">
-          {days.map(({ d, label, mins }) => (
-            <div key={d} className="flex-1 flex flex-col items-center gap-1">
-              <span className="text-[9px] text-muted-foreground tabular-nums">
-                {mins > 0 ? fmtDuration(mins) : ""}
-              </span>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">Last 7 days</p>
+        <div className="flex items-end gap-2 h-24">
+          {days.map(({ date, label, mins }) => (
+            <div key={date} className="flex-1 flex flex-col items-center gap-1">
+              <span className="text-[9px] text-muted-foreground tabular-nums">{mins > 0 ? fmtDuration(mins) : ""}</span>
               <div className="w-full rounded-sm transition-all"
                 style={{
                   height: `${Math.max((mins / maxMins) * 80, mins > 0 ? 4 : 0)}px`,
                   background: "hsl(var(--primary))",
-                  opacity: mins > 0 ? 1 : 0.12,
+                  opacity: mins > 0 ? 1 : 0.15,
                   minHeight: mins > 0 ? 4 : 0,
                 }} />
               <span className="text-[9px] text-muted-foreground">{label}</span>
@@ -1300,7 +1250,7 @@ function ReportsTab() {
               <div key={p.id} className="flex items-center gap-3">
                 <ProjectDot color={p.color} size={8} />
                 <span className="text-sm flex-1 truncate">{p.name}</span>
-                <span className="text-xs font-semibold tabular-nums text-muted-foreground w-12 text-right">{fmtDuration(p.mins)}</span>
+                <span className="text-xs font-semibold tabular-nums text-muted-foreground">{fmtDuration(p.mins)}</span>
                 <div className="w-20 h-1.5 rounded-full overflow-hidden" style={{ background: "hsl(var(--muted))" }}>
                   <div className="h-full rounded-full" style={{
                     width: `${(p.mins / (byProject[0]?.mins ?? 1)) * 100}%`,
@@ -1313,26 +1263,7 @@ function ReportsTab() {
         </div>
       )}
 
-      {/* By task */}
-      {byTask.length > 0 && (
-        <div className="rounded-xl border p-4" style={{ background: "hsl(var(--card))", borderColor: "hsl(var(--border))" }}>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">By task</p>
-          <div className="flex flex-col gap-2">
-            {byTask.map((t) => (
-              <div key={t.id} className="flex items-center gap-3">
-                <ListTodo size={10} className="text-muted-foreground/50 shrink-0" />
-                <span className="text-sm flex-1 truncate">{t.title}</span>
-                <span className="text-xs font-semibold tabular-nums text-muted-foreground w-12 text-right">{fmtDuration(t.mins)}</span>
-                <div className="w-20 h-1.5 rounded-full overflow-hidden" style={{ background: "hsl(var(--muted))" }}>
-                  <div className="h-full rounded-full bg-primary/70" style={{ width: `${(t.mins / maxTaskMins) * 100}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {inRange.length === 0 && (
+      {completed.length === 0 && (
         <EmptyState icon={<BarChart2 size={26} />} title="No data yet" description="Track time to see your reports here." />
       )}
     </div>
@@ -1348,11 +1279,16 @@ export default function FocusModule() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
+      {/* Active timer banner (cross-tab) */}
       <ActiveTimerBanner onJump={() => setTab("tracker")} />
+
+      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b shrink-0"
         style={{ borderColor: "hsl(var(--border))" }}>
         <SegmentControl active={tab} onChange={setTab} />
       </div>
+
+      {/* Tab content */}
       {tab === "focus"   && <FocusTab />}
       {tab === "tracker" && <TrackerTab />}
       {tab === "reports" && <ReportsTab />}

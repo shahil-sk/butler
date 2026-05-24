@@ -15,15 +15,21 @@ import type { ID, ISODate, Task } from "@/shared/types";
 // ── Unscheduled tasks for the planner sidebar drag-list ──────
 
 /**
- * Tasks that have no planner block on `date`.
+ * Tasks that have no planner block on any of the visible dates.
  * Filters out done/archived. Optionally filtered by projectId.
+ * FIXED: Now correctly checks against ALL visible dates (multi-day view).
  */
 export function usePlannerUnscheduledTasks(
-  date: ISODate,
+  visibleDates: ISODate[],
   projectId?: ID
 ) {
-  const blocks = usePlannerStore((s) => s.blocks.filter((b) => b.date === date && b.taskId != null));
-  const scheduledTaskIds = useMemo(() => new Set(blocks.map((b) => b.taskId!)), [blocks]);
+  const blocks = usePlannerStore((s) => 
+    s.blocks.filter((b) => visibleDates.includes(b.date) && b.taskId != null)
+  );
+  const scheduledTaskIds = useMemo(
+    () => new Set(blocks.map((b) => b.taskId!)), 
+    [blocks]
+  );
 
   return useTaskStore((s) =>
     s.tasks.filter(
@@ -52,18 +58,45 @@ export function usePlannerScheduledTasks(date: ISODate) {
   }, [blocks, tasks]);
 }
 
+// ── Tasks scheduled across ANY visible dates ──────────────────
+/**
+ * For multi-day views: return tasks that appear in blocks
+ * on ANY of the visible dates (not just the active date).
+ */
+export function usePlannerScheduledTasksAcrossVisible(visibleDates: ISODate[]) {
+  const blocks = usePlannerStore((s) =>
+    s.blocks.filter((b) => visibleDates.includes(b.date) && b.taskId != null)
+  );
+  const tasks = useTaskStore((s) => s.tasks);
+
+  return useMemo(() => {
+    const taskMap = new Map<ID, { block: typeof blocks[0]; task: Task }>();
+    for (const block of blocks) {
+      const task = tasks.find((t) => t.id === block.taskId);
+      if (task) {
+        // Keep first block per task (can map to multiple blocks if task scheduled >1 day)
+        if (!taskMap.has(task.id)) {
+          taskMap.set(task.id, { block, task });
+        }
+      }
+    }
+    return Array.from(taskMap.values());
+  }, [blocks, tasks]);
+}
+
 // ── Schedule a task into planner from any module ──────────────
 
 export function useScheduleTask() {
   const scheduleTask = usePlannerStore((s) => s.scheduleTask);
 
   return useCallback(
-    async (task: Task, date: ISODate, startTime: string) => {
+    async (task: Task, date: ISODate, startTime: string, syncTaskDate = true) => {
       const block = await scheduleTask(
         task.id,
         date,
         startTime,
-        task.estimateMinutes ?? 60
+        task.estimateMinutes ?? 60,
+        syncTaskDate  // Pass through the sync flag
       );
       bus.emit("planner:block-linked-task", { blockId: block.id, taskId: task.id, date });
       return block;
@@ -80,7 +113,7 @@ export function useScheduleTask() {
  */
 export function useCarryForwardCandidates(fromDate: ISODate) {
   const blocks = usePlannerStore((s) =>
-    s.blocks.filter((b) => b.date === fromDate && b.taskId != null)
+    s.blocks.filter((b) => b.date === fromDate && b.taskId != null && !b.isCompleted)
   );
   const tasks = useTaskStore((s) => s.tasks);
 

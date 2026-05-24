@@ -45,14 +45,22 @@ export function TaskSidebar({ visibleDates }: TaskSidebarProps) {
   // For multi-day views, show tasks scheduled across ALL visible dates
   const isMultiDay = visibleDates.length > 1;
 
+  // ── FIXED: Unscheduled tasks now check against ALL visible dates ──
   const unscheduled = useMemo(() => {
+    // Get blocks for ANY of the visible dates
+    const blocksForVisibleDates = usePlannerStore.getState().blocks.filter(
+      (b) => visibleDates.includes(b.date) && b.taskId != null
+    );
+    const scheduledTaskIds = new Set(blocksForVisibleDates.map((b) => b.taskId!));
+
     let base = tasks.filter(
       (t) =>
         t.status !== "done" &&
         t.status !== "archived" &&
         t.parentTaskId == null &&
-        !visibleDates.includes(t.scheduledDate ?? "")
+        !scheduledTaskIds.has(t.id)  // Not scheduled on ANY visible date
     );
+
     if (search) {
       const q = search.toLowerCase();
       base = base.filter((t) => t.title.toLowerCase().includes(q));
@@ -65,7 +73,7 @@ export function TaskSidebar({ visibleDates }: TaskSidebarProps) {
     return base;
   }, [tasks, search, sortByPri, visibleDates]);
 
-  // Scheduled tasks grouped by date (for all visible dates)
+  // ── FIXED: Scheduled tasks grouped by date, now shows ALL visible dates ──
   const scheduledByDate = useMemo(() => {
     const result: { date: string; tasks: Task[] }[] = [];
     for (const date of visibleDates) {

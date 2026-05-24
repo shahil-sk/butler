@@ -150,7 +150,7 @@ interface PlannerActions {
   deleteBlock:        (id: ID) => Promise<void>;
   rescheduleBlock:    (id: ID, newStart: string, newEnd: string) => Promise<void>;
   resizeBlock:        (id: ID, newEnd: string) => Promise<void>;
-  scheduleTask:       (taskId: ID, date: ISODate, startTime: string, durationMinutes: number) => Promise<TimeBlock>;
+  scheduleTask:       (taskId: ID, date: ISODate, startTime: string, durationMinutes: number, syncScheduledDate?: boolean) => Promise<TimeBlock>;
   carryForward:       (taskId: ID, fromDate: ISODate, toDate: ISODate) => Promise<void>;
   // Template actions
   loadTemplates:      () => Promise<void>;
@@ -314,17 +314,20 @@ export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get
     set((s) => ({ blocks: s.blocks.map((b) => b.id === id ? updated : b) }));
   },
 
-  scheduleTask: async (taskId, date, startTime, durationMinutes) => {
+  scheduleTask: async (taskId, date, startTime, durationMinutes, syncScheduledDate = true) => {
     const tasks = (await import("@/modules/tasks/store")).useTaskStore.getState().tasks;
     const task  = tasks.find((t) => t.id === taskId);
     const [h, m] = startTime.split(":").map(Number);
     const endMinutes = h * 60 + m + (task?.estimateMinutes ?? durationMinutes);
     const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
 
-    bus.emit("task:updated", {
-      task: { id: taskId } as never,
-      changed: { scheduledDate: date },
-    });
+    // Only sync scheduledDate to task if explicitly requested (avoid duplicate updates)
+    if (syncScheduledDate) {
+      bus.emit("task:updated", {
+        task: { id: taskId } as never,
+        changed: { scheduledDate: date },
+      });
+    }
 
     return get().createBlock({
       date, taskId,

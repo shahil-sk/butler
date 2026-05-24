@@ -200,7 +200,7 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
         sources: sourceRows.map(rowToSource) as ResearchSource[],
         documents: docRows.map(rowToDocument) as ResearchDocument[],
         threads: threadRows.map(rowToThread) as ResearchThread[],
-        aiJobs: jobRows as ResearchAiJob[],
+        aiJobs: jobRows as unknown as ResearchAiJob[],
         isLoading: false,
       });
     } catch (err) {

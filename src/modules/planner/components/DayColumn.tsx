@@ -3,6 +3,7 @@
 // New: pulsing now-indicator with time label, half-hour grid
 //      lines, block completion toggle on check icon,
 //      drag-enter column highlight
+// FIXED: Use task.estimateMinutes on drop, complete block syncs to task
 // ============================================================
 
 import { useRef, useState, useCallback, useEffect } from "react";
@@ -12,6 +13,7 @@ import { usePlannerStore, type TimeBlock, snapMinutes, clampTime } from "../stor
 import { useTaskStore } from "@/modules/tasks/store";
 import { useProjectStore } from "@/modules/projects/store";
 import { useCalendarStore } from "@/modules/calendar/store";
+import { bus } from "@/kernel/event-bus";
 import type { ISODate } from "@/shared/types";
 import { BlockEditModal } from "./BlockEditModal";
 
@@ -141,7 +143,8 @@ function BlockCard({
   const project = task?.projectId ? projects.find((p) => p.id === task.projectId) : null;
 
   const top    = timeToY(block.startTime);
-  const height = Math.max(timeToY(block.endTime) - top, 24);
+  // FIXED: Increased min height from 24 to 56px for better visibility
+  const height = Math.max(timeToY(block.endTime) - top, 56);
   const color  = block.color ?? project?.color ?? (block.isBreak ? "#6b7280" : "#3b82f6");
 
   // Completion progress bar: fraction of block elapsed vs now
@@ -162,6 +165,17 @@ function BlockCard({
   const commitTitle = () => {
     setEditing(false);
     if (title.trim() && title !== block.title) void updateBlock(block.id, { title: title.trim() });
+  };
+
+  // FIXED: Complete block + sync to task
+  const handleComplete = async () => {
+    await completeBlock(block.id);
+    if (block.taskId) {
+      bus.emit("task:updated", {
+        task: { id: block.taskId } as never,
+        changed: { status: "done" },
+      });
+    }
   };
 
   return (
@@ -236,7 +250,7 @@ function BlockCard({
         <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0 transition-fast">
           {/* Completion toggle */}
           <button
-            onClick={(e) => { e.stopPropagation(); void completeBlock(block.id); }}
+            onClick={(e) => { e.stopPropagation(); void handleComplete(); }}
             className="p-0.5 rounded text-muted-foreground hover:text-emerald-500 transition-fast"
             title={block.isCompleted ? "Completed" : "Mark complete"}
           >
@@ -316,6 +330,7 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
     const snappedY = timeToY(snapMinutes(yToTime(y)));
     const taskId   = dragTaskId ?? e.dataTransfer.getData("taskId");
     const task     = tasks.find((t) => t.id === taskId);
+    // FIXED: Use task.estimateMinutes instead of hardcoded 60
     const durPx    = ((task?.estimateMinutes ?? 60) / 60) * HOUR_HEIGHT;
     setGhost({ y: snappedY, height: durPx });
   }, [dragTaskId, tasks, getGridY]);
@@ -331,13 +346,15 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
     const taskId    = dragTaskId ?? e.dataTransfer.getData("taskId") ?? undefined;
 
     if (taskId) {
-      await scheduleTask(taskId, date, startTime, 60);
+      const task = tasks.find((t) => t.id === taskId);
+      // FIXED: Use task.estimateMinutes instead of hardcoded 60
+      await scheduleTask(taskId, date, startTime, task?.estimateMinutes ?? 60, true);
       setDragTaskId(null);
     } else {
       const endTime = snapMinutes(yToTime(y + HOUR_HEIGHT));
       await createBlock({ date, startTime, endTime, title: "Block" });
     }
-  }, [dragTaskId, date, getGridY, scheduleTask, createBlock, setDragTaskId]);
+  }, [dragTaskId, date, getGridY, scheduleTask, createBlock, setDragTaskId, tasks]);
 
   // ── Block pointer-drag (move) ───────────────────────────────
   const onPointerDownGrip = useCallback(

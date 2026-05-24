@@ -21,12 +21,11 @@ import { TaskCard } from "./components/TaskCard";
 import { QuickAdd } from "./components/QuickAdd";
 import { FilterBar, PrimaryButton, EmptyState, type FilterTab } from "@/shared/ui";
 import { cn } from "@/shared/utils";
-import type { Priority } from "@/shared/types";
+import type { Task, Priority } from "@/shared/types";
 
 registry.register(tasksManifest);
 
 // ─── Types ───────────────────────────────────────────────────
-type Task = ReturnType<ReturnType<typeof useTaskStore>["getFilteredTasks"]>[number];
 type GroupId = "overdue" | "today" | "in_progress" | "todo" | "done";
 
 interface TaskGroup {

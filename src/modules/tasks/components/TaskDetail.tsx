@@ -144,9 +144,8 @@ export function TaskDetail() {
       status,
       estimateMinutes: estimateMins !== "" ? Number(estimateMins) : undefined,
       checklistItems: checklistItems.map((item, i) => ({ ...item, order: i })),
-      // Include scheduled date+time if user picked them
+      // Include scheduled date if user picked it
       scheduledDate:  scheduledDate || undefined,
-      scheduledTime:  scheduledTime || undefined,
     });
 
     // If user pre-scheduled: also create a calendar event immediately

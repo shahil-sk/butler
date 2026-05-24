@@ -72,7 +72,7 @@ function CardMenu({ project }: { project: Project }) {
                   onClick={(e) => { e.stopPropagation(); item.action(); setOpen(false); }}
                   className={cn(
                     "w-full flex items-center gap-2.5 px-3 py-2 text-[13px] transition-fast",
-                    item.danger
+                    (item as any).danger
                       ? "text-red-500 hover:bg-red-500/8"
                       : "text-foreground hover:bg-accent"
                   )}
