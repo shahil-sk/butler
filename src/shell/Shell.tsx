@@ -97,7 +97,7 @@ export function Shell() {
 
   return (
     <ThemeProvider>
-      <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground">
+      <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground ambient-bg">
         <Sidebar />
 
         <div className="flex flex-1 min-w-0 overflow-hidden">

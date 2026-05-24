@@ -311,3 +311,48 @@
   box-shadow: var(--shadow-card);
   padding: 1rem;
 }
+
+/* ── butler-ui Mindful UI additions ─────────────────────────── */
+.ambient-bg {
+  background: radial-gradient(circle at 0% 0%, hsla(var(--primary) / 0.04) 0%, transparent 45%),
+              radial-gradient(circle at 100% 100%, hsla(var(--ring) / 0.03) 0%, transparent 55%),
+              hsl(var(--background));
+}
+
+.glass-panel {
+  background: hsla(var(--card) / 0.65);
+  backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid hsla(var(--border) / 0.35);
+  box-shadow: var(--shadow-md);
+}
+
+.dark .glass-panel {
+  background: hsla(var(--card) / 0.45);
+  border: 1px solid hsla(var(--border) / 0.25);
+  box-shadow: var(--shadow-xl);
+}
+
+.glow-card {
+  position: relative;
+  transition: all var(--duration-normal) cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glow-card:hover {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 16px 36px -12px hsla(var(--primary) / 0.15);
+  border-color: hsla(var(--primary) / 0.35);
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, hsl(var(--text-primary)) 30%, hsla(var(--text-primary) / 0.7) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.shadow-premium {
+  box-shadow: 0 10px 30px -10px hsla(0 0% 0% / 0.1), 0 1px 3px hsla(0 0% 0% / 0.05);
+}
+
+.dark .shadow-premium {
+  box-shadow: 0 20px 40px -15px hsla(0 0% 0% / 0.5), 0 1px 3px hsla(0 0% 0% / 0.2);
+}
