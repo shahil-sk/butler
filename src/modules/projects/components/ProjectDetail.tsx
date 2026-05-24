@@ -7,12 +7,14 @@ import { useState, useEffect, useRef } from "react";
 import {
   X, Plus, Trash2,
   CheckCircle2, Circle, FileText, ChevronDown,
+  Play, Calendar, Clock, CheckSquare,
 } from "lucide-react";
 import { cn, formatDate } from "@/shared/utils";
 import { Modal, Popover, PopoverItem, PopoverDivider, ProjectDot } from "@/shared/ui";
 import { useProjectStore } from "../store";
 import { useTaskStore } from "@/modules/tasks/store";
 import { useNoteStore } from "@/modules/notes/store";
+import { useFocusStore } from "@/modules/focus/store";
 import { bus } from "@/kernel/event-bus";
 import type { ProjectStatus } from "@/shared/types";
 import { TaskDetail } from "@/modules/tasks/components/TaskDetail";
@@ -73,9 +75,39 @@ function TaskLine({
           ? <CheckCircle2 size={15} className="text-emerald-500" />
           : <Circle size={15} className="text-muted-foreground/50 group-hover:text-muted-foreground" />}
       </button>
+
       <span className={cn("flex-1 text-[13px] truncate", isDone && "line-through text-muted-foreground/50")}>
         {task.title}
       </span>
+
+      {/* Focus play button */}
+      {!isDone && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            bus.emit("focus:start-requested", { taskId: task.id });
+          }}
+          className="shrink-0 p-1 rounded hover:bg-muted text-muted-foreground/35 hover:text-primary transition-fast opacity-0 group-hover:opacity-100"
+          title="Start Focus Session"
+        >
+          <Play size={11} className="fill-current" />
+        </button>
+      )}
+
+      {/* Schedule in Planner button */}
+      {!task.scheduledDate && !isDone && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            bus.emit("task:schedule-in-planner", { task });
+          }}
+          className="shrink-0 p-1 rounded hover:bg-muted text-muted-foreground/35 hover:text-primary transition-fast opacity-0 group-hover:opacity-100"
+          title="Schedule in Planner"
+        >
+          <Calendar size={11} />
+        </button>
+      )}
+
       {task.dueDate && (
         <span className={cn(
           "text-[11px] tabular-nums shrink-0",
@@ -103,6 +135,10 @@ export function ProjectDetail() {
 
   const project = openProjectId ? getProjectById(openProjectId) : null;
   const tasks   = allTasks.filter((t) => t.projectId === openProjectId && t.status !== "archived");
+
+  const focusSessions = useFocusStore((s) => s.sessions.filter((sess) => sess.projectId === openProjectId && sess.type === "focus"));
+  const totalFocusMins = focusSessions.reduce((sum, s) => sum + (s.actualMinutes ?? 0), 0);
+  const totalFocusHours = (totalFocusMins / 60).toFixed(1);
 
   const [tab,             setTab]             = useState<"overview" | "tasks" | "milestones">("overview");
   const [name,            setName]            = useState(project?.name ?? "");
@@ -239,12 +275,30 @@ export function ProjectDetail() {
                 className="w-full text-[13px] text-muted-foreground bg-transparent outline-none resize-none leading-relaxed placeholder:text-muted-foreground/40"
               />
 
-              {total > 0 && (
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">Progress</span>
-                    <span className="tabular-nums font-medium">{progress}%</span>
+              {/* Progress & Focus Stats */}
+              <div className="grid grid-cols-2 gap-4 border-t border-border/50 pt-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-primary/10 text-primary rounded-lg shrink-0">
+                    <Clock size={16} />
                   </div>
+                  <div className="min-w-0">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground/60 block tracking-wider">Focus Logged</span>
+                    <span className="text-sm font-semibold text-foreground">{totalFocusHours} hrs</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-emerald-500/10 text-emerald-600 rounded-lg shrink-0">
+                    <CheckSquare size={16} />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground/60 block tracking-wider">Completion</span>
+                    <span className="text-sm font-semibold text-foreground">{progress}%</span>
+                  </div>
+                </div>
+              </div>
+
+              {total > 0 && (
+                <div className="space-y-1.5 pt-2">
                   <div className="h-1.5 rounded-full bg-border overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-500"
