@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import {
   X, Flag, Calendar, Clock, Plus, Trash2,
   CheckSquare, Circle, ChevronDown, FolderKanban,
-  FileText, ExternalLink, CalendarClock,
+  FileText, ExternalLink, CalendarClock, Play,
 } from "lucide-react";
 import { cn, formatDate, PRIORITY_COLORS, PRIORITY_LABELS, today, now } from "@/shared/utils";
 import { Modal, Popover, PopoverItem, PopoverDivider, ProjectDot, SectionLabel } from "@/shared/ui";
@@ -329,13 +329,42 @@ export function TaskDetail() {
           </span>
 
           {!isCreating && (
-            <button
-              onClick={() => { void deleteTask(task!.id); closeTask(); }}
-              className="p-1.5 rounded text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-fast"
-              title="Delete task"
-            >
-              <Trash2 size={13} />
-            </button>
+            <>
+              {/* Start Focus Session */}
+              {task?.status !== "done" && (
+                <button
+                  onClick={() => {
+                    bus.emit("focus:start-requested", { taskId: task.id });
+                    closeTask();
+                  }}
+                  className="p-1.5 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-fast"
+                  title="Start Focus Session"
+                >
+                  <Play size={13} className="fill-current" />
+                </button>
+              )}
+
+              {/* Schedule in Planner */}
+              {!task?.scheduledDate && task?.status !== "done" && (
+                <button
+                  onClick={() => {
+                    bus.emit("task:schedule-in-planner", { task });
+                  }}
+                  className="p-1.5 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-fast"
+                  title="Schedule in Planner"
+                >
+                  <Calendar size={13} />
+                </button>
+              )}
+
+              <button
+                onClick={() => { void deleteTask(task!.id); closeTask(); }}
+                className="p-1.5 rounded text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-fast"
+                title="Delete task"
+              >
+                <Trash2 size={13} />
+              </button>
+            </>
           )}
           <button
             onClick={handleClose}

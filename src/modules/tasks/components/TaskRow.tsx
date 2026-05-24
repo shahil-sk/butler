@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import {
   Circle, CheckCircle2, ChevronRight, ChevronDown,
-  Calendar, MoreHorizontal, Copy, Trash2, ArrowRight, Clock, FolderKanban,
+  Calendar, MoreHorizontal, Copy, Trash2, ArrowRight, Clock, FolderKanban, Play,
 } from "lucide-react";
 import { cn, formatDate } from "@/shared/utils";
 import { Popover, PopoverItem, PopoverDivider, ProjectDot, PriorityDot } from "@/shared/ui";
@@ -152,6 +152,34 @@ export function TaskRow({ task, depth = 0 }: TaskRowProps) {
               ? `${Math.round((task.estimateMinutes / 60) * 10) / 10}h`
               : `${task.estimateMinutes}m`}
           </span>
+        )}
+
+        {/* Focus play button */}
+        {!isDone && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              bus.emit("focus:start-requested", { taskId: task.id });
+            }}
+            className="shrink-0 p-1 rounded hover:bg-muted text-muted-foreground/35 hover:text-primary transition-fast opacity-0 group-hover:opacity-100"
+            title="Start Focus Session"
+          >
+            <Play size={10} className="fill-current" />
+          </button>
+        )}
+
+        {/* Schedule in Planner button */}
+        {!task.scheduledDate && !isDone && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              bus.emit("task:schedule-in-planner", { task });
+            }}
+            className="shrink-0 p-1 rounded hover:bg-muted text-muted-foreground/35 hover:text-primary transition-fast opacity-0 group-hover:opacity-100"
+            title="Schedule in Planner"
+          >
+            <Calendar size={10} />
+          </button>
         )}
 
         {/* Context menu button */}
