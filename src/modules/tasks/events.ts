@@ -47,15 +47,7 @@ export function setupTaskEventListeners(): () => void {
     })
   );
 
-  // Planner block unlinked → clear scheduledDate
-  unsubs.push(
-    bus.on("planner:block-unlinked-task", ({ previousTaskId }) => {
-      const store = useTaskStore.getState();
-      const task  = store.tasks.find((t) => t.id === previousTaskId);
-      if (!task || !task.scheduledDate) return;
-      store.updateTask(previousTaskId, { scheduledDate: undefined });
-    })
-  );
+
 
   // Project deleted → unlink tasks from that project
   unsubs.push(

@@ -110,6 +110,43 @@ export function IntegrationLayer() {
       notify({ type: "info", message: `"${task.title}" added to Planner`, durationMs: 2000 });
     }));
 
+    // task:completed → mark all its unfinished planner blocks as completed
+    unsubs.push(bus.on("task:completed", ({ taskId }) => {
+      const blocks = usePlannerStore.getState().blocks.filter((b) => b.taskId === taskId && !b.isCompleted);
+      blocks.forEach((block) => {
+        void usePlannerStore.getState().completeBlock(block.id);
+      });
+    }));
+
+    // task:restored → mark all its completed planner blocks as incomplete
+    unsubs.push(bus.on("task:restored", ({ taskId }) => {
+      const blocks = usePlannerStore.getState().blocks.filter((b) => b.taskId === taskId && b.isCompleted);
+      blocks.forEach((block) => {
+        void usePlannerStore.getState().updateBlock(block.id, { isCompleted: false });
+      });
+    }));
+
+    // task:updated → if scheduledDate changed, shift the corresponding planner blocks to match!
+    unsubs.push(bus.on("task:updated", ({ task, changed }) => {
+      if (changed.scheduledDate) {
+        const blocks = usePlannerStore.getState().blocks.filter((b) => b.taskId === task.id);
+        blocks.forEach((block) => {
+          if (block.date !== changed.scheduledDate) {
+            void usePlannerStore.getState().updateBlock(block.id, { date: changed.scheduledDate });
+          }
+        });
+      }
+    }));
+
+    // planner:block-completed → automatically complete the linked task
+    unsubs.push(bus.on("planner:block-completed", ({ taskId }) => {
+      if (!taskId) return;
+      const task = useTaskStore.getState().getTaskById(taskId);
+      if (task && task.status !== "done") {
+        void useTaskStore.getState().completeTask(taskId);
+      }
+    }));
+
     // =========================================================
     // TASKS ↔ NOTES
     // =========================================================
@@ -230,7 +267,7 @@ export function IntegrationLayer() {
       }
     }));
 
-    unsubs.push(bus.on("planner:block-unlinked-task", ({ blockId, previousTaskId }) => {
+    unsubs.push(bus.on("planner:block-unlinked-task", ({ blockId, previousTaskId, date, startTime }) => {
       // 1. Update task: remove blockId from task.linkedPlannerBlockIds
       const task = useTaskStore.getState().tasks.find((t) => t.id === previousTaskId);
       if (task) {
@@ -240,15 +277,36 @@ export function IntegrationLayer() {
             linkedPlannerBlockIds: filtered,
           });
         }
+
+        // Keep scheduledDate in sync: if no blocks remain, clear it. Otherwise, point to the next block's date.
+        const remainingBlocks = usePlannerStore.getState().blocks.filter(
+          (b) => b.taskId === previousTaskId && b.id !== blockId
+        );
+        if (remainingBlocks.length === 0) {
+          void useTaskStore.getState().updateTask(previousTaskId, { scheduledDate: undefined });
+        } else {
+          void useTaskStore.getState().updateTask(previousTaskId, { scheduledDate: remainingBlocks[0].date });
+        }
       }
 
-      // 2. Remove mirrored calendar event
-      const calendarEvents = useCalendarStore.getState().events.filter(
-        (e) => e.isTimeBlock && e.linkedTaskIds.includes(previousTaskId)
-      );
-      calendarEvents.forEach((e) => {
-        void useCalendarStore.getState().deleteEvent(e.id);
-      });
+      // 2. Remove the specific mirrored calendar event
+      if (date && startTime) {
+        const startIso = `${date}T${startTime}`;
+        const targetEvent = useCalendarStore.getState().events.find(
+          (e) => e.isTimeBlock && e.linkedTaskIds.includes(previousTaskId) && e.startAt.startsWith(startIso)
+        );
+        if (targetEvent) {
+          void useCalendarStore.getState().deleteEvent(targetEvent.id);
+        }
+      } else {
+        // Fallback: delete any time block matching the ID (if timestamps are missing)
+        const calendarEvents = useCalendarStore.getState().events.filter(
+          (e) => e.isTimeBlock && e.linkedTaskIds.includes(previousTaskId)
+        );
+        calendarEvents.forEach((e) => {
+          void useCalendarStore.getState().deleteEvent(e.id);
+        });
+      }
       notify({ type: "info", message: "Time block removed from Calendar.", durationMs: 2000 });
     }));
 

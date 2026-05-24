@@ -75,7 +75,15 @@ export interface ButlerEventMap {
   /** Emitted when a planner block is manually linked to a task (from BlockEditModal) */
   "planner:block-linked-task": { blockId: ID; taskId: ID; date: string };
   /** Emitted when a planner block is unlinked from a task */
-  "planner:block-unlinked-task": { blockId: ID; previousTaskId: ID };
+  "planner:block-unlinked-task": {
+    blockId: ID;
+    previousTaskId: ID;
+    date?: string;
+    startTime?: string;
+    endTime?: string;
+  };
+  /** Emitted when a planner block is completed */
+  "planner:block-completed": { blockId: ID; taskId?: ID };
 
   // ── Focus events ─────────────────────────────────────
   "focus:start-requested":     { taskId?: ID };

@@ -270,7 +270,13 @@ export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get
     const nextTaskId = updated.taskId;
 
     if (prevTaskId && prevTaskId !== nextTaskId) {
-      bus.emit("planner:block-unlinked-task", { blockId: id, previousTaskId: prevTaskId });
+      bus.emit("planner:block-unlinked-task", {
+        blockId: id,
+        previousTaskId: prevTaskId,
+        date: existing.date,
+        startTime: existing.startTime,
+        endTime: existing.endTime,
+      });
     }
     if (nextTaskId && nextTaskId !== prevTaskId) {
       bus.emit("planner:block-linked-task", { blockId: id, taskId: nextTaskId, date: updated.date });
@@ -285,6 +291,9 @@ export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get
     const updated: TimeBlock = { ...existing, isCompleted: true, updatedAt: now() };
     await db.execute(UPDATE_BLOCK_SQL, updateBlockParams(updated));
     set((s) => ({ blocks: s.blocks.map((b) => b.id === id ? updated : b) }));
+
+    // Emit block completion event for cross-module integration
+    bus.emit("planner:block-completed", { blockId: id, taskId: existing.taskId });
   },
 
   deleteBlock: async (id) => {
@@ -293,7 +302,13 @@ export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get
     set((s) => ({ blocks: s.blocks.filter((b) => b.id !== id) }));
 
     if (existing?.taskId) {
-      bus.emit("planner:block-unlinked-task", { blockId: id, previousTaskId: existing.taskId });
+      bus.emit("planner:block-unlinked-task", {
+        blockId: id,
+        previousTaskId: existing.taskId,
+        date: existing.date,
+        startTime: existing.startTime,
+        endTime: existing.endTime,
+      });
     }
   },
 
