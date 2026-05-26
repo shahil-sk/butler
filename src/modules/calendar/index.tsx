@@ -1,26 +1,30 @@
 // ============================================================
-// CALENDAR — Module root  (improved)
-// - Correct hook placement (no hooks inside callbacks)
-// - Bus listeners: tasks/notes auto-reload context
-// - WeekView / DayView / AgendaView wired in
+// CALENDAR — Module root  (v3 enhanced)
+// New in this revision:
+//   - JumpToDate overlay (Cmd/Ctrl+G)
+//   - MiniAgendaSidebar on month view
+//   - Deadline dots on month cells (via task store)
+//   - Event colour-picker in toolbar area shortcut
 // ============================================================
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   format, parseISO,
 } from "date-fns";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Calendar } from "lucide-react";
 import { cn } from "@/shared/utils";
 import { useCalendarStore } from "./store";
-import { MonthGrid }  from "./components/MonthGrid";
-import { WeekView }   from "./WeekView";
-import { DayView }    from "./DayView";
-import { AgendaView } from "./AgendaView";
-import { EventForm }  from "./EventForm";
-import { bus }        from "@/kernel/event-bus";
-import { useTaskStore } from "@/modules/tasks/store";
-import { useNoteStore } from "@/modules/notes/store";
+import { MonthGrid }          from "./components/MonthGrid";
+import { WeekView }           from "./WeekView";
+import { DayView }            from "./DayView";
+import { AgendaView }         from "./AgendaView";
+import { EventForm }          from "./EventForm";
+import { MiniAgendaSidebar }  from "./MiniAgendaSidebar";
+import { JumpToDateOverlay, useJumpToDate } from "./JumpToDate";
+import { bus }                from "@/kernel/event-bus";
+import { useTaskStore }       from "@/modules/tasks/store";
+import { useNoteStore }       from "@/modules/notes/store";
 
 const VIEW_LABELS = { month: "Month", week: "Week", day: "Day", agenda: "Agenda" } as const;
 
@@ -34,6 +38,7 @@ export function CalendarModule() {
 
   const loadTasks = useTaskStore((s) => s.loadTasks);
   const loadNotes = useNoteStore((s) => s.loadNotes);
+  const { open: jumpOpen, setOpen: setJumpOpen } = useJumpToDate();
 
   const anchor = parseISO(activeDate);
   const from   = startOfMonth(startOfWeek(anchor, { weekStartsOn: 1 }));
@@ -80,20 +85,25 @@ export function CalendarModule() {
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-6 pt-6 pb-3 border-b border-border/40 shrink-0 gap-4 flex-wrap md:flex-nowrap">
-        <div className="flex items-center gap-1.5 bg-muted/40 dark:bg-muted/10 p-0.5 border border-border/40 rounded-xl">
-          <button onClick={goPrev} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/40 transition-fast">
-            <ChevronLeft size={13} />
-          </button>
-          <button onClick={goToday} className="px-3 py-1 text-[11px] font-bold rounded-lg bg-background hover:bg-accent/40 text-foreground border border-border/20 transition-fast shadow-sm">
-            Today
-          </button>
-          <button onClick={goNext} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/40 transition-fast">
-            <ChevronRight size={13} />
-          </button>
-        </div>
+      <div className="flex items-center gap-4 px-4 py-2 border-b border-border shrink-0">
+        <button onClick={goPrev} className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-fast" aria-label="Previous">
+          <ChevronLeft size={14} />
+        </button>
+        <button onClick={goNext} className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-fast" aria-label="Next">
+          <ChevronRight size={14} />
+        </button>
+
+        <h1 onClick={goToday} className="text-[24px] font-semibold tracking-tight text-gradient flex-1 text-center md:text-center md:pl-2 min-w-[150px] hover:cursor-pointer">{headerLabel}</h1>
         
-        <h1 className="text-[18px] font-bold tracking-tight text-gradient flex-1 text-center md:text-left md:pl-2 min-w-[150px]">{headerLabel}</h1>
+        {/* Jump-to-date button */}
+        <button
+          onClick={() => setJumpOpen(true)}
+          title="Jump to date (Ctrl+G)"
+          className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-fast"
+          aria-label="Jump to date"
+        >
+          <Calendar size={13} />
+        </button>
 
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-0.5 bg-muted/40 dark:bg-muted/20 p-0.5 border border-border/30 rounded-xl shrink-0">
@@ -123,20 +133,31 @@ export function CalendarModule() {
         </div>
       </div>
 
-      {(view === "month" || view === "week") && (
-        <div className="grid grid-cols-7 border-b border-border shrink-0">
-          {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d) => (
-            <div key={d} className="py-1.5 text-center text-[11px] font-medium text-muted-foreground">{d}</div>
-          ))}
-        </div>
-      )}
+      {/* Main content area */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+          {(view === "month" || view === "week") && (
+            <div className="grid grid-cols-7 border-b border-border shrink-0">
+              {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d) => (
+                <div key={d} className="py-1.5 text-center text-[11px] font-medium text-muted-foreground">{d}</div>
+              ))}
+            </div>
+          )}
 
-      {view === "month"  && <MonthGrid />}
-      {view === "week"   && <WeekView />}
-      {view === "day"    && <DayView />}
-      {view === "agenda" && <AgendaView />}
+          {view === "month"  && <MonthGrid />}
+          {view === "week"   && <WeekView />}
+          {view === "day"    && <DayView />}
+          {view === "agenda" && <AgendaView />}
+        </div>
+
+        {/* Mini agenda sidebar — only on month view */}
+        {view === "month" && <MiniAgendaSidebar />}
+      </div>
 
       <EventForm />
+
+      {/* Jump-to-date overlay */}
+      {jumpOpen && <JumpToDateOverlay onClose={() => setJumpOpen(false)} />}
     </div>
   );
 }

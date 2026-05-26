@@ -1,3 +1,7 @@
+// ============================================================
+// BUTLER — SHELL  (updated: /settings/* → SettingsModule)
+// ============================================================
+
 import { useEffect } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { Sidebar } from "./components/Sidebar";
@@ -16,28 +20,17 @@ import { useTaskStore } from "@/modules/tasks/store";
 import { cn } from "@/shared/utils";
 import { ErrorBoundary } from "@/shared/ErrorBoundary";
 
-import { TasksModule } from "@/modules/tasks";
-import { ProjectsModule } from "@/modules/projects";
-import { PlannerModule } from "@/modules/planner";
-import { NotesModule } from "@/modules/notes";
-import { CalendarModule } from "@/modules/calendar";
-import JournalModule from "@/modules/journal";
-import FocusModule from "@/modules/focus";
-import TimeTrackingModule from "@/modules/time-tracking";
-import DatabaseModule from "@/modules/database";
-import { ResearchModule } from "@/modules/research";
-
-function ModulePlaceholder({ name }: { name: string }) {
-  return (
-    <div className="flex-1 flex items-center justify-center h-full">
-      <div className="text-center space-y-1.5">
-        <div className="w-10 h-10 rounded-xl mx-auto mb-3 skeleton" aria-hidden />
-        <p className="text-sm font-semibold text-foreground tracking-tight">{name}</p>
-        <p className="text-xs text-muted-foreground">Coming soon</p>
-      </div>
-    </div>
-  );
-}
+import { TasksModule }       from "@/modules/tasks";
+import { ProjectsModule }    from "@/modules/projects";
+import { PlannerModule }     from "@/modules/planner";
+import { NotesModule }       from "@/modules/notes";
+import { CalendarModule }    from "@/modules/calendar";
+import JournalModule         from "@/modules/journal";
+import FocusModule           from "@/modules/focus";
+import TimeTrackingModule    from "@/modules/time-tracking";
+import DatabaseModule        from "@/modules/database";
+import { ResearchModule }    from "@/modules/research";
+import { SettingsModule }    from "@/modules/settings";
 
 function ModuleLoader() {
   return (
@@ -127,7 +120,7 @@ export function Shell() {
                     <Route path="/time/*"       element={<TimeTrackingModule />} />
                     <Route path="/database/*"   element={<DatabaseModule />} />
                     <Route path="/research/*"   element={<ResearchModule />} />
-                    <Route path="/settings/*"   element={<ModulePlaceholder name="Settings" />} />
+                    <Route path="/settings/*"   element={<SettingsModule />} />
                     <Route path="*"             element={<Navigate to="/tasks" replace />} />
                   </Routes>
                 </ErrorBoundary>
