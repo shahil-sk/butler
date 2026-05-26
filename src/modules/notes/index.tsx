@@ -483,8 +483,7 @@ export function NotesModule() {
             title="Search (Cmd+K)"
             className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-150">
             <Search size={14} />
-            Search
-            <kbd className="text-[10px] font-mono text-muted-foreground/50 bg-muted px-1.5 py-0.5 rounded">⌘K</kbd>
+            {/* <kbd className="text-[10px] font-mono text-muted-foreground/50 bg-muted px-1.5 py-0.5 rounded">⌘K</kbd> */}
           </button>
 
           <div className="w-px h-5 bg-border mx-1" />

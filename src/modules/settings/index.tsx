@@ -34,7 +34,7 @@ const SHORTCUTS: { keys: string[]; description: string; module?: string }[] = [
   { keys: ["Cmd", "["],        description: "Previous period",           module: "Calendar" },
   { keys: ["Cmd", "]"],        description: "Next period",               module: "Calendar" },
   { keys: ["Cmd", "T"],        description: "Go to today",               module: "Calendar" },
-  { keys: ["Cmd", "1"…"9"],   description: "Switch sidebar item",       module: "Global" },
+  { keys: ["Cmd", "1-9"],   description: "Switch sidebar item",       module: "Global" },
 ];
 
 export function SettingsModule() {
