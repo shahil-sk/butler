@@ -1,10 +1,18 @@
+// ============================================================
+// TASKS — TaskRow
+// Design: ultra-clean horizontal row, no card chrome,
+//         priority dot (semantic), hover-reveal actions,
+//         subtask tree expand, tabular metadata on right.
+// ============================================================
+
 import { useState, useRef } from "react";
 import {
-  Circle, CheckCircle2, ChevronRight, ChevronDown,
-  Calendar, MoreHorizontal, Copy, Trash2, ArrowRight, Clock, FolderKanban, Play, Lock,
+  CircleDot, CheckCircle2, ChevronRight, ChevronDown,
+  Calendar, MoreHorizontal, Copy, Trash2, Clock,
+  Play, Lock, FolderKanban, Archive,
 } from "lucide-react";
 import { cn, formatDate } from "@/shared/utils";
-import { Popover, PopoverItem, PopoverDivider, ProjectDot, PriorityDot } from "@/shared/ui";
+import { Popover, PopoverItem, PopoverDivider, PriorityDot } from "@/shared/ui";
 import { useTaskStore } from "../store";
 import { useProjectStore } from "@/modules/projects/store";
 import { bus } from "@/kernel/event-bus";
@@ -15,217 +23,211 @@ interface TaskRowProps {
   depth?: number;
 }
 
-export function TaskRow({ task, depth = 0 }: TaskRowProps) {
-  const [expanded, setExpanded] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuAnchor = useRef<HTMLButtonElement>(null);
+const PRIORITY_DOT: Record<string, string> = {
+  urgent: "bg-red-500",
+  high:   "bg-orange-400",
+  medium: "bg-amber-400",
+  low:    "bg-sky-400",
+  none:   "bg-transparent",
+};
 
-  const { completeTask, restoreTask, deleteTask, duplicateTask, openTask, getSubtasks, archiveTask, tasks: allTasks } =
-    useTaskStore();
+function formatEstimate(mins: number): string {
+  return mins >= 60 ? `${Math.round((mins / 60) * 10) / 10}h` : `${mins}m`;
+}
+
+export function TaskRow({ task, depth = 0 }: TaskRowProps) {
+  const [expanded, setExpanded]   = useState(false);
+  const [menuOpen, setMenuOpen]   = useState(false);
+  const menuAnchor                = useRef<HTMLButtonElement>(null);
+
+  const {
+    completeTask, restoreTask, deleteTask,
+    duplicateTask, openTask, getSubtasks,
+    archiveTask, tasks: allTasks,
+  } = useTaskStore();
+
   const project = useProjectStore((s) =>
     task.projectId ? s.getProjectById(task.projectId) : undefined
   );
 
-  const subtasks    = getSubtasks(task.id);
-  const hasSubtasks = subtasks.length > 0;
-  const isDone      = task.status === "done";
-  const isCancelled = task.status === "cancelled";
-  const isOverdue   =
-    !isDone && !isCancelled && task.dueDate != null &&
-    task.dueDate < new Date().toISOString().slice(0, 10);
-  const isBlocked   =
-    !isDone && !isCancelled && task.dependencies?.some(
-      (depId) => allTasks.find((t) => t.id === depId)?.status !== "done"
-    );
+  const subtasks     = getSubtasks(task.id);
+  const hasSubtasks  = subtasks.length > 0;
+  const isDone       = task.status === "done";
+  const isCancelled  = task.status === "cancelled";
+  const todayStr     = new Date().toISOString().slice(0, 10);
+  const isOverdue    = !isDone && !isCancelled && !!task.dueDate && task.dueDate < todayStr;
+  const isBlocked    = !isDone && !isCancelled && (task.dependencies ?? []).some(
+    (depId) => allTasks.find((t) => t.id === depId)?.status !== "done"
+  );
   const doneSubtasks = subtasks.filter((s) => s.status === "done").length;
   const subtaskPct   = hasSubtasks ? (doneSubtasks / subtasks.length) * 100 : 0;
-
-  const priorityAccent: Record<string, string> = {
-    urgent: "before:bg-red-500",
-    high:   "before:bg-orange-400",
-    medium: "before:bg-yellow-400",
-    low:    "before:bg-blue-400",
-    none:   "before:bg-transparent",
-  };
+  const hasPriority  = task.priority && task.priority !== "none";
 
   return (
-    <div>
+    <div className={cn(depth > 0 && "ml-6 relative before:absolute before:left-[-12px] before:top-0 before:bottom-0 before:w-px before:bg-border/40")}>
       <div
         className={cn(
-          "group relative flex items-center gap-2.5 px-3 py-[8px] rounded-xl cursor-pointer select-none",
-          "hover:bg-accent/60 transition-all duration-300 ease-spring active:scale-[0.995] border border-transparent hover:border-border/40 hover:shadow-xs",
-          "before:absolute before:left-0 before:top-[20%] before:bottom-[20%] before:w-[3px] before:rounded-full before:scale-y-50 before:opacity-0 group-hover:before:scale-y-100 group-hover:before:opacity-100 before:transition-all before:duration-300 before:ease-spring",
-          priorityAccent[task.priority ?? "none"],
-          isDone && "opacity-55",
-          depth > 0 && "ml-5 border-l border-border/40 pl-3 rounded-l-none"
+          "group/row relative flex items-center gap-2 py-[7px] px-2 rounded-lg cursor-pointer select-none",
+          "hover:bg-accent/25 transition-all duration-150 ease-[cubic-bezier(0.32,0.72,0,1)]",
+          isDone && "opacity-50"
         )}
         onClick={() => openTask(task.id)}
       >
-        {/* Subtask progress */}
+        {/* Subtask progress — ultra-thin bottom line */}
         {hasSubtasks && subtaskPct > 0 && subtaskPct < 100 && (
-          <div className="absolute bottom-0 left-8 right-2 h-[2px] rounded-full bg-border/60 overflow-hidden">
+          <div className="absolute bottom-0 left-8 right-2 h-[1.5px] rounded-full bg-border/40 overflow-hidden pointer-events-none">
             <div
-              className="h-full bg-primary/50 rounded-full transition-all duration-500"
+              className="h-full bg-primary/40 rounded-full transition-all duration-500"
               style={{ width: `${subtaskPct}%` }}
             />
           </div>
         )}
 
-        {/* Expand */}
+        {/* Expand subtasks toggle */}
         <button
           onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
           className={cn(
-            "shrink-0 w-4 h-4 flex items-center justify-center rounded-lg",
-            "text-muted-foreground/35 hover:text-foreground hover:bg-accent transition-all duration-300 ease-spring",
-            !hasSubtasks && "invisible"
+            "shrink-0 w-5 h-5 flex items-center justify-center rounded-md",
+            "text-muted-foreground/30 hover:text-foreground hover:bg-accent transition-all duration-150",
+            !hasSubtasks && "pointer-events-none opacity-0"
           )}
         >
-          {expanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+          {expanded
+            ? <ChevronDown size={11} strokeWidth={1.75} />
+            : <ChevronRight size={11} strokeWidth={1.75} />
+          }
         </button>
 
-        {/* Complete */}
+        {/* Completion toggle */}
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            isDone ? restoreTask(task.id) : completeTask(task.id);
-          }}
+          onClick={(e) => { e.stopPropagation(); isDone ? restoreTask(task.id) : completeTask(task.id); }}
           className={cn(
-            "shrink-0 transition-all duration-300 ease-spring rounded-full active:scale-90",
+            "shrink-0 rounded-full transition-all duration-200 active:scale-90",
             isDone
-              ? "text-emerald-500 hover:text-muted-foreground/50"
+              ? "text-emerald-500 hover:text-muted-foreground/40"
               : "text-muted-foreground/30 hover:text-primary"
           )}
+          title={isDone ? "Mark incomplete" : "Mark complete"}
         >
           {isDone
-            ? <CheckCircle2 size={16} strokeWidth={2} />
-            : <Circle size={16} strokeWidth={1.5} />}
+            ? <CheckCircle2 size={15} strokeWidth={1.75} />
+            : <CircleDot size={15} strokeWidth={1.5} />
+          }
         </button>
 
-        <PriorityDot priority={task.priority} />
+        {/* Priority dot */}
+        {hasPriority && (
+          <span
+            className={cn("shrink-0 w-[5px] h-[5px] rounded-full", PRIORITY_DOT[task.priority])}
+            title={task.priority}
+          />
+        )}
 
+        {/* Title */}
         <span className={cn(
-          "flex-1 text-[13px] leading-snug truncate font-medium text-foreground/90 group-hover:text-foreground transition-colors",
-          (isDone || isCancelled) && "line-through text-muted-foreground/40"
+          "flex-1 text-[13px] font-medium leading-snug truncate min-w-0 transition-colors",
+          (isDone || isCancelled)
+            ? "line-through text-muted-foreground/35"
+            : "text-foreground/85 group-hover/row:text-foreground"
         )}>
           {task.title}
         </span>
 
-        {isBlocked && (
-          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-500/10 text-red-500 shrink-0" title="Blocked by other tasks">
-            <Lock size={9} />
-            Blocked
-          </span>
-        )}
+        {/* Right-side metadata */}
+        <div className="flex items-center gap-2.5 shrink-0">
+          {/* Blocked */}
+          {isBlocked && (
+            <span className="flex items-center gap-0.5 text-[10px] font-semibold text-red-500/70">
+              <Lock size={9} strokeWidth={2} /> Blocked
+            </span>
+          )}
 
-        {hasSubtasks && (
-          <span className={cn(
-            "text-[10px] tabular-nums shrink-0 px-1.5 py-0.5 rounded-full font-medium",
-            doneSubtasks === subtasks.length
-              ? "bg-green-500/10 text-green-500"
-              : "bg-muted text-muted-foreground/60"
-          )}>
-            {doneSubtasks}/{subtasks.length}
-          </span>
-        )}
+          {/* Subtask count */}
+          {hasSubtasks && (
+            <span className={cn(
+              "text-[10px] tabular-nums font-semibold px-1.5 py-0.5 rounded-md",
+              doneSubtasks === subtasks.length
+                ? "text-emerald-500/80 bg-emerald-500/10"
+                : "text-muted-foreground/50 bg-muted/50"
+            )}>
+              {doneSubtasks}/{subtasks.length}
+            </span>
+          )}
 
-        {project && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              bus.emit("navigate:to", { path: "/projects" });
-              setTimeout(() => bus.emit("project:open", { projectId: project.id }), 50);
-            }}
-            className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-fast text-muted-foreground/50 hover:text-foreground"
-          >
-            <ProjectDot color={project.color} size={6} />
-            <span className="text-[10px] max-w-[68px] truncate">{project.name}</span>
-          </button>
-        )}
+          {/* Estimate — hover reveal */}
+          {task.estimateMinutes && (
+            <span className="flex items-center gap-1 text-[10px] text-muted-foreground/40 tabular-nums opacity-0 group-hover/row:opacity-100 transition-all duration-200">
+              <Clock size={10} strokeWidth={1.5} />
+              {formatEstimate(task.estimateMinutes)}
+            </span>
+          )}
 
-        {task.dueDate && (
-          <span className={cn(
-            "flex items-center gap-1 text-[10px] shrink-0 tabular-nums",
-            isOverdue
-              ? "text-red-500 font-semibold"
-              : isDone
-                ? "text-muted-foreground/25"
-                : "text-muted-foreground/45"
-          )}>
-            <Calendar size={10} strokeWidth={1.75} />
-            {formatDate(task.dueDate)}
-          </span>
-        )}
+          {/* Due date */}
+          {task.dueDate && (
+            <span className={cn(
+              "flex items-center gap-1 text-[11px] tabular-nums font-medium",
+              isOverdue ? "text-red-500" : isDone ? "text-muted-foreground/25" : "text-muted-foreground/45"
+            )}>
+              <Calendar size={10} strokeWidth={1.5} />
+              {formatDate(task.dueDate)}
+            </span>
+          )}
 
-        {task.estimateMinutes && (
-          <span className="flex items-center gap-1 text-[10px] text-muted-foreground/45 shrink-0 opacity-0 group-hover:opacity-100 transition-all duration-300 ease-spring">
-            <Clock size={10} strokeWidth={1.75} />
-            {task.estimateMinutes >= 60
-              ? `${Math.round((task.estimateMinutes / 60) * 10) / 10}h`
-              : `${task.estimateMinutes}m`}
-          </span>
-        )}
+          {/* Project — hover reveal */}
+          {project && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                bus.emit("navigate:to", { path: "/projects" });
+                setTimeout(() => bus.emit("project:open", { projectId: project.id }), 50);
+              }}
+              className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 text-muted-foreground/45 hover:text-foreground transition-all duration-200"
+              title={project.name}
+            >
+              <span className={cn("w-[6px] h-[6px] rounded-full shrink-0")} style={{ backgroundColor: project.color }} />
+              <span className="text-[10px] max-w-[60px] truncate">{project.name}</span>
+            </button>
+          )}
 
-        {/* Focus play button */}
-        {!isDone && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              bus.emit("focus:start-requested", { taskId: task.id });
-            }}
-            className="shrink-0 p-1.5 rounded-lg hover:bg-accent text-muted-foreground/45 hover:text-primary transition-all duration-300 ease-spring opacity-0 group-hover:opacity-100 active:scale-90"
-            title="Start Focus Session"
-          >
-            <Play size={11} className="fill-current" />
-          </button>
-        )}
+          {/* Actions — hover reveal */}
+          <div className="flex items-center gap-0.5 opacity-0 group-hover/row:opacity-100 transition-all duration-200">
+            {!isDone && (
+              <>
+                <button
+                  onClick={(e) => { e.stopPropagation(); bus.emit("focus:start-requested", { taskId: task.id }); }}
+                  className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-primary hover:bg-primary/8 transition-all duration-150 active:scale-90"
+                  title="Start focus session"
+                >
+                  <Play size={11} strokeWidth={1.5} className="fill-current" />
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); bus.emit("task:schedule-in-planner", { task }); }}
+                  className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-primary hover:bg-primary/8 transition-all duration-150 active:scale-90"
+                  title="Schedule in Planner"
+                >
+                  <Calendar size={11} strokeWidth={1.5} />
+                </button>
+              </>
+            )}
 
-        {/* Schedule in Planner button */}
-        {!task.scheduledDate && !isDone && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              bus.emit("task:schedule-in-planner", { task });
-            }}
-            className="shrink-0 p-1.5 rounded-lg hover:bg-accent text-muted-foreground/45 hover:text-primary transition-all duration-300 ease-spring opacity-0 group-hover:opacity-100 active:scale-90"
-            title="Schedule in Planner"
-          >
-            <Calendar size={11} />
-          </button>
-        )}
-
-        {/* Context menu button */}
-        <div className="relative shrink-0 opacity-0 group-hover:opacity-100 transition-all duration-300 ease-spring">
-          <button
-            ref={menuAnchor}
-            onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
-            className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-foreground hover:bg-accent transition-all duration-300 ease-spring active:scale-90"
-          >
-            <MoreHorizontal size={12} />
-          </button>
+            <button
+              ref={menuAnchor}
+              onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
+              className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-foreground hover:bg-accent transition-all duration-150 active:scale-90"
+            >
+              <MoreHorizontal size={13} strokeWidth={1.5} />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Context menu — portal popover, never clips */}
-      <Popover
-        anchor={menuAnchor}
-        open={menuOpen}
-        onClose={() => setMenuOpen(false)}
-        align="right"
-        className="w-44"
-      >
-        <PopoverItem icon={Copy} onClick={() => { void duplicateTask(task.id); setMenuOpen(false); }}>
-          Duplicate
-        </PopoverItem>
-        <PopoverItem icon={FolderKanban} onClick={() => setMenuOpen(false)}>
-          Move to project
-        </PopoverItem>
-        <PopoverItem icon={ArrowRight} onClick={() => { void archiveTask(task.id); setMenuOpen(false); }}>
-          Archive
-        </PopoverItem>
+      {/* Context menu */}
+      <Popover anchor={menuAnchor} open={menuOpen} onClose={() => setMenuOpen(false)} align="right" className="w-44">
+        <PopoverItem icon={Copy} onClick={() => { void duplicateTask(task.id); setMenuOpen(false); }}>Duplicate</PopoverItem>
+        <PopoverItem icon={FolderKanban} onClick={() => setMenuOpen(false)}>Move to project</PopoverItem>
+        <PopoverItem icon={Archive} onClick={() => { void archiveTask(task.id); setMenuOpen(false); }}>Archive</PopoverItem>
         <PopoverDivider />
-        <PopoverItem icon={Trash2} danger onClick={() => { void deleteTask(task.id); setMenuOpen(false); }}>
-          Delete
-        </PopoverItem>
+        <PopoverItem icon={Trash2} danger onClick={() => { void deleteTask(task.id); setMenuOpen(false); }}>Delete</PopoverItem>
       </Popover>
 
       {/* Subtasks */}
