@@ -156,10 +156,22 @@ async function runMigrations(db: DbAdapter, migrations: Migration[]): Promise<vo
   for (const migration of pending) {
     console.log(`[DB] Applying migration v${migration.version}: ${migration.module}`);
     await db.transaction(async (tx) => {
-      const statements = migration.up
+      // Strip comment lines before splitting by semicolon to avoid discarding entire statements starting with comments
+      const cleanSql = migration.up
+        .split("\n")
+        .map((line) => {
+          const trimmed = line.trim();
+          if (trimmed.startsWith("--") || trimmed.startsWith("//")) {
+            return "";
+          }
+          return line;
+        })
+        .join("\n");
+
+      const statements = cleanSql
         .split(";")
         .map((s) => s.trim())
-        .filter((s) => s.length > 0 && !s.startsWith("--"));
+        .filter((s) => s.length > 0);
         
       for (const stmt of statements) {
         await tx.execute(stmt);

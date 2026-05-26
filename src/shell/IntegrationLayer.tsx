@@ -7,6 +7,7 @@
 
 import { useEffect } from "react";
 import { bus } from "@/kernel/event-bus";
+import { getNextRecurrenceDate, today } from "@/shared/utils";
 import { useTaskStore } from "@/modules/tasks/store";
 import { useProjectStore } from "@/modules/projects/store";
 import { useNoteStore } from "@/modules/notes/store";
@@ -16,8 +17,11 @@ import { useFocusStore } from "@/modules/focus/store";
 import { useTimeStore } from "@/modules/time-tracking/store";
 import { usePlannerStore } from "@/modules/planner/store";
 import { useShellStore } from "@/shell/store";
+import { useFocusEventListeners } from "@/modules/focus/events";
 
 export function IntegrationLayer() {
+  useFocusEventListeners();
+
   useEffect(() => {
     const unsubs: Array<() => void> = [];
     const notify = useShellStore.getState().notify;
@@ -93,6 +97,67 @@ export function IntegrationLayer() {
           notify({ type: "info", message: `Time tracking stopped for completed task.`, durationMs: 2500 });
         }
       }
+
+      // ⑤ Auto-stop running focus session if it is tracking this completed task
+      const focusStore = useFocusStore.getState();
+      if (focusStore.activeSession && focusStore.activeSession.taskId === taskId) {
+        void focusStore._completeActive();
+        notify({ type: "info", message: `Active focus session completed with task.`, durationMs: 2500 });
+      }
+
+      // ⑥ Auto-spawn next instance of recurring task
+      if (task && task.recurrence) {
+        const nextDate = getNextRecurrenceDate(task.dueDate ?? today(), task.recurrence);
+        if (nextDate) {
+          void useTaskStore.getState().createTask({
+            title: task.title,
+            description: task.description,
+            priority: task.priority,
+            projectId: task.projectId,
+            parentTaskId: task.parentTaskId,
+            labels: task.labels,
+            tags: task.tags,
+            dueDate: nextDate,
+            estimateMinutes: task.estimateMinutes,
+            recurrence: task.recurrence,
+            dependencies: task.dependencies,
+          }).then((newInst) => {
+            notify({
+              type: "success",
+              message: `Recurring task spawned for ${nextDate}`,
+              durationMs: 3000,
+            });
+          });
+        }
+      }
+
+      // ⑦ Check for unblocked dependents
+      const allTasks = useTaskStore.getState().tasks;
+      const dependents = allTasks.filter((t) => t.dependencies?.includes(taskId));
+      dependents.forEach((dep) => {
+        const allBlockersDone = dep.dependencies.every((blockerId) => {
+          if (blockerId === taskId) return true;
+          const t = useTaskStore.getState().getTaskById(blockerId);
+          return t?.status === "done";
+        });
+        if (allBlockersDone) {
+          bus.emit("task:unblocked", { taskId: dep.id });
+        }
+      });
+    }));
+
+    // task:unblocked ➔ schedule in Planner for today
+    unsubs.push(bus.on("task:unblocked", ({ taskId }) => {
+      const task = useTaskStore.getState().getTaskById(taskId);
+      if (task && task.status !== "done" && task.status !== "archived") {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        bus.emit("task:schedule-in-planner", { task, date: todayStr });
+        notify({
+          type: "info",
+          message: `"${task.title}" is now unblocked and scheduled for today!`,
+          durationMs: 4000,
+        });
+      }
     }));
 
     // =========================================================
@@ -100,10 +165,19 @@ export function IntegrationLayer() {
     // =========================================================
 
     unsubs.push(bus.on("task:schedule-in-planner", ({ task, date, startTime }) => {
+      const targetDate = date ?? new Date().toISOString().slice(0, 10);
+      const alreadyScheduled = usePlannerStore.getState().blocks.some(
+        (b) => b.taskId === task.id && b.date === targetDate
+      );
+      if (alreadyScheduled) {
+        notify({ type: "warning", message: `"${task.title}" is already scheduled on this day`, durationMs: 2500 });
+        return;
+      }
+
       void usePlannerStore.getState().createBlock({
         taskId: task.id,
         title: task.title,
-        date: date ?? new Date().toISOString().slice(0, 10),
+        date: targetDate,
         startTime: startTime ?? "09:00",
         endTime: "10:00", // Will be clamped automatically in store based on duration
       });
@@ -179,14 +253,38 @@ export function IntegrationLayer() {
       event.linkedTaskIds.forEach((taskId) => {
         const task = useTaskStore.getState().getTaskById(taskId);
         if (!task) return;
-        if (task.linkedEventIds.includes(event.id)) return;
-        void useTaskStore.getState().updateTask(taskId, {
-          linkedEventIds: [...task.linkedEventIds, event.id],
-        });
+        if (!task.linkedEventIds.includes(event.id)) {
+          void useTaskStore.getState().updateTask(taskId, {
+            linkedEventIds: [...task.linkedEventIds, event.id],
+          });
+        }
+
+        // Mirror as a planner block if it is a time block and doesn't exist yet!
+        if (event.isTimeBlock) {
+          const date = event.startAt.slice(0, 10);
+          const startTime = event.startAt.slice(11, 16);
+          const endTime = event.endAt.slice(11, 16);
+
+          const existingBlock = usePlannerStore.getState().blocks.find(
+            (b) => b.taskId === taskId && b.date === date && b.startTime === startTime
+          );
+
+          if (!existingBlock) {
+            void usePlannerStore.getState().createBlock({
+              taskId,
+              title: event.title,
+              date,
+              startTime,
+              endTime,
+            });
+          }
+        }
       });
     }));
 
     unsubs.push(bus.on("calendar:event-deleted", ({ eventId }) => {
+      const event = useCalendarStore.getState().events.find((e) => e.id === eventId);
+      
       const affected = useTaskStore.getState().tasks.filter(
         (t) => t.linkedEventIds.includes(eventId)
       );
@@ -195,6 +293,19 @@ export function IntegrationLayer() {
           linkedEventIds: t.linkedEventIds.filter((id) => id !== eventId),
         })
       );
+
+      if (event && event.isTimeBlock && event.linkedTaskIds.length > 0) {
+        const date = event.startAt.slice(0, 10);
+        const startTime = event.startAt.slice(11, 16);
+        const taskId = event.linkedTaskIds[0];
+
+        const targetBlock = usePlannerStore.getState().blocks.find(
+          (b) => b.taskId === taskId && b.date === date && b.startTime === startTime
+        );
+        if (targetBlock) {
+          void usePlannerStore.getState().deleteBlock(targetBlock.id);
+        }
+      }
     }));
 
     // =========================================================
@@ -256,13 +367,20 @@ export function IntegrationLayer() {
       // 2. Add to calendar
       const block = usePlannerStore.getState().blocks.find(b => b.id === blockId);
       if (block && block.startTime) {
+        // Prevent duplicate mirrored event if it's already there!
+        const startIso = `${date}T${block.startTime}`;
+        const existingEvent = useCalendarStore.getState().events.find(
+          (e) => e.isTimeBlock && e.linkedTaskIds.includes(taskId) && e.startAt.startsWith(startIso)
+        );
+        if (existingEvent) return;
+
         void useCalendarStore.getState().createEvent({
           title: block.title,
-          startAt: `${date}T${block.startTime}`,
+          startAt: startIso,
           endAt: `${date}T${block.endTime}`,
           linkedTaskIds: [taskId],
           isTimeBlock: true,
-          calendarId: "default", // It will use the primary active calendar automatically if not provided, but types might require it, so we leave it as partial if calendar store handles it. Actually let's assume it defaults or we fetch default.
+          calendarId: "default",
         });
       }
     }));
@@ -370,6 +488,67 @@ export function IntegrationLayer() {
       );
     }));
 
+    unsubs.push(bus.on("project:updated", ({ project, changed }) => {
+      if (changed.status === "completed") {
+        const incompleteTasks = useTaskStore.getState().tasks.filter(
+          (t) => t.projectId === project.id && t.status !== "done" && t.status !== "archived"
+        );
+        incompleteTasks.forEach((t) => void useTaskStore.getState().archiveTask(t.id));
+        if (incompleteTasks.length > 0) {
+          notify({
+            type: "info",
+            message: `${incompleteTasks.length} incomplete tasks archived with completed project.`,
+            durationMs: 4000,
+          });
+        }
+
+        const todayStr = new Date().toISOString().slice(0, 10);
+        void useJournalStore.getState().createEntry({
+          type: "reflection",
+          date: todayStr,
+          content: JSON.stringify({
+            type: "doc",
+            content: [
+              {
+                type: "heading",
+                attrs: { level: 2 },
+                content: [{ type: "text", text: `Project Wrap-up: ${project.name}` }]
+              },
+              {
+                type: "paragraph",
+                content: [{ type: "text", text: `Reflections on completing project "${project.name}" on ${todayStr}.` }]
+              },
+              {
+                type: "heading",
+                attrs: { level: 3 },
+                content: [{ type: "text", text: "What went well?" }]
+              },
+              {
+                type: "paragraph",
+                content: [{ type: "text", text: "• " }]
+              },
+              {
+                type: "heading",
+                attrs: { level: 3 },
+                content: [{ type: "text", text: "What were the challenges?" }]
+              },
+              {
+                type: "paragraph",
+                content: [{ type: "text", text: "• " }]
+              }
+            ]
+          }),
+          linkedProjectIds: [project.id]
+        }).then(() => {
+          notify({
+            type: "success",
+            message: `Project wrap-up reflection created in Journal.`,
+            durationMs: 4000
+          });
+        });
+      }
+    }));
+
     // =========================================================
     // JOURNAL ↔ NOTES
     // =========================================================
@@ -390,6 +569,32 @@ export function IntegrationLayer() {
     // =========================================================
     // FOCUS ↔ TASKS
     // =========================================================
+
+    unsubs.push(bus.on("focus:session-started", ({ session }) => {
+      if (session.taskId) {
+        const task = useTaskStore.getState().getTaskById(session.taskId);
+        if (task && task.status === "todo") {
+          void useTaskStore.getState().updateTask(session.taskId, { status: "in_progress" });
+          notify({ type: "info", message: `Task status set to "In Progress"`, durationMs: 2000 });
+        }
+      }
+
+      const startAt = session.startedAt ?? new Date().toISOString();
+      const endAt = new Date(new Date(startAt).getTime() + session.plannedMinutes * 60 * 1000).toISOString();
+      const title = session.taskId
+        ? `Focus: ${useTaskStore.getState().getTaskById(session.taskId)?.title ?? "Session"}`
+        : "Focus Session";
+        
+      void useCalendarStore.getState().createEvent({
+        title,
+        startAt,
+        endAt,
+        linkedTaskIds: session.taskId ? [session.taskId] : [],
+        isTimeBlock: false,
+        calendarId: "default",
+        color: "#fb923c",
+      });
+    }));
 
     unsubs.push(bus.on("focus:session-completed", ({ session }) => {
       if (!session.taskId) return;
@@ -673,6 +878,49 @@ export function IntegrationLayer() {
 
     unsubs.push(bus.on("note:created", ({ note }) => {
       notify({ type: "success", message: `Note "${note.title}" created`, durationMs: 1500 });
+    }));
+
+    // =========================================================
+    // KERNEL CRON EVENTS
+    // =========================================================
+
+    unsubs.push(bus.on("day:started", ({ date }) => {
+      void useJournalStore.getState().getOrCreateDaily(date);
+      void usePlannerStore.getState().carryOverIncomplete();
+      notify({ type: "info", message: "Good morning! Your day is ready.", durationMs: 4000 });
+    }));
+
+    unsubs.push(bus.on("task:overdue", ({ taskId, daysPast }) => {
+      const task = useTaskStore.getState().getTaskById(taskId);
+      if (task) {
+        notify({
+          type: "warning",
+          message: `"${task.title}" is ${daysPast}d overdue`,
+          durationMs: 6000,
+        });
+      }
+    }));
+
+    unsubs.push(bus.on("task:due-today", ({ taskId }) => {
+      const task = useTaskStore.getState().getTaskById(taskId);
+      if (task) {
+        notify({
+          type: "info",
+          message: `"${task.title}" is due today`,
+          durationMs: 4000,
+        });
+      }
+    }));
+
+    unsubs.push(bus.on("calendar:event-starting", ({ eventId, minutesBefore }) => {
+      const event = useCalendarStore.getState().events.find((e) => e.id === eventId);
+      if (event) {
+        notify({
+          type: "info",
+          message: `Event "${event.title}" starts in ${minutesBefore} minutes`,
+          durationMs: 5000,
+        });
+      }
     }));
 
     return () => unsubs.forEach((u) => u());

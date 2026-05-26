@@ -1,13 +1,14 @@
 // ============================================================
 // TASKS MODULE — STORE
-// Added: sort applied inside getFilteredTasks()
+// Added: sort, recurring auto-spawn, dependency unblock, NLP QuickAdd
 // ============================================================
 
 import { create } from "zustand";
 import { db } from "@/kernel/db";
 import { bus } from "@/kernel/event-bus";
 import { generateId, now, today } from "@/shared/utils";
-import type { Task, Priority, TaskStatus, ChecklistItem, ID } from "@/shared/types";
+import { parseNaturalTaskInput } from "./nlp";
+import type { Task, Priority, TaskStatus, ChecklistItem, RecurrenceRule, ID } from "@/shared/types";
 
 // ── DB row → Task ─────────────────────────────────────────────
 
@@ -133,38 +134,40 @@ interface TaskState {
 }
 
 interface TaskActions {
-  loadTasks:           () => Promise<void>;
-  createTask:          (input: Partial<Task>) => Promise<Task>;
-  updateTask:          (id: ID, patch: Partial<Task>) => Promise<void>;
-  deleteTask:          (id: ID) => Promise<void>;
-  completeTask:        (id: ID) => Promise<void>;
-  restoreTask:         (id: ID) => Promise<void>;
-  archiveTask:         (id: ID) => Promise<void>;
-  duplicateTask:       (id: ID) => Promise<Task>;
-  moveTask:            (id: ID, toProjectId: ID | null) => Promise<void>;
-  reorderTasks:        (ids: ID[]) => Promise<void>;
-  batchUpdate:         (ids: ID[], patch: Partial<Task>) => Promise<void>;
-  batchDelete:         (ids: ID[]) => Promise<void>;
-  addChecklistItem:    (taskId: ID, text: string) => Promise<void>;
-  toggleChecklistItem: (taskId: ID, itemId: ID) => Promise<void>;
-  deleteChecklistItem: (taskId: ID, itemId: ID) => Promise<void>;
-  openQuickAdd:        (prefill?: Partial<Task>) => void;
-  closeQuickAdd:       () => void;
-  openTask:            (id: ID) => void;
-  closeTask:           () => void;
-  selectTask:          (id: ID, multi?: boolean) => void;
-  clearSelection:      () => void;
-  setView:             (v: TaskView) => void;
-  setGroupBy:          (g: TaskGroupBy) => void;
-  setSortBy:           (s: TaskSortBy) => void;
-  setFilter:           (f: Partial<TaskFilter>) => void;
-  setActiveRoute:      (r: string) => void;
-  getFilteredTasks:    () => Task[];
-  getSubtasks:         (parentId: ID) => Task[];
-  getTaskById:         (id: ID) => Task | undefined;
-  getTodayTasks:       () => Task[];
-  getUpcomingTasks:    () => Task[];
-  getOverdueTasks:     () => Task[];
+  loadTasks:            () => Promise<void>;
+  createTask:           (input: Partial<Task>) => Promise<Task>;
+  updateTask:           (id: ID, patch: Partial<Task>) => Promise<void>;
+  deleteTask:           (id: ID) => Promise<void>;
+  completeTask:         (id: ID) => Promise<void>;
+  restoreTask:          (id: ID) => Promise<void>;
+  archiveTask:          (id: ID) => Promise<void>;
+  duplicateTask:        (id: ID) => Promise<Task>;
+  moveTask:             (id: ID, toProjectId: ID | null) => Promise<void>;
+  reorderTasks:         (ids: ID[]) => Promise<void>;
+  batchUpdate:          (ids: ID[], patch: Partial<Task>) => Promise<void>;
+  batchDelete:          (ids: ID[]) => Promise<void>;
+  addChecklistItem:     (taskId: ID, text: string) => Promise<void>;
+  toggleChecklistItem:  (taskId: ID, itemId: ID) => Promise<void>;
+  deleteChecklistItem:  (taskId: ID, itemId: ID) => Promise<void>;
+  openQuickAdd:         (prefill?: Partial<Task>) => void;
+  closeQuickAdd:        () => void;
+  openTask:             (id: ID) => void;
+  closeTask:            () => void;
+  selectTask:           (id: ID, multi?: boolean) => void;
+  clearSelection:       () => void;
+  setView:              (v: TaskView) => void;
+  setGroupBy:           (g: TaskGroupBy) => void;
+  setSortBy:            (s: TaskSortBy) => void;
+  setFilter:            (f: Partial<TaskFilter>) => void;
+  setActiveRoute:       (r: string) => void;
+  getFilteredTasks:     () => Task[];
+  getSubtasks:          (parentId: ID) => Task[];
+  getTaskById:          (id: ID) => Task | undefined;
+  getTodayTasks:        () => Task[];
+  getUpcomingTasks:     () => Task[];
+  getOverdueTasks:      () => Task[];
+  /** Parse a natural language string then createTask() */
+  parseAndCreateTask:   (raw: string) => Promise<Task>;
 }
 
 const DEFAULT_FILTER: TaskFilter = { statuses: [], priorities: [], projectIds: [], labels: [] };
@@ -259,8 +262,28 @@ export const useTaskStore = create<TaskState & TaskActions>()((set, get) => ({
 
   completeTask: async (id) => {
     const completedAt = now();
+    const task = get().tasks.find((t) => t.id === id);
     await get().updateTask(id, { status: "done", completedAt });
     bus.emit("task:completed", { taskId: id, completedAt });
+
+    // ── Auto-spawn next recurring instance ──────────────────
+    if (task?.recurrence) {
+      void spawnNextRecurring(task, get().createTask);
+    }
+
+    // ── Emit task:unblocked for any task whose blockers are all done ─
+    const { tasks } = get();
+    const nowDoneIds = new Set(
+      tasks.filter((t) => t.status === "done" || t.id === id).map((t) => t.id)
+    );
+    tasks.forEach((t) => {
+      if (t.id === id || t.status === "done" || t.status === "archived") return;
+      if ((t.dependencies ?? []).length === 0) return;
+      const wasBlocked = t.dependencies.some((depId) => !nowDoneIds.has(depId) && depId !== id);
+      if (!wasBlocked && t.dependencies.includes(id)) {
+        bus.emit("task:unblocked", { taskId: t.id });
+      }
+    });
   },
 
   restoreTask: async (id) => {
@@ -420,4 +443,97 @@ export const useTaskStore = create<TaskState & TaskActions>()((set, get) => ({
     const t = today();
     return get().tasks.filter((task) => task.status !== "done" && task.dueDate != null && task.dueDate < t);
   },
+
+  parseAndCreateTask: async (raw) => {
+    const parsed = parseNaturalTaskInput(raw);
+    // Resolve projectSlug → projectId by matching name prefix (case-insensitive)
+    let projectId: string | undefined;
+    if (parsed.projectSlug) {
+      try {
+        const { useProjectStore } = await import("@/modules/projects/store");
+        const projects = useProjectStore.getState().projects;
+        const match = projects.find(
+          (p) => p.name.toLowerCase().startsWith(parsed.projectSlug!)
+        );
+        projectId = match?.id;
+      } catch { /* project store not available */ }
+    }
+    return get().createTask({
+      title:          parsed.title,
+      dueDate:        parsed.dueDate,
+      priority:       parsed.priority,
+      projectId,
+    });
+  },
 }));
+
+// ── Recurring spawn helper ────────────────────────────────────
+
+function addDays(isoDate: string, days: number): string {
+  const d = new Date(isoDate + "T00:00:00");
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function nextRecurringDate(rule: RecurrenceRule, fromDate: string): string | null {
+  if (rule.frequency === "daily") {
+    return addDays(fromDate, rule.interval || 1);
+  }
+  if (rule.frequency === "weekly") {
+    const base = addDays(fromDate, (rule.interval || 1) * 7);
+    if (rule.daysOfWeek && rule.daysOfWeek.length > 0) {
+      // Find next matching weekday on or after base
+      const d = new Date(base + "T00:00:00");
+      for (let i = 0; i < 7; i++) {
+        if (rule.daysOfWeek.includes(d.getDay())) {
+          return d.toISOString().slice(0, 10);
+        }
+        d.setDate(d.getDate() + 1);
+      }
+    }
+    return base;
+  }
+  if (rule.frequency === "monthly") {
+    const d = new Date(fromDate + "T00:00:00");
+    d.setMonth(d.getMonth() + (rule.interval || 1));
+    return d.toISOString().slice(0, 10);
+  }
+  if (rule.frequency === "yearly") {
+    const d = new Date(fromDate + "T00:00:00");
+    d.setFullYear(d.getFullYear() + (rule.interval || 1));
+    return d.toISOString().slice(0, 10);
+  }
+  // custom: treat same as daily with interval
+  return addDays(fromDate, rule.interval || 1);
+}
+
+async function spawnNextRecurring(
+  completed: Task,
+  createTask: (input: Partial<Task>) => Promise<Task>,
+) {
+  const rule = completed.recurrence!;
+  const fromDate = completed.dueDate ?? completed.scheduledDate ?? today();
+
+  // Respect endDate / count (simple guard)
+  if (rule.endDate && fromDate >= rule.endDate) return;
+
+  const nextDate = nextRecurringDate(rule, fromDate);
+  if (!nextDate) return;
+  if (rule.endDate && nextDate > rule.endDate) return;
+
+  await createTask({
+    title:          completed.title,
+    description:    completed.description,
+    priority:       completed.priority,
+    projectId:      completed.projectId,
+    parentTaskId:   completed.parentTaskId,
+    labels:         [...(completed.labels ?? [])],
+    tags:           [...(completed.tags ?? [])],
+    dueDate:        nextDate,
+    estimateMinutes: completed.estimateMinutes,
+    recurrence:     completed.recurrence,
+    checklistItems: completed.checklistItems.map((i) => ({ ...i, checked: false })),
+    linkedNoteIds:  [...(completed.linkedNoteIds ?? [])],
+    status:         "todo",
+  });
+}

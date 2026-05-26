@@ -8,7 +8,7 @@ import { useRef, useState } from "react";
 import {
   MoreHorizontal, Calendar, Circle, CheckCircle2,
   Copy, Trash2, Archive, ExternalLink,
-  Flag, Clock, X, Play,
+  Flag, Clock, X, Play, Lock,
 } from "lucide-react";
 import { cn, formatDate } from "@/shared/utils";
 import { Popover, PopoverItem, PopoverDivider, ProjectDot } from "@/shared/ui";
@@ -216,7 +216,7 @@ interface TaskCardProps {
 }
 
 export function TaskCard({ task, view }: TaskCardProps) {
-  const { openTask, completeTask, restoreTask, getSubtasks } = useTaskStore();
+  const { openTask, completeTask, restoreTask, getSubtasks, tasks: allTasks } = useTaskStore();
   const project = useProjectStore((s) =>
     task.projectId ? s.getProjectById(task.projectId) : undefined
   );
@@ -228,6 +228,9 @@ export function TaskCard({ task, view }: TaskCardProps) {
   const isCancelled  = task.status === "cancelled";
   const today        = new Date().toISOString().slice(0, 10);
   const isOverdue    = !isDone && !isCancelled && !!task.dueDate && task.dueDate < today;
+  const isBlocked    = !isDone && !isCancelled && task.dependencies?.some(
+    (depId) => allTasks.find((t) => t.id === depId)?.status !== "done"
+  );
 
   // ── List view (REDESIGNED) ──────────────────────────────
   if (view === "list") {
@@ -369,168 +372,185 @@ export function TaskCard({ task, view }: TaskCardProps) {
     <div
       onClick={() => openTask(task.id)}
       className={cn(
-        "group relative flex flex-col rounded-lg border border-border bg-card",
-        "hover:shadow-lg hover:border-border/60 transition-all duration-150 cursor-pointer overflow-hidden",
-        isDone && "opacity-65"
+        "group relative p-1.5 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-[1.75rem] shadow-sm hover:shadow-premium transition-all duration-300 ease-spring hover:border-black/15 dark:hover:border-white/15 cursor-pointer flex flex-col min-h-0 active:scale-[0.99]",
+        isDone && "opacity-55"
       )}
     >
-      {/* Subtask progress bar */}
-      {subtasks.length > 0 && (
-        <div className="h-1 w-full bg-muted/60">
-          <div
-            className={cn(
-              "h-full transition-all duration-500",
-              subtaskPct === 100 ? "bg-emerald-500" : "bg-primary"
-            )}
-            style={{ width: `${subtaskPct}%` }}
-          />
-        </div>
-      )}
-
-      <div className="p-5 flex flex-col gap-4 flex-1">
-        {/* Header: Menu + Priority */}
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            {task.priority && task.priority !== "none" && (
-              <div className={cn(
-                "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold shrink-0 border",
-                PRIORITY_TEXT[task.priority],
-                PRIORITY_BG[task.priority],
-                "border-transparent"
-              )}>
-                <Flag size={11} className="fill-current" />
-                {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
-              </div>
-            )}
-          </div>
-          <CardMenu task={task} />
-        </div>
-
-        {/* Title and description */}
-        <div className="flex items-start gap-3">
-          <button
-            onClick={(e) => { e.stopPropagation(); isDone ? restoreTask(task.id) : completeTask(task.id); }}
-            className={cn(
-              "shrink-0 mt-0.5 transition-all rounded-full p-0.5",
-              isDone ? "text-emerald-500 hover:text-muted-foreground/50" : "text-muted-foreground/40 hover:text-primary"
-            )}
-            title={isDone ? "Mark incomplete" : "Mark complete"}
-          >
-            {isDone ? <CheckCircle2 size={18} strokeWidth={2} /> : <Circle size={18} strokeWidth={1.5} />}
-          </button>
-          <div className="flex-1 min-w-0">
-            <h3 className={cn(
-              "text-[14px] font-bold leading-snug",
-              (isDone || isCancelled) && "line-through text-muted-foreground/50"
-            )}>
-              {task.title}
-            </h3>
-            {task.description && (
-              <p className="mt-2 text-[12px] text-muted-foreground leading-relaxed line-clamp-2">
-                {task.description.replace(/[#*`>[\]]/g, "")}
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Tags */}
-        {task.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {task.tags.slice(0, 3).map((tag) => (
-              <span key={tag} className="text-[11px] px-2.5 py-1 rounded-lg bg-muted text-muted-foreground font-medium border border-border">
-                {tag}
-              </span>
-            ))}
-            {task.tags.length > 3 && (
-              <span className="text-[11px] px-2.5 py-1 rounded-lg bg-muted text-muted-foreground/60 font-medium border border-border">
-                +{task.tags.length - 3} more
-              </span>
-            )}
+      {/* Inner Core */}
+      <div className="flex-1 flex flex-col bg-card rounded-[calc(1.75rem-0.375rem)] overflow-hidden shadow-[inset_0_1px_1px_rgba(255,255,255,0.06)] p-3.5 gap-3.5">
+        {/* Subtask progress bar */}
+        {subtasks.length > 0 && (
+          <div className="h-1 w-full bg-muted/60 rounded-full overflow-hidden shrink-0">
+            <div
+              className={cn(
+                "h-full transition-all duration-500",
+                subtaskPct === 100 ? "bg-emerald-500" : "bg-primary"
+              )}
+              style={{ width: `${subtaskPct}%` }}
+            />
           </div>
         )}
 
-        {/* Footer: Metadata and actions */}
-        <div className="mt-auto pt-3 border-t border-border flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Subtask progress */}
-            {subtasks.length > 0 && (
+        {/* Top Row: Status & Priority */}
+        <div className="flex items-center justify-between gap-2 shrink-0">
+          <StatusBadge status={task.status} />
+          <div className="flex items-center gap-1.5">
+            {task.priority && task.priority !== "none" && (
               <span className={cn(
-                "text-[11px] font-semibold px-2.5 py-1 rounded-lg border",
-                doneSubtasks === subtasks.length
-                  ? "bg-emerald-100 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/40"
-                  : "bg-muted text-muted-foreground border-border"
+                "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-transparent",
+                PRIORITY_TEXT[task.priority],
+                PRIORITY_BG[task.priority]
               )}>
-                {doneSubtasks}/{subtasks.length}
+                <Flag size={9} className="fill-current" />
+                {task.priority}
               </span>
             )}
+            <CardMenu task={task} />
+          </div>
+        </div>
 
-            {/* Time estimate */}
-            {task.estimateMinutes && (
-              <span className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground px-2.5 py-1 rounded-lg bg-muted/50 border border-border">
-                <Clock size={11} strokeWidth={1.75} />
-                {task.estimateMinutes >= 60 ? `${Math.round((task.estimateMinutes / 60) * 10) / 10}h` : `${task.estimateMinutes}m`}
-              </span>
-            )}
+        {/* Content: Title & Description */}
+        <div className="flex-1 flex flex-col gap-2 min-h-0">
+          <div className="flex items-start gap-2.5">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                isDone ? restoreTask(task.id) : completeTask(task.id);
+              }}
+              className={cn(
+                "shrink-0 mt-0.5 transition-all duration-300 ease-spring rounded-full p-0.5 active:scale-90",
+                isDone ? "text-emerald-500 hover:text-muted-foreground/50" : "text-muted-foreground/45 hover:text-primary"
+              )}
+              title={isDone ? "Mark incomplete" : "Mark complete"}
+            >
+              {isDone ? <CheckCircle2 size={16} strokeWidth={2} /> : <Circle size={16} strokeWidth={1.5} />}
+            </button>
+            <div className="flex-1 min-w-0">
+              <h3 className={cn(
+                "text-[13.5px] font-semibold leading-snug text-foreground/90 group-hover:text-foreground transition-colors break-words",
+                (isDone || isCancelled) && "line-through text-muted-foreground/40"
+              )}>
+                {task.title}
+              </h3>
+              {task.description && (
+                <p className="mt-1.5 text-[11px] text-muted-foreground/60 leading-relaxed line-clamp-2">
+                  {task.description.replace(/[#*`>[\]]/g, "")}
+                </p>
+              )}
+            </div>
+          </div>
 
-            {/* Project */}
-            {project && (
+          {/* Tags */}
+          {task.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1 shrink-0">
+              {task.tags.slice(0, 2).map((tag) => (
+                <span key={tag} className="text-[9.5px] px-2 py-0.5 rounded bg-muted text-muted-foreground/80 border border-border/40 font-medium">
+                  {tag}
+                </span>
+              ))}
+              {task.tags.length > 2 && (
+                <span className="text-[9.5px] px-2 py-0.5 rounded bg-muted text-muted-foreground/50 border border-border/40 font-medium">
+                  +{task.tags.length - 2}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Divider */}
+        <div className="h-px bg-border/40 -mx-3.5 shrink-0" />
+
+        {/* Footer info */}
+        <div className="flex flex-col gap-2 shrink-0">
+          <div className="flex items-center justify-between gap-2">
+            {project ? (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   bus.emit("navigate:to", { path: "/projects" });
                   setTimeout(() => bus.emit("project:open", { projectId: project.id }), 50);
                 }}
-                className="flex items-center gap-1.5 text-muted-foreground/60 hover:text-foreground transition-all px-2 py-1 rounded-lg hover:bg-accent/50"
+                className="flex items-center gap-1.5 text-muted-foreground/60 hover:text-foreground transition-all duration-300 ease-spring px-2 py-0.5 rounded-md hover:bg-accent/60"
                 title={`Go to ${project.name}`}
               >
                 <ProjectDot color={project.color} size={6} />
-                <span className="text-[11px] font-medium max-w-[90px] truncate">{project.name}</span>
+                <span className="text-[10px] font-semibold max-w-[80px] truncate">{project.name}</span>
               </button>
+            ) : (
+              <div className="w-1" />
+            )}
+
+            {isBlocked && (
+              <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-500/10 text-red-500 border border-red-500/10 shrink-0" title="Blocked by other tasks">
+                <Lock size={9} />
+                Blocked
+              </span>
             )}
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            {/* Focus button */}
-            {!isDone && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  bus.emit("focus:start-requested", { taskId: task.id });
-                }}
-                className="shrink-0 p-2 rounded-lg text-muted-foreground/50 hover:text-primary hover:bg-accent transition-all opacity-0 group-hover:opacity-100"
-                title="Start Focus Session"
-              >
-                <Play size={13} className="fill-current" />
-              </button>
-            )}
+          <div className="flex items-center justify-between gap-1.5 mt-0.5">
+            <div className="flex items-center gap-1.5">
+              {/* Due date */}
+              <InlineDueDateEditor
+                taskId={task.id}
+                dueDate={task.dueDate}
+                isOverdue={isOverdue}
+                isDone={isDone}
+                className="py-1 px-2"
+              />
 
-            {/* Schedule button */}
-            {!task.scheduledDate && !isDone && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  bus.emit("task:schedule-in-planner", { task });
-                }}
-                className="shrink-0 p-2 rounded-lg text-muted-foreground/50 hover:text-primary hover:bg-accent transition-all opacity-0 group-hover:opacity-100"
-                title="Schedule in Planner"
-              >
-                <Calendar size={13} />
-              </button>
-            )}
+              {/* Estimate */}
+              {task.estimateMinutes && (
+                <span className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/60 px-1.5 py-1 rounded bg-muted/40 border border-border/30">
+                  <Clock size={11} strokeWidth={1.75} />
+                  {task.estimateMinutes >= 60
+                    ? `${Math.round((task.estimateMinutes / 60) * 10) / 10}h`
+                    : `${task.estimateMinutes}m`}
+                </span>
+              )}
 
-            {/* Due date editor */}
-            <InlineDueDateEditor
-              taskId={task.id}
-              dueDate={task.dueDate}
-              isOverdue={isOverdue}
-              isDone={isDone}
-            />
+              {/* Subtask fraction */}
+              {subtasks.length > 0 && (
+                <span className={cn(
+                  "text-[10px] font-semibold px-1.5 py-1 rounded border",
+                  doneSubtasks === subtasks.length
+                    ? "bg-emerald-100 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/40"
+                    : "bg-muted text-muted-foreground border-border"
+                )}>
+                  {doneSubtasks}/{subtasks.length}
+                </span>
+              )}
+            </div>
+
+            {/* Hover Actions */}
+            <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+              {!isDone && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    bus.emit("focus:start-requested", { taskId: task.id });
+                  }}
+                  className="p-1 rounded hover:bg-accent text-muted-foreground/60 hover:text-primary transition-all active:scale-90"
+                  title="Start Focus Session"
+                >
+                  <Play size={12} className="fill-current" />
+                </button>
+              )}
+
+              {!task.scheduledDate && !isDone && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    bus.emit("task:schedule-in-planner", { task });
+                  }}
+                  className="p-1 rounded hover:bg-accent text-muted-foreground/60 hover:text-primary transition-all active:scale-90"
+                  title="Schedule in Planner"
+                >
+                  <Calendar size={12} />
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-
-        {/* Status badge */}
-        <div className="pt-2 border-t border-border">
-          <StatusBadge status={task.status} />
         </div>
       </div>
     </div>

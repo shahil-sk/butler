@@ -9,7 +9,7 @@ export function TabBar({ panel }: { panel: SplitPanel }) {
   if (panel.tabs.length === 0) return null;
 
   return (
-    <div className="flex items-center h-[38px] border-b border-border bg-surface-1 shrink-0 overflow-hidden">
+    <div className="flex items-center h-[38px] border-b border-border/35 bg-surface-1/40 backdrop-blur-xs shrink-0 overflow-hidden px-1">
       {/* Tabs */}
       <div className="flex items-center flex-1 min-w-0 overflow-x-auto scrollbar-none">
         {panel.tabs.map((tab) => (
@@ -71,19 +71,12 @@ function TabItem({
     <div
       onClick={onActivate}
       className={cn(
-        "group relative flex items-center gap-1.5 h-[38px] px-3 min-w-0 max-w-[160px]",
-        "text-xs cursor-pointer select-none shrink-0",
-        "border-r border-border/60 transition-fast",
+        "group relative flex items-center gap-1.5 h-[28px] mx-0.5 px-3 rounded-lg text-xs cursor-pointer select-none shrink-0 transition-all duration-300 ease-spring active:scale-[0.97]",
         isActive
-          ? "bg-background text-foreground"
-          : "text-muted-foreground hover:text-foreground hover:bg-surface-2/60"
+          ? "bg-background text-foreground shadow-xs border border-border/30 font-medium"
+          : "text-muted-foreground hover:text-foreground hover:bg-surface-2/50"
       )}
     >
-      {/* Active indicator bar */}
-      {isActive && (
-        <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary rounded-t-full" />
-      )}
-
       {/* Dirty dot */}
       {tab.isDirty && (
         <span className="w-[5px] h-[5px] rounded-full bg-amber-400 shrink-0" />
@@ -101,7 +94,7 @@ function TabItem({
         <button
           onClick={onClose}
           className={cn(
-            "ml-auto p-0.5 rounded shrink-0 transition-fast",
+            "ml-auto p-0.5 rounded shrink-0 transition-all duration-300",
             "opacity-0 group-hover:opacity-100",
             "text-muted-foreground hover:text-foreground hover:bg-surface-3"
           )}

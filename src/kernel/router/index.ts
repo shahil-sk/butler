@@ -61,17 +61,81 @@ export function navigateBack(): void {
 // Attach once in App.tsx — maps key combos to bus events
 
 export function setupGlobalShortcuts(): () => void {
+  let lastKey = "";
+  let lastTime = 0;
+
   const handler = (e: KeyboardEvent) => {
+    const target = e.target as HTMLElement;
+    const isInput =
+      target.tagName === "INPUT" ||
+      target.tagName === "TEXTAREA" ||
+      target.isContentEditable;
+
     const combo = buildCombo(e);
     if (!combo) return;
 
-    const shortcuts = registry.getAllShortcuts().filter((s) => s.global);
-    const match = shortcuts.find((s) => s.keys === combo);
-    if (!match) return;
+    const shortcuts = registry.getAllShortcuts();
 
-    e.preventDefault();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    bus.emit(match.action as any, undefined);
+    // 1. Check direct combos (e.g. "cmd+enter", "c")
+    const match = shortcuts.find((s) => {
+      const matchKeys = s.keys.toLowerCase() === combo.toLowerCase();
+      if (!matchKeys) return false;
+      if (s.global) return true;
+      return !isInput;
+    });
+
+    if (match) {
+      e.preventDefault();
+      let payload: any = undefined;
+      if (match.action === "navigate:to") {
+        const mod = registry.get(match.moduleId);
+        const path = mod?.routes[0]?.path;
+        if (path) payload = { path };
+      } else if (match.action === "journal:open-date") {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        payload = { date: todayStr };
+      }
+      bus.emit(match.action as any, payload);
+      lastKey = "";
+      return;
+    }
+
+    // 2. Check sequential shortcuts (e.g. "g n", "c n")
+    if (!isInput) {
+      const now = Date.now();
+      const currentKey = e.key.toLowerCase();
+
+      if (lastKey && now - lastTime < 1000) {
+        const fullSequence = `${lastKey} ${currentKey}`;
+        const seqMatch = shortcuts.find(
+          (s) => s.keys.toLowerCase() === fullSequence.toLowerCase()
+        );
+
+        if (seqMatch) {
+          e.preventDefault();
+          let payload: any = undefined;
+          if (seqMatch.action === "navigate:to") {
+            const mod = registry.get(seqMatch.moduleId);
+            const path = mod?.routes[0]?.path;
+            if (path) payload = { path };
+          } else if (seqMatch.action === "journal:open-date") {
+            const todayStr = new Date().toISOString().slice(0, 10);
+            payload = { date: todayStr };
+          }
+          bus.emit(seqMatch.action as any, payload);
+          lastKey = "";
+          return;
+        }
+      }
+
+      // Record first key of potential sequence
+      if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        lastKey = currentKey;
+        lastTime = now;
+      } else {
+        lastKey = "";
+      }
+    }
   };
 
   window.addEventListener("keydown", handler);

@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   X, Flag, Calendar, Clock, Plus, Trash2,
   CheckSquare, Circle, ChevronDown, FolderKanban,
-  FileText, ExternalLink, CalendarClock, Play,
+  FileText, ExternalLink, CalendarClock, Play, Lock, RefreshCw,
 } from "lucide-react";
 import { cn, formatDate, PRIORITY_COLORS, PRIORITY_LABELS, today, now } from "@/shared/utils";
 import { Modal, Popover, PopoverItem, PopoverDivider, ProjectDot, SectionLabel } from "@/shared/ui";
@@ -11,7 +11,51 @@ import { useProjectStore } from "@/modules/projects/store";
 import { useNoteStore } from "@/modules/notes/store";
 import { useCalendarStore } from "@/modules/calendar/store";
 import { bus } from "@/kernel/event-bus";
-import type { Task, Priority, TaskStatus } from "@/shared/types";
+import type { Task, Priority, TaskStatus, RecurrenceRule } from "@/shared/types";
+import { EntityBadge } from "@/shared/EntityBadge";
+
+function parseDurationToMinutes(val: string): number | undefined {
+  const clean = val.trim().toLowerCase();
+  if (!clean) return undefined;
+
+  // Check if raw number
+  if (/^\d+$/.test(clean)) {
+    return parseInt(clean, 10);
+  }
+
+  let totalMinutes = 0;
+  let matched = false;
+
+  // Match hours: e.g. "1.5h" or "1 h" or "2hours"
+  const hrMatch = clean.match(/(\d+(?:\.\d+)?)\s*h/);
+  if (hrMatch) {
+    totalMinutes += parseFloat(hrMatch[1]) * 60;
+    matched = true;
+  }
+
+  // Match minutes: e.g. "30m" or "45 m" or "15mins"
+  const minMatch = clean.match(/(\d+)\s*m/);
+  if (minMatch) {
+    totalMinutes += parseInt(minMatch[1], 10);
+    matched = true;
+  }
+
+  // If no h/m matches but it has a dot (e.g. "1.5" representing hours)
+  if (!matched && /^\d+\.\d+$/.test(clean)) {
+    return parseFloat(clean) * 60;
+  }
+
+  return matched ? Math.round(totalMinutes) : undefined;
+}
+
+function formatMinutesToDurationString(mins: number): string {
+  if (!mins) return "";
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h > 0 && m > 0) return `${h}h ${m}m`;
+  if (h > 0) return `${h}h`;
+  return `${m}m`;
+}
 
 const STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
   { value: "todo",        label: "To do" },
@@ -60,9 +104,33 @@ export function TaskDetail() {
   // Tracks whether user has picked a schedule (create mode only)
   const [scheduledDate, setScheduledDate]  = useState<string | undefined>(undefined);
   const [scheduledTime, setScheduledTime]  = useState<string | undefined>(undefined);
-
   const [linkNoteOpen,  setLinkNoteOpen]   = useState(false);
   const [noteSearch,    setNoteSearch]     = useState("");
+  const [estimateInputStr, setEstimateInputStr] = useState("");
+
+  // Dependencies states
+  const depAnchor = useRef<HTMLButtonElement>(null);
+  const [depOpen, setDepOpen] = useState(false);
+  const [depSearch, setDepSearch] = useState("");
+  const [tempDependencies, setTempDependencies] = useState<string[]>([]);
+
+  // Recurrence state
+  type RecurFreq = "none" | "daily" | "weekly" | "monthly" | "yearly" | "custom";
+  const [recurFreq,      setRecurFreq]      = useState<RecurFreq>("none");
+  const [recurInterval,  setRecurInterval]  = useState(1);
+  const [recurDays,      setRecurDays]      = useState<number[]>([]); // 0=Sun,6=Sat
+  const [recurEndDate,   setRecurEndDate]   = useState("");
+
+  const buildRecurrence = (): RecurrenceRule | undefined => {
+    if (recurFreq === "none") return undefined;
+    const rule: RecurrenceRule = {
+      frequency: recurFreq === "custom" ? "custom" : recurFreq,
+      interval:  recurInterval,
+    };
+    if (recurFreq === "weekly" && recurDays.length > 0) rule.daysOfWeek = recurDays;
+    if (recurEndDate) rule.endDate = recurEndDate;
+    return rule;
+  };
 
   // Popover anchors
   const statusAnchor   = useRef<HTMLButtonElement>(null);
@@ -74,6 +142,48 @@ export function TaskDetail() {
 
   const titleRef = useRef<HTMLInputElement>(null);
 
+  const allTasksForDeps = useTaskStore((s) => s.tasks);
+  const currentDeps = isCreating ? tempDependencies : (task?.dependencies ?? []);
+
+  const candidateBlockers = useMemo(() => {
+    return allTasksForDeps.filter((t) => {
+      if (t.status === "done" || t.status === "archived") return false;
+      if (task && t.id === task.id) return false;
+      if (currentDeps.includes(t.id)) return false;
+      if (depSearch.trim() && !t.title.toLowerCase().includes(depSearch.toLowerCase())) return false;
+      if (task) {
+        const dependsOnRecursive = (startId: string, targetId: string, visited = new Set<string>()): boolean => {
+          if (startId === targetId) return true;
+          if (visited.has(startId)) return false;
+          visited.add(startId);
+          const startTask = allTasksForDeps.find(x => x.id === startId);
+          if (!startTask || !startTask.dependencies) return false;
+          return startTask.dependencies.some(depId => dependsOnRecursive(depId, targetId, visited));
+        };
+        if (dependsOnRecursive(t.id, task.id)) return false;
+      }
+      return true;
+    }).slice(0, 10);
+  }, [allTasksForDeps, task, currentDeps, depSearch]);
+
+  const handleAddDependency = (depId: string) => {
+    if (isCreating) {
+      setTempDependencies((prev) => [...prev, depId]);
+    } else if (task) {
+      save({ dependencies: [...(task.dependencies ?? []), depId] });
+    }
+    setDepOpen(false);
+    setDepSearch("");
+  };
+
+  const handleRemoveDependency = (depId: string) => {
+    if (isCreating) {
+      setTempDependencies((prev) => prev.filter((id) => id !== depId));
+    } else if (task) {
+      save({ dependencies: (task.dependencies ?? []).filter((id) => id !== depId) });
+    }
+  };
+
   // Sync local state from task (view mode) or prefill (create mode)
   useEffect(() => {
     if (isCreating) {
@@ -84,6 +194,10 @@ export function TaskDetail() {
       setProjectId(quickAddPrefill.projectId ?? "");
       setStatus("todo");
       setEstimateMins("");
+      setEstimateInputStr("");
+      setTempDependencies([]);
+      setDepOpen(false);
+      setDepSearch("");
       setChecklistItems([]);
       setNewCheckItem("");
       setLinkNoteOpen(false);
@@ -92,6 +206,10 @@ export function TaskDetail() {
       setScheduledTime(undefined);
       setScheduleDate(today());
       setScheduleTime("09:00");
+      setRecurFreq("none");
+      setRecurInterval(1);
+      setRecurDays([]);
+      setRecurEndDate("");
       setTimeout(() => titleRef.current?.focus(), 40);
     }
   }, [isCreating, quickAddOpen]);
@@ -105,12 +223,27 @@ export function TaskDetail() {
       setProjectId(task.projectId ?? "");
       setStatus(task.status);
       setEstimateMins(task.estimateMinutes ?? "");
+      setEstimateInputStr(task.estimateMinutes ? formatMinutesToDurationString(task.estimateMinutes) : "");
+      setDepOpen(false);
+      setDepSearch("");
       // Pre-fill schedule panel from existing scheduledDate if any
       if (task.scheduledDate) {
         setScheduleDate(task.scheduledDate);
       } else {
         setScheduleDate(today());
         setScheduleTime("09:00");
+      }
+      // Pre-fill recurrence
+      if (task.recurrence) {
+        setRecurFreq(task.recurrence.frequency as RecurFreq);
+        setRecurInterval(task.recurrence.interval || 1);
+        setRecurDays(task.recurrence.daysOfWeek ?? []);
+        setRecurEndDate(task.recurrence.endDate ?? "");
+      } else {
+        setRecurFreq("none");
+        setRecurInterval(1);
+        setRecurDays([]);
+        setRecurEndDate("");
       }
     }
   }, [task?.id]);
@@ -146,6 +279,8 @@ export function TaskDetail() {
       checklistItems: checklistItems.map((item, i) => ({ ...item, order: i })),
       // Include scheduled date if user picked it
       scheduledDate:  scheduledDate || undefined,
+      dependencies:   tempDependencies,
+      recurrence:     buildRecurrence(),
     });
 
     // If user pre-scheduled: also create a calendar event immediately
@@ -461,6 +596,91 @@ export function TaskDetail() {
               />
             </MetaRow>
 
+            {/* Recurrence */}
+            <MetaRow label="Repeat" icon={<RefreshCw size={13} />}>
+              <div className="flex flex-col gap-2 w-full">
+                {/* Frequency pills */}
+                <div className="flex flex-wrap gap-1">
+                  {(["none", "daily", "weekly", "monthly", "yearly"] as const).map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => {
+                        setRecurFreq(f);
+                        if (!isCreating) save({ recurrence: f === "none" ? undefined : { frequency: f, interval: recurInterval, daysOfWeek: recurDays.length ? recurDays : undefined, endDate: recurEndDate || undefined } });
+                      }}
+                      className={cn(
+                        "px-2 py-0.5 rounded-md text-[11px] font-medium border transition-all duration-150",
+                        recurFreq === f
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-border/50 text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                      )}
+                    >
+                      {f === "none" ? "None" : f.charAt(0).toUpperCase() + f.slice(1)}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Weekly day picker */}
+                {recurFreq === "weekly" && (
+                  <div className="flex gap-1">
+                    {["S","M","T","W","T","F","S"].map((day, i) => (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          const next = recurDays.includes(i)
+                            ? recurDays.filter((d) => d !== i)
+                            : [...recurDays, i];
+                          setRecurDays(next);
+                          if (!isCreating) save({ recurrence: { frequency: "weekly", interval: recurInterval, daysOfWeek: next, endDate: recurEndDate || undefined } });
+                        }}
+                        className={cn(
+                          "w-6 h-6 rounded-full text-[10px] font-bold border transition-all duration-150",
+                          recurDays.includes(i)
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "border-border/50 text-muted-foreground hover:border-primary/50"
+                        )}
+                      >
+                        {day}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Interval + end date for non-none */}
+                {recurFreq !== "none" && (
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] text-muted-foreground">Every</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={99}
+                        value={recurInterval}
+                        onChange={(e) => {
+                          const v = Math.max(1, parseInt(e.target.value) || 1);
+                          setRecurInterval(v);
+                          if (!isCreating) save({ recurrence: buildRecurrence() });
+                        }}
+                        className="w-12 text-xs bg-muted/30 border border-border/50 rounded-md px-1.5 py-0.5 outline-none focus:border-primary/50 text-center"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] text-muted-foreground">Until</span>
+                      <input
+                        type="date"
+                        value={recurEndDate}
+                        onChange={(e) => {
+                          setRecurEndDate(e.target.value);
+                          if (!isCreating) save({ recurrence: buildRecurrence() });
+                        }}
+                        className="text-xs bg-muted/30 border border-border/50 rounded-md px-1.5 py-0.5 outline-none focus:border-primary/50"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </MetaRow>
+
             {/* Scheduled — shown in both modes */}
             <MetaRow label="Scheduled" icon={<CalendarClock size={13} />}>
               {isCreating ? (
@@ -518,27 +738,136 @@ export function TaskDetail() {
               )}
             </MetaRow>
 
-            {/* Estimate */}
+            {/* Estimate with Natural Text + Slider */}
             <MetaRow label="Estimate" icon={<Clock size={13} />}>
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="number"
-                  value={isCreating ? estimateMins : (task?.estimateMinutes ?? "")}
-                  onChange={(e) => {
-                    if (isCreating) setEstimateMins(e.target.value ? Number(e.target.value) : "");
-                    else save({ estimateMinutes: e.target.value ? Number(e.target.value) : undefined });
-                  }}
-                  className="w-14 text-sm bg-transparent outline-none text-foreground"
-                  placeholder="—"
-                  min={0}
-                  step={5}
-                />
-                <span className="text-xs text-muted-foreground">min</span>
-                {(isCreating ? (estimateMins || 0) : (task?.estimateMinutes ?? 0)) > 0 && (
-                  <span className="text-xs text-muted-foreground/50">
-                    ({Math.round(Number(isCreating ? estimateMins : task?.estimateMinutes) / 60 * 10) / 10}h)
+              <div className="flex flex-col gap-2 w-full max-w-[280px]">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={estimateInputStr}
+                    onChange={(e) => setEstimateInputStr(e.target.value)}
+                    onBlur={() => {
+                      const mins = parseDurationToMinutes(estimateInputStr);
+                      if (mins !== undefined) {
+                        if (isCreating) {
+                          setEstimateMins(mins);
+                          setEstimateInputStr(formatMinutesToDurationString(mins));
+                        } else {
+                          save({ estimateMinutes: mins });
+                          setEstimateInputStr(formatMinutesToDurationString(mins));
+                        }
+                      } else if (estimateInputStr === "") {
+                        if (isCreating) {
+                          setEstimateMins("");
+                          setEstimateInputStr("");
+                        } else {
+                          save({ estimateMinutes: undefined });
+                          setEstimateInputStr("");
+                        }
+                      } else {
+                        // revert
+                        const currentMins = isCreating ? estimateMins : (task?.estimateMinutes ?? "");
+                        setEstimateInputStr(currentMins !== "" ? formatMinutesToDurationString(Number(currentMins)) : "");
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") e.currentTarget.blur();
+                    }}
+                    className="w-24 text-sm bg-muted/30 border border-border/50 rounded-lg px-2 py-1 outline-none focus:border-primary/50 text-foreground font-medium"
+                    placeholder="e.g. 1h 30m"
+                  />
+                  {/* Human-friendly display of parsed value */}
+                  {((isCreating ? estimateMins : task?.estimateMinutes) || 0) > 0 && (
+                    <span className="text-xs text-muted-foreground/60 font-medium">
+                      = {isCreating ? estimateMins : task?.estimateMinutes} min
+                    </span>
+                  )}
+                </div>
+                {/* Slider */}
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={0}
+                    max={240}
+                    step={5}
+                    value={Number(isCreating ? estimateMins : (task?.estimateMinutes ?? 0))}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      if (isCreating) {
+                        setEstimateMins(val || "");
+                        setEstimateInputStr(val ? formatMinutesToDurationString(val) : "");
+                      } else {
+                        save({ estimateMinutes: val || undefined });
+                        setEstimateInputStr(val ? formatMinutesToDurationString(val) : "");
+                      }
+                    }}
+                    className="flex-1 h-1 rounded-lg bg-border accent-primary cursor-pointer appearance-none"
+                  />
+                  <span className="text-[10px] text-muted-foreground/50 shrink-0 select-none">
+                    max 4h
                   </span>
-                )}
+                </div>
+              </div>
+            </MetaRow>
+
+            {/* Blocked by (Dependencies) */}
+            <MetaRow label="Blocked by" icon={<Lock size={13} />}>
+              <div className="flex flex-col gap-2 w-full">
+                {/* Dependency Pills */}
+                <div className="flex flex-wrap gap-1.5">
+                  {(isCreating ? tempDependencies : (task?.dependencies ?? [])).map((depId) => (
+                    <div key={depId} className="flex items-center gap-0.5 rounded bg-muted/60 border border-border/45 pl-1 pr-0.5 py-0.5">
+                      <EntityBadge type="task" id={depId} />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveDependency(depId)}
+                        className="p-0.5 rounded text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-fast"
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  ))}
+                  {/* Empty state placeholder */}
+                  {((isCreating ? tempDependencies : task?.dependencies)?.length ?? 0) === 0 && (
+                    <span className="text-xs text-muted-foreground/40 italic">— no blockers</span>
+                  )}
+                </div>
+
+                {/* Add dependency button + selector */}
+                <div className="relative">
+                  <button
+                    ref={depAnchor}
+                    onClick={() => setDepOpen((v) => !v)}
+                    className="text-xs text-primary font-medium hover:underline flex items-center gap-1 mt-1"
+                  >
+                    <Plus size={11} /> Add blocker
+                  </button>
+                  <Popover anchor={depAnchor} open={depOpen} onClose={() => setDepOpen(false)} className="w-64 p-2 flex flex-col gap-2 max-h-60 overflow-y-auto">
+                    <input
+                      type="text"
+                      value={depSearch}
+                      onChange={(e) => setDepSearch(e.target.value)}
+                      placeholder="Search tasks..."
+                      className="w-full text-xs bg-muted/50 rounded-lg px-2.5 py-1.5 outline-none border border-border focus:border-primary/50"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <div className="flex flex-col gap-0.5">
+                      {candidateBlockers.map((t) => (
+                        <button
+                          key={t.id}
+                          onClick={() => handleAddDependency(t.id)}
+                          className="w-full text-left px-2 py-1.5 rounded text-[11px] hover:bg-accent/80 transition-colors flex items-center gap-2 truncate"
+                        >
+                          <Circle size={10} className="shrink-0 text-muted-foreground/45" />
+                          <span className="truncate">{t.title}</span>
+                        </button>
+                      ))}
+                      {candidateBlockers.length === 0 && (
+                        <span className="text-center text-[10px] text-muted-foreground/40 py-2">No other tasks found</span>
+                      )}
+                    </div>
+                  </Popover>
+                </div>
               </div>
             </MetaRow>
           </div>
@@ -579,13 +908,17 @@ export function TaskDetail() {
                       }
                     }}
                     className={cn(
-                      "shrink-0 transition-fast",
-                      item.checked ? "text-green-500" : "text-muted-foreground/30 hover:text-primary"
+                      "shrink-0 w-4.5 h-4.5 rounded-lg border flex items-center justify-center transition-all duration-300 ease-spring active:scale-75",
+                      item.checked
+                        ? "bg-emerald-500 border-emerald-500 text-white"
+                        : "border-border bg-muted/40 hover:border-primary text-transparent"
                     )}
                   >
-                    {item.checked ? <CheckSquare size={14} /> : <Circle size={14} />}
+                    <svg className="w-3 h-3 stroke-current fill-none stroke-[3.5]" viewBox="0 0 24 24">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
                   </button>
-                  <span className={cn("flex-1 text-sm", item.checked && "line-through text-muted-foreground/40")}>
+                  <span className={cn("flex-1 text-[13.5px] text-foreground/90 font-medium", item.checked && "line-through text-muted-foreground/40")}>
                     {item.text}
                   </span>
                   <button
@@ -757,22 +1090,95 @@ export function TaskDetail() {
         ))}
       </Popover>
 
-      {/* Priority popover */}
-      <Popover anchor={priorityAnchor} open={priorityOpen} onClose={() => setPriorityOpen(false)} className="w-44">
-        {(["urgent", "high", "medium", "low", "none"] as const).map((p) => (
-          <PopoverItem
-            key={p}
-            active={(isCreating ? priority : task?.priority) === p}
-            icon={Flag}
+      {/* Eisenhower Matrix Priority popover */}
+      <Popover anchor={priorityAnchor} open={priorityOpen} onClose={() => setPriorityOpen(false)} className="w-[300px] p-4 flex flex-col gap-3 rounded-2xl shadow-premium border border-border bg-popover/95 backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-300 ease-spring">
+        <div>
+          <p className="text-xs font-extrabold text-foreground">Eisenhower Matrix</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">Select priority quadrant</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {/* Urgent & Important */}
+          <button
             onClick={() => {
-              if (isCreating) setPriority(p);
-              else save({ priority: p });
+              if (isCreating) setPriority("urgent");
+              else save({ priority: "urgent" });
               setPriorityOpen(false);
             }}
+            className={cn(
+              "flex flex-col items-start p-3 rounded-xl border text-left transition-all duration-300 ease-spring active:scale-95",
+              (isCreating ? priority : task?.priority) === "urgent"
+                ? "bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400 font-extrabold shadow-sm"
+                : "border-border/60 hover:bg-accent/40"
+            )}
           >
-            {PRIORITY_LABELS[p]}
-          </PopoverItem>
-        ))}
+            <span className="text-[9px] uppercase font-extrabold text-red-500 tracking-wider">Q1: Urgent</span>
+            <span className="text-[11px] leading-tight text-foreground/80 mt-1 font-semibold">&amp; Important</span>
+          </button>
+
+          {/* Important & Not Urgent */}
+          <button
+            onClick={() => {
+              if (isCreating) setPriority("high");
+              else save({ priority: "high" });
+              setPriorityOpen(false);
+            }}
+            className={cn(
+              "flex flex-col items-start p-3 rounded-xl border text-left transition-all duration-300 ease-spring active:scale-95",
+              (isCreating ? priority : task?.priority) === "high"
+                ? "bg-orange-500/10 border-orange-500/30 text-orange-600 dark:text-orange-400 font-extrabold shadow-sm"
+                : "border-border/60 hover:bg-accent/40"
+            )}
+          >
+            <span className="text-[9px] uppercase font-extrabold text-orange-500 tracking-wider">Q2: Important</span>
+            <span className="text-[11px] leading-tight text-foreground/80 mt-1 font-semibold">Not Urgent</span>
+          </button>
+
+          {/* Urgent & Not Important */}
+          <button
+            onClick={() => {
+              if (isCreating) setPriority("medium");
+              else save({ priority: "medium" });
+              setPriorityOpen(false);
+            }}
+            className={cn(
+              "flex flex-col items-start p-3 rounded-xl border text-left transition-all duration-300 ease-spring active:scale-95",
+              (isCreating ? priority : task?.priority) === "medium"
+                ? "bg-yellow-500/10 border-yellow-500/30 text-yellow-600 dark:text-yellow-400 font-extrabold shadow-sm"
+                : "border-border/60 hover:bg-accent/40"
+            )}
+          >
+            <span className="text-[9px] uppercase font-extrabold text-yellow-600 dark:text-yellow-400 tracking-wider">Q3: Urgent</span>
+            <span className="text-[11px] leading-tight text-foreground/80 mt-1 font-semibold">Not Important</span>
+          </button>
+
+          {/* Not Urgent & Not Important (Low) */}
+          <button
+            onClick={() => {
+              if (isCreating) setPriority("low");
+              else save({ priority: "low" });
+              setPriorityOpen(false);
+            }}
+            className={cn(
+              "flex flex-col items-start p-3 rounded-xl border text-left transition-all duration-300 ease-spring active:scale-95",
+              (isCreating ? priority : task?.priority) === "low"
+                ? "bg-blue-500/10 border-blue-500/30 text-blue-600 dark:text-blue-400 font-extrabold shadow-sm"
+                : "border-border/60 hover:bg-accent/40"
+            )}
+          >
+            <span className="text-[9px] uppercase font-extrabold text-blue-500 tracking-wider">Q4: Neither</span>
+            <span className="text-[11px] leading-tight text-foreground/80 mt-1 font-semibold">(Low Priority)</span>
+          </button>
+        </div>
+        <button
+          onClick={() => {
+            if (isCreating) setPriority("none");
+            else save({ priority: "none" });
+            setPriorityOpen(false);
+          }}
+          className="w-full py-2 rounded-xl border border-border text-[11px] font-bold text-muted-foreground hover:bg-accent/60 transition-all duration-300 ease-spring active:scale-95"
+        >
+          Clear Priority (None)
+        </button>
       </Popover>
 
       {/* Project popover */}

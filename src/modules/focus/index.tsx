@@ -20,7 +20,6 @@ import { RichEditor } from "@/shared/RichEditor";
 
 import { focusManifest } from "@/modules/focus/manifest";
 import { useFocusStore } from "@/modules/focus/store";
-import { useFocusEventListeners } from "@/modules/focus/events";
 
 import { TIME_MANIFEST } from "@/modules/time-tracking/manifest";
 import { useTimeStore } from "@/modules/time-tracking/store";
@@ -110,7 +109,7 @@ function useFocusSound() {
 // ─────────────────────────────────────────────────────────────
 
 type Tab = "focus" | "tracker" | "reports";
-const TABS: { id: Tab; label: string; Icon: React.FC<{ size?: number; className?: string }> }[] = [
+const TABS: { id: Tab; label: string; Icon: any }[] = [
   { id: "focus",   label: "Focus",   Icon: Target },
   { id: "tracker", label: "Tracker", Icon: Clock },
   { id: "reports", label: "Reports", Icon: BarChart2 },
@@ -118,14 +117,16 @@ const TABS: { id: Tab; label: string; Icon: React.FC<{ size?: number; className?
 
 function SegmentControl({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
   return (
-    <div className="flex items-center rounded-lg p-0.5 gap-0.5" style={{ background: "hsl(var(--muted))" }}>
+    <div className="flex items-center gap-1 p-0.5 bg-muted/40 dark:bg-muted/25 border border-border/30 rounded-xl">
       {TABS.map(({ id, label, Icon }) => (
         <button key={id} onClick={() => onChange(id)}
           className={cn(
-            "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-150 select-none",
-            active === id ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            "flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[12px] font-bold transition-all duration-200 select-none",
+            active === id
+              ? "bg-background text-foreground shadow-sm shadow-black/5 border border-border/20"
+              : "text-muted-foreground hover:text-foreground hover:bg-accent/40"
           )}>
-          <Icon size={13} />
+          <Icon size={12} />
           {label}
         </button>
       ))}
@@ -481,8 +482,6 @@ function DailyGoalBar({ todayMins, goalMins }: { todayMins: number; goalMins: nu
 // ─────────────────────────────────────────────────────────────
 
 function FocusTab() {
-  useFocusEventListeners();
-
   const load        = useFocusStore((s) => s.load);
   const sessions    = useFocusStore((s) => s.sessions);
   const active      = useFocusStore((s) => s.activeSession);
@@ -1144,7 +1143,7 @@ function TrackerTab() {
           />
         )}
         {grouped.length === 0 && !activeEntry ? (
-          <EmptyState icon={<Clock size={26} />} title="No entries yet" description="Start a timer or add an entry manually." />
+          <EmptyState title="No entries yet" subtitle="Start a timer or add an entry manually." />
         ) : (
           grouped.map(([date, dayEntries]) => (
             <div key={date}>
@@ -1264,7 +1263,7 @@ function ReportsTab() {
       )}
 
       {completed.length === 0 && (
-        <EmptyState icon={<BarChart2 size={26} />} title="No data yet" description="Track time to see your reports here." />
+        <EmptyState title="No data yet" subtitle="Track time to see your reports here." />
       )}
     </div>
   );
@@ -1278,20 +1277,25 @@ export default function FocusModule() {
   const [tab, setTab] = useState<Tab>("focus");
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden bg-background">
       {/* Active timer banner (cross-tab) */}
       <ActiveTimerBanner onJump={() => setTab("tracker")} />
 
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b shrink-0"
-        style={{ borderColor: "hsl(var(--border))" }}>
+      <div className="flex items-center justify-between px-6 pt-6 pb-3 border-b border-border/40 shrink-0 gap-4 flex-wrap md:flex-nowrap bg-background">
+        <div>
+          <h1 className="text-[20px] font-bold leading-tight tracking-tight text-gradient">Focus Mode</h1>
+          <p className="text-[12px] text-muted-foreground mt-0.5 leading-tight font-medium">Mindful sessions & pomodoro tracker</p>
+        </div>
         <SegmentControl active={tab} onChange={setTab} />
       </div>
 
       {/* Tab content */}
-      {tab === "focus"   && <FocusTab />}
-      {tab === "tracker" && <TrackerTab />}
-      {tab === "reports" && <ReportsTab />}
+      <div className="flex-1 overflow-hidden bg-background">
+        {tab === "focus"   && <FocusTab />}
+        {tab === "tracker" && <TrackerTab />}
+        {tab === "reports" && <ReportsTab />}
+      </div>
     </div>
   );
 }

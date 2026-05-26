@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import {
   Circle, CheckCircle2, ChevronRight, ChevronDown,
-  Calendar, MoreHorizontal, Copy, Trash2, ArrowRight, Clock, FolderKanban, Play,
+  Calendar, MoreHorizontal, Copy, Trash2, ArrowRight, Clock, FolderKanban, Play, Lock,
 } from "lucide-react";
 import { cn, formatDate } from "@/shared/utils";
 import { Popover, PopoverItem, PopoverDivider, ProjectDot, PriorityDot } from "@/shared/ui";
@@ -20,7 +20,7 @@ export function TaskRow({ task, depth = 0 }: TaskRowProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuAnchor = useRef<HTMLButtonElement>(null);
 
-  const { completeTask, restoreTask, deleteTask, duplicateTask, openTask, getSubtasks, archiveTask } =
+  const { completeTask, restoreTask, deleteTask, duplicateTask, openTask, getSubtasks, archiveTask, tasks: allTasks } =
     useTaskStore();
   const project = useProjectStore((s) =>
     task.projectId ? s.getProjectById(task.projectId) : undefined
@@ -33,6 +33,10 @@ export function TaskRow({ task, depth = 0 }: TaskRowProps) {
   const isOverdue   =
     !isDone && !isCancelled && task.dueDate != null &&
     task.dueDate < new Date().toISOString().slice(0, 10);
+  const isBlocked   =
+    !isDone && !isCancelled && task.dependencies?.some(
+      (depId) => allTasks.find((t) => t.id === depId)?.status !== "done"
+    );
   const doneSubtasks = subtasks.filter((s) => s.status === "done").length;
   const subtaskPct   = hasSubtasks ? (doneSubtasks / subtasks.length) * 100 : 0;
 
@@ -48,9 +52,9 @@ export function TaskRow({ task, depth = 0 }: TaskRowProps) {
     <div>
       <div
         className={cn(
-          "group relative flex items-center gap-2 px-2 py-[7px] rounded-lg cursor-pointer select-none",
-          "hover:bg-accent/50 transition-fast",
-          "before:absolute before:left-0 before:top-[20%] before:bottom-[20%] before:w-[2.5px] before:rounded-full before:opacity-0 group-hover:before:opacity-100 before:transition-opacity before:duration-150",
+          "group relative flex items-center gap-2.5 px-3 py-[8px] rounded-xl cursor-pointer select-none",
+          "hover:bg-accent/60 transition-all duration-300 ease-spring active:scale-[0.995] border border-transparent hover:border-border/40 hover:shadow-xs",
+          "before:absolute before:left-0 before:top-[20%] before:bottom-[20%] before:w-[3px] before:rounded-full before:scale-y-50 before:opacity-0 group-hover:before:scale-y-100 group-hover:before:opacity-100 before:transition-all before:duration-300 before:ease-spring",
           priorityAccent[task.priority ?? "none"],
           isDone && "opacity-55",
           depth > 0 && "ml-5 border-l border-border/40 pl-3 rounded-l-none"
@@ -71,8 +75,8 @@ export function TaskRow({ task, depth = 0 }: TaskRowProps) {
         <button
           onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
           className={cn(
-            "shrink-0 w-4 h-4 flex items-center justify-center rounded",
-            "text-muted-foreground/30 hover:text-muted-foreground transition-fast",
+            "shrink-0 w-4 h-4 flex items-center justify-center rounded-lg",
+            "text-muted-foreground/35 hover:text-foreground hover:bg-accent transition-all duration-300 ease-spring",
             !hasSubtasks && "invisible"
           )}
         >
@@ -86,25 +90,32 @@ export function TaskRow({ task, depth = 0 }: TaskRowProps) {
             isDone ? restoreTask(task.id) : completeTask(task.id);
           }}
           className={cn(
-            "shrink-0 transition-fast rounded-full",
+            "shrink-0 transition-all duration-300 ease-spring rounded-full active:scale-90",
             isDone
-              ? "text-green-500 hover:text-muted-foreground/50"
-              : "text-muted-foreground/25 hover:text-primary"
+              ? "text-emerald-500 hover:text-muted-foreground/50"
+              : "text-muted-foreground/30 hover:text-primary"
           )}
         >
           {isDone
-            ? <CheckCircle2 size={15} strokeWidth={2} />
-            : <Circle size={15} strokeWidth={1.5} />}
+            ? <CheckCircle2 size={16} strokeWidth={2} />
+            : <Circle size={16} strokeWidth={1.5} />}
         </button>
 
         <PriorityDot priority={task.priority} />
 
         <span className={cn(
-          "flex-1 text-[13px] leading-snug truncate font-[440]",
+          "flex-1 text-[13px] leading-snug truncate font-medium text-foreground/90 group-hover:text-foreground transition-colors",
           (isDone || isCancelled) && "line-through text-muted-foreground/40"
         )}>
           {task.title}
         </span>
+
+        {isBlocked && (
+          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-500/10 text-red-500 shrink-0" title="Blocked by other tasks">
+            <Lock size={9} />
+            Blocked
+          </span>
+        )}
 
         {hasSubtasks && (
           <span className={cn(
@@ -146,7 +157,7 @@ export function TaskRow({ task, depth = 0 }: TaskRowProps) {
         )}
 
         {task.estimateMinutes && (
-          <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground/35 shrink-0 opacity-0 group-hover:opacity-100 transition-fast">
+          <span className="flex items-center gap-1 text-[10px] text-muted-foreground/45 shrink-0 opacity-0 group-hover:opacity-100 transition-all duration-300 ease-spring">
             <Clock size={10} strokeWidth={1.75} />
             {task.estimateMinutes >= 60
               ? `${Math.round((task.estimateMinutes / 60) * 10) / 10}h`
@@ -161,10 +172,10 @@ export function TaskRow({ task, depth = 0 }: TaskRowProps) {
               e.stopPropagation();
               bus.emit("focus:start-requested", { taskId: task.id });
             }}
-            className="shrink-0 p-1 rounded hover:bg-muted text-muted-foreground/35 hover:text-primary transition-fast opacity-0 group-hover:opacity-100"
+            className="shrink-0 p-1.5 rounded-lg hover:bg-accent text-muted-foreground/45 hover:text-primary transition-all duration-300 ease-spring opacity-0 group-hover:opacity-100 active:scale-90"
             title="Start Focus Session"
           >
-            <Play size={10} className="fill-current" />
+            <Play size={11} className="fill-current" />
           </button>
         )}
 
@@ -175,21 +186,21 @@ export function TaskRow({ task, depth = 0 }: TaskRowProps) {
               e.stopPropagation();
               bus.emit("task:schedule-in-planner", { task });
             }}
-            className="shrink-0 p-1 rounded hover:bg-muted text-muted-foreground/35 hover:text-primary transition-fast opacity-0 group-hover:opacity-100"
+            className="shrink-0 p-1.5 rounded-lg hover:bg-accent text-muted-foreground/45 hover:text-primary transition-all duration-300 ease-spring opacity-0 group-hover:opacity-100 active:scale-90"
             title="Schedule in Planner"
           >
-            <Calendar size={10} />
+            <Calendar size={11} />
           </button>
         )}
 
         {/* Context menu button */}
-        <div className="relative shrink-0 opacity-0 group-hover:opacity-100 transition-fast">
+        <div className="relative shrink-0 opacity-0 group-hover:opacity-100 transition-all duration-300 ease-spring">
           <button
             ref={menuAnchor}
             onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
-            className="p-1 rounded text-muted-foreground/50 hover:text-foreground hover:bg-muted/80 transition-fast"
+            className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-foreground hover:bg-accent transition-all duration-300 ease-spring active:scale-90"
           >
-            <MoreHorizontal size={13} />
+            <MoreHorizontal size={12} />
           </button>
         </div>
       </div>

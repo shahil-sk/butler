@@ -17,6 +17,7 @@ import { useTimeStore } from "@/modules/time-tracking/store";
 import { useFocusStore } from "@/modules/focus/store";
 import { DayColumn } from "./components/DayColumn";
 import { TaskSidebar } from "./components/TaskSidebar";
+import { Button } from "@/components/Button";
 
 import { cn, toISODate } from "@/shared/utils";
 import { format, parseISO, startOfWeek, addDays } from "date-fns";
@@ -191,17 +192,17 @@ function CustomPlanModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
-      <div className="relative w-full max-w-md mx-4 rounded-xl bg-card border border-border shadow-xl flex flex-col max-h-[80vh]">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+      <div className="relative w-full max-w-md mx-4 rounded-2xl bg-card/75 border border-border/40 shadow-premium flex flex-col max-h-[80vh] glass-panel animate-modal-in">
+        <div className="flex items-center justify-between px-4 py-3.5 border-b border-border/40 shrink-0">
           <div className="flex items-center gap-2">
-            <BookTemplate size={14} className="text-primary" />
-            <h3 className="text-sm font-semibold">Custom Plan Templates</h3>
+            <BookTemplate size={14} className="text-primary animate-pulse" />
+            <h3 className="text-sm font-bold text-gradient">Custom Plan Templates</h3>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-fast">✕</button>
+          <button onClick={onClose} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/40 transition-fast">✕</button>
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
           <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Save today as template</p>
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2">Save today as template</p>
             {todayBlocks.length === 0 ? (
               <p className="text-xs text-muted-foreground/60 italic">No blocks on {format(parseISO(activeDate), "MMM d")} — add blocks first.</p>
             ) : (
@@ -210,28 +211,28 @@ function CustomPlanModal({ onClose }: { onClose: () => void }) {
                   value={newName} onChange={(e) => setNewName(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && void handleSave()}
                   placeholder={`e.g. "Deep Work Day" (${todayBlocks.length} blocks)`}
-                  className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring/40"
+                  className="flex-1 px-3 py-2 rounded-xl border border-border bg-background/50 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40"
                 />
                 <button onClick={() => void handleSave()} disabled={!newName.trim() || saving}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 transition-opacity disabled:opacity-40">
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 transition-opacity disabled:opacity-40 shadow-sm shadow-primary/20">
                   <Save size={12} />{saving ? "Saving…" : "Save"}
                 </button>
               </div>
             )}
           </div>
           <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Saved templates</p>
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2">Saved templates</p>
             {templates.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 py-8 text-center">
-                <BookTemplate size={24} className="text-muted-foreground/20" />
+              <div className="flex flex-col items-center gap-2 py-8 text-center bg-muted/20 border border-dashed border-border/60 rounded-2xl">
+                <BookTemplate size={24} className="text-muted-foreground/20 animate-bounce" />
                 <p className="text-xs text-muted-foreground/60">No templates yet.<br />Save today’s plan to reuse it later.</p>
               </div>
             ) : (
               <div className="flex flex-col gap-2">
                 {templates.map((t) => (
-                  <div key={t.id} className="flex items-center gap-3 p-3 rounded-xl border border-border bg-background hover:border-primary/30 transition-colors group">
+                  <div key={t.id} className="flex items-center gap-3 p-3 rounded-2xl border border-border bg-card hover:border-primary/30 transition-all duration-200 group glow-card shadow-sm">
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{t.name}</p>
+                      <p className="text-sm font-semibold truncate">{t.name}</p>
                       <p className="text-[11px] text-muted-foreground mt-0.5">{t.blocks.length} blocks · {format(parseISO(t.createdAt), "MMM d, yyyy")}</p>
                       <div className="flex flex-wrap gap-1 mt-1.5">
                         {t.blocks.slice(0, 5).map((b, i) => (
@@ -316,67 +317,66 @@ export function PlannerModule() {
       {/* Row 1: Title + actions */}
       <div className="flex items-center justify-between px-6 pt-6 pb-3 shrink-0">
         <div>
-          <h1 className="text-[18px] font-bold leading-tight tracking-tight">Planner</h1>
-          <p className="text-[12px] text-muted-foreground mt-0.5 leading-tight">{rangeLabel}</p>
+          <h1 className="text-[20px] font-bold leading-tight tracking-tight text-gradient">Planner</h1>
+          <p className="text-[12px] text-muted-foreground mt-0.5 leading-tight font-medium">{rangeLabel}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-0.5">
-            <button onClick={prev} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
-              <ChevronLeft size={14} />
-            </button>
-            <button onClick={goToday}
-              className={cn(
-                "px-2.5 py-1 rounded-md text-[12px] font-semibold transition-colors",
-                isToday ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-accent"
-              )}>
+        <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-1 bg-muted/40 dark:bg-muted/10 p-0.5 border border-border/40 rounded-xl">
+            <Button variant="ghost" size="sm" onClick={prev} className="p-1.5 h-7 w-7">
+              <ChevronLeft size={13} />
+            </Button>
+            <Button
+              variant={isToday ? "secondary" : "ghost"}
+              size="sm"
+              onClick={goToday}
+              className="h-7 text-[11px] font-bold"
+            >
               Today
-            </button>
-            <button onClick={next} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
-              <ChevronRight size={14} />
-            </button>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={next} className="p-1.5 h-7 w-7">
+              <ChevronRight size={13} />
+            </Button>
           </div>
-          <div className="w-px h-4 bg-border" />
-          <button
-            onClick={() => setShowPlanModal(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-          >
-            <BookTemplate size={13} /> Templates
-          </button>
+          <div className="w-px h-4 bg-border/40" />
+          <Button variant="secondary" size="sm" onClick={() => setShowPlanModal(true)} className="h-8 gap-1.5 text-[12px] font-semibold">
+            <BookTemplate size={13} className="text-primary" /> Templates
+          </Button>
         </div>
       </div>
 
       {/* Row 2: View tabs with block count badges */}
-      <div className="flex items-center px-6 border-b border-border shrink-0">
-        {VIEW_OPTIONS.map(({ value, icon: Icon, label }) => {
-          const dateSet = value === "week" ? weekDates : value === "3day" ? threeDates : [activeDate];
-          const blockCount = dateSet.reduce((a, d) => a + getBlocksForDate(d).length, 0);
-          return (
-            <button
-              key={value}
-              onClick={() => setView(value)}
-              className={cn(
-                "inline-flex items-center gap-1.5 px-3 py-3 text-[13px] font-medium",
-                "border-b-2 -mb-px transition-colors",
-                view === value
-                  ? "border-foreground text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground hover:border-border",
-              )}
-            >
-              <Icon size={13} />
-              {label}
-              {blockCount > 0 && (
-                <span className={cn(
-                  "text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded-full",
+      <div className="flex items-center px-6 py-2 border-b border-border/40 shrink-0 bg-surface-1/10">
+        <div className="flex items-center gap-1 p-0.5 bg-muted/40 dark:bg-muted/25 border border-border/30 rounded-xl">
+          {VIEW_OPTIONS.map(({ value, icon: Icon, label }) => {
+            const dateSet = value === "week" ? weekDates : value === "3day" ? threeDates : [activeDate];
+            const blockCount = dateSet.reduce((a, d) => a + getBlocksForDate(d).length, 0);
+            return (
+              <button
+                key={value}
+                onClick={() => setView(value)}
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[12px] font-bold transition-all duration-200",
                   view === value
-                    ? "bg-foreground/10 text-foreground"
-                    : "bg-muted text-muted-foreground/60"
-                )}>
-                  {blockCount}
-                </span>
-              )}
-            </button>
-          );
-        })}
+                    ? "bg-background text-foreground shadow-sm shadow-black/5 border border-border/20"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent/40",
+                )}
+              >
+                <Icon size={12} />
+                {label}
+                {blockCount > 0 && (
+                  <span className={cn(
+                    "text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded-full ml-1",
+                    view === value
+                      ? "bg-primary/10 text-primary"
+                      : "bg-muted/80 text-muted-foreground/60"
+                  )}>
+                    {blockCount}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Stats bar (day view only) */}

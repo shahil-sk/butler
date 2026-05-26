@@ -24,7 +24,7 @@ import { NoteList } from "./components/NoteList";
 import { NoteEditor } from "./components/NoteEditor";
 import { NoteToolbar } from "./components/NoteToolbar";
 import { DailyNoteContext } from "./components/DailyNoteContext";
-import { cn } from "@/shared/utils";
+import { cn, getTiptapPlainText } from "@/shared/utils";
 import { format } from "date-fns";
 import type { Note, Task, Project } from "@/shared/types";
 
@@ -40,20 +40,16 @@ registry.register(NOTES_MANIFEST);
 // HELPERS
 // ─────────────────────────────────────────────────────────────
 
-function stripHtml(html: string) {
-  return html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
-}
-function wordCount(html: string) {
-  const text = stripHtml(html);
+function wordCount(raw: string) {
+  const text = getTiptapPlainText(raw);
   return text ? text.split(/\s+/).filter(Boolean).length : 0;
 }
-function charCount(html: string) {
-  return stripHtml(html).length;
+function charCount(raw: string) {
+  return getTiptapPlainText(raw).length;
 }
 function noteToMarkdown(note: Note): string {
-  // Minimal html->md conversion good enough for export
   let md = `# ${note.title || "Untitled"}\n\n`;
-  md += stripHtml(note.content ?? "");
+  md += getTiptapPlainText(note.content ?? "");
   return md;
 }
 function downloadMarkdown(note: Note) {
@@ -132,7 +128,7 @@ function QuickSearchOverlay({
       .filter((n) =>
         n.title?.toLowerCase().includes(lq) ||
         (n.tags ?? []).some((t) => t.toLowerCase().includes(lq)) ||
-        stripHtml(n.content ?? "").toLowerCase().includes(lq)
+        getTiptapPlainText(n.content ?? "").toLowerCase().includes(lq)
       )
       .slice(0, 12);
   }, [q, notes]);
@@ -182,8 +178,8 @@ function QuickSearchOverlay({
                       ))}
                     </div>
                   )}
-                  {stripHtml(n.content ?? "").length > 0 && (
-                    <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{stripHtml(n.content ?? "").substring(0, 80)}</p>
+                  {getTiptapPlainText(n.content ?? "").length > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{getTiptapPlainText(n.content ?? "").substring(0, 80)}</p>
                   )}
                 </div>
                 {n.type === "daily" && <span className="text-xs text-muted-foreground shrink-0 bg-muted px-2 py-1 rounded-full font-medium">daily</span>}
@@ -250,10 +246,10 @@ function ConnectionsPanel({ note }: { note: Note }) {
   // Naive link detection: tasks/projects whose title appears in note content
   const content = note.content ?? "";
   const linkedTasks = allTasks.filter(
-    (t) => t.title && stripHtml(content).toLowerCase().includes(t.title.toLowerCase())
+    (t) => t.title && getTiptapPlainText(content).toLowerCase().includes(t.title.toLowerCase())
   ).slice(0, 8);
   const linkedProjects = allProjects.filter(
-    (p) => p.name && stripHtml(content).toLowerCase().includes(p.name.toLowerCase())
+    (p) => p.name && getTiptapPlainText(content).toLowerCase().includes(p.name.toLowerCase())
   ).slice(0, 6);
   
   const totalConnections = linkedTasks.length + linkedProjects.length;
@@ -465,18 +461,18 @@ export function NotesModule() {
       )}
 
       {/* ── Header ─────────────────────────────────────────────── */}
-      <header className="flex items-center justify-between px-6 py-4 shrink-0 border-b border-border/50 bg-background">
+      <header className="flex items-center justify-between px-6 pt-6 pb-3 shrink-0 border-b border-border/40 bg-background">
         <div className="flex items-center gap-4">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-1.5 rounded-lg hover:bg-muted transition-all duration-150 text-muted-foreground hover:text-foreground"
+            className="p-1.5 rounded-lg hover:bg-accent/40 transition-all duration-150 text-muted-foreground hover:text-foreground"
             title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
           >
             {sidebarOpen ? <ChevronLeft size={18} /> : <Menu size={18} />}
           </button>
           <div>
-            <h1 className="text-2xl font-bold leading-tight tracking-tight">Notes</h1>
-            <p className="text-xs text-muted-foreground mt-1 leading-tight font-medium">{today}</p>
+            <h1 className="text-[20px] font-bold leading-tight tracking-tight text-gradient">Notes</h1>
+            <p className="text-[12px] text-muted-foreground mt-0.5 leading-tight font-medium">{today}</p>
           </div>
         </div>
 

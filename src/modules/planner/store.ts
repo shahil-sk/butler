@@ -152,6 +152,7 @@ interface PlannerActions {
   resizeBlock:        (id: ID, newEnd: string) => Promise<void>;
   scheduleTask:       (taskId: ID, date: ISODate, startTime: string, durationMinutes: number, syncScheduledDate?: boolean) => Promise<TimeBlock>;
   carryForward:       (taskId: ID, fromDate: ISODate, toDate: ISODate) => Promise<void>;
+  carryOverIncomplete: () => Promise<void>;
   // Template actions
   loadTemplates:      () => Promise<void>;
   savePlanTemplate:   (name: string, date: ISODate) => Promise<PlanTemplate>;
@@ -344,6 +345,15 @@ export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get
       });
     }
 
+    const existingBlock = get().blocks.find((b) => b.taskId === taskId && b.date === date);
+    if (existingBlock) {
+      await get().updateBlock(existingBlock.id, {
+        startTime,
+        endTime: clampTime(endTime),
+      });
+      return get().blocks.find((b) => b.id === existingBlock.id) || existingBlock;
+    }
+
     return get().createBlock({
       date, taskId,
       title: task?.title ?? "Task block",
@@ -362,6 +372,16 @@ export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get
       task: { id: taskId } as never,
       changed: { scheduledDate: toDate },
     });
+  },
+
+  carryOverIncomplete: async () => {
+    const todayStr = today();
+    const incompleteBlocks = get().blocks.filter(
+      (b) => b.date < todayStr && !b.isCompleted && b.taskId
+    );
+    for (const block of incompleteBlocks) {
+      await get().updateBlock(block.id, { date: todayStr });
+    }
   },
 
   // ── Template actions ────────────────────────────────────────

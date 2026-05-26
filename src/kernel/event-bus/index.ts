@@ -14,7 +14,7 @@ import type {
   TimeEntry,
   JournalEntry,
   SearchResult,
-  Database,
+  DatabaseTable,
   ResearchSource,
   ResearchDocument,
   ResearchChunk,
@@ -49,6 +49,8 @@ export interface ButlerEventMap {
   "task:moved":                { taskId: ID; toProjectId: ID | null };
   "task:quick-add":            { prefill?: Partial<Task> };
   "task:open":                 { taskId: ID };
+  /** Emitted when all dependencies/blockers of a task are completed */
+  "task:unblocked":            { taskId: ID };
   /** Cross-module: any surface can request "schedule this task in Planner" */
   "task:schedule-in-planner":  { task: Task; date?: string; startTime?: string };
 
@@ -84,6 +86,10 @@ export interface ButlerEventMap {
   };
   /** Emitted when a planner block is completed */
   "planner:block-completed": { blockId: ID; taskId?: ID };
+  /** Request to create a new planner block from a task */
+  "planner:create-block":    { title: string; date?: string; durationMinutes?: number; linkedTaskId?: ID; color?: string };
+  /** Emitted when all blockers for a task are done — planner can auto-reschedule */
+  "planner:task-unblocked":  { task: Task };
 
   // ── Focus events ─────────────────────────────────────
   "focus:start-requested":     { taskId?: ID };
@@ -93,6 +99,8 @@ export interface ButlerEventMap {
   "focus:session-completed":   { session: FocusSession };
   "focus:session-cancelled":   { sessionId: ID };
   "focus:tick":                { sessionId: ID; remainingSeconds: number };
+  /** Cancel the active focus session if it is linked to the given task */
+  "focus:cancel-if-active":    { taskId: ID };
 
   // ── Time tracking events ─────────────────────────────
   "time:entry-created":        { entry: TimeEntry };
@@ -107,11 +115,13 @@ export interface ButlerEventMap {
   "journal:open-date":         { date: string };
 
   // ── Database events ──────────────────────────────────
-  "database:created":       { database: Database };
-  "database:updated":       { database: Database };
+  "database:created":       { database: DatabaseTable };
+  "database:updated":       { database: DatabaseTable };
   "database:deleted":       { databaseId: string };
   "database:row:created":   { databaseId: string; rowId: string };
   "database:row:deleted":   { databaseId: string; rowId: string };
+  /** Notify database module to mark linked rows as Done */
+  "database:task-completed": { taskId: ID; linkedNoteIds: ID[] };
 
   // ── Research events ──────────────────────────────────
   "research:source-imported":      { source: ResearchSource };
@@ -137,6 +147,8 @@ export interface ButlerEventMap {
   "research:open-document":        { documentId: ID };
   "research:open-source":          { sourceId: ID };
   "research:open-thread":          { threadId: ID };
+  /** Semantic search triggered from a context (task open, etc) */
+  "research:search-for-context":   { query: string; sourceId: ID; sourceType: "task" | "note" | "event" };
 
   // ── Search events ─────────────────────────────────────
   "search:open":               { query?: string };
@@ -168,6 +180,32 @@ export interface ButlerEventMap {
   // ── Sync / Persistence ─────────────────────────────────
   "sync:autosave":             void;
   "sync:conflict":             { entityType: string; entityId: ID };
+
+  // ── Kernel Cron Events ─────────────────────────────────
+  "day:started":               { date: string };
+  "task:due-today":            { taskId: ID };
+  "task:overdue":              { taskId: ID; daysPast: number };
+  "calendar:event-starting":   { eventId: ID; minutesBefore: number };
+
+  // ── Habit Events (Journal) ─────────────────────────────
+  "habit:checked":             { habitId: ID; date: string; value: boolean };
+  "habit:streak-updated":      { habitId: ID; streak: number };
+
+  // ── Focus Flow Mode ────────────────────────────────────
+  "focus:flow-started":        { taskId?: ID };
+  "focus:flow-ended":          { durationMinutes: number; taskId?: ID };
+
+  // ── Research AI ────────────────────────────────────────
+  "research:semantic-results": { query: string; chunks: ResearchChunk[] };
+  "research:summary-ready":     { documentId: ID; summary: string };
+
+  // ── Settings ───────────────────────────────────────────
+  "settings:changed":          { key: string; value: unknown };
+  "shortcuts:registered":      { moduleId: string; count: number };
+
+  // ── Global Today Panel ─────────────────────────────────
+  "today:panel-open":          void;
+  "today:panel-close":         void;
 
   // ── AI hooks ─────────────────────────────────────────
   "ai:context-update":         { context: Record<string, unknown> };

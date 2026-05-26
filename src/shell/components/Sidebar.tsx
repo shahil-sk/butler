@@ -181,41 +181,21 @@ export function Sidebar() {
                     aria-label={item.label}
                     aria-current={isActive ? "page" : undefined}
                     className={cn(
-                      "w-full flex items-center rounded-md transition-fast text-[13px] font-medium group",
-                      collapsed ? "justify-center p-2" : "gap-2.5 px-2.5 py-1.5"
+                      "w-full flex items-center rounded-lg transition-all duration-300 ease-spring active:scale-[0.97] text-[13px] font-medium group",
+                      collapsed ? "justify-center p-2.5" : "gap-2.5 px-2.5 py-1.5",
+                      isActive
+                        ? "bg-sidebar-primary/10 text-sidebar-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
+                        : "text-sidebar-fg hover:bg-sidebar-accent hover:text-sidebar-fg-active"
                     )}
-                    style={{
-                      background: isActive
-                        ? "hsl(var(--sidebar-primary) / 0.14)"
-                        : "transparent",
-                      color: isActive
-                        ? "hsl(var(--sidebar-primary))"
-                        : "hsl(var(--sidebar-fg))",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isActive) {
-                        (e.currentTarget as HTMLButtonElement).style.background =
-                          "hsl(var(--sidebar-accent))";
-                        (e.currentTarget as HTMLButtonElement).style.color =
-                          "hsl(var(--sidebar-fg-active))";
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isActive) {
-                        (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-                        (e.currentTarget as HTMLButtonElement).style.color =
-                          "hsl(var(--sidebar-fg))";
-                      }
-                    }}
                   >
-                    <Icon size={15} className="shrink-0" />
+                    <Icon size={14} className="shrink-0 transition-transform duration-300 group-hover:scale-110" />
                     {!collapsed && (
                       <>
                         <span className="flex-1 text-left truncate">{item.label}</span>
                         {item.id === "tasks" && <OverdueBadge />}
                         <ChevronRight
                           size={11}
-                          className="opacity-0 group-hover:opacity-40 shrink-0 transition-fast"
+                          className="opacity-0 group-hover:opacity-40 shrink-0 transition-all duration-300 translate-x-[-2px] group-hover:translate-x-0"
                         />
                       </>
                     )}
@@ -248,34 +228,33 @@ export function Sidebar() {
         {/* User row (expanded only) */}
         {!collapsed && (
           <div
-            className="flex items-center gap-2.5 px-2.5 py-2 rounded-md mt-1"
-            style={{
-              background: "hsl(var(--sidebar-accent, var(--sidebar-border)) / 0.5)",
-            }}
+            className="p-1 bg-black/10 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-[1.25rem] mt-2 shrink-0 shadow-[inset_0_1px_1px_rgba(255,255,255,0.08)]"
           >
             <div
-              className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0"
-              style={{
-                background:
-                  "linear-gradient(135deg, hsl(var(--sidebar-primary)), hsl(221 85% 45%))",
-                color: "white",
-              }}
+              className="flex items-center gap-2.5 px-2 py-1.5 rounded-[calc(1.25rem-0.25rem)] bg-sidebar-accent/50 shadow-sm"
             >
-              B
-            </div>
-            <div className="flex-1 min-w-0">
-              <p
-                className="text-[12px] font-semibold truncate leading-tight"
-                style={{ color: "hsl(var(--sidebar-fg-active))" }}
+              <div
+                className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0"
+                style={{
+                  background:
+                    "linear-gradient(135deg, hsl(var(--sidebar-primary)), hsl(221 85% 45%))",
+                  color: "white",
+                }}
               >
-                Butler User
-              </p>
-              <p
-                className="text-[11px] truncate leading-tight mt-0.5"
-                style={{ color: "hsl(var(--sidebar-fg))" }}
-              >
-                Personal workspace
-              </p>
+                B
+              </div>
+              <div className="flex-1 min-w-0">
+                <p
+                  className="text-[12px] font-semibold truncate leading-tight text-sidebar-fg-active"
+                >
+                  Butler User
+                </p>
+                <p
+                  className="text-[10px] truncate leading-tight mt-0.5 text-sidebar-fg/80"
+                >
+                  Personal workspace
+                </p>
+              </div>
             </div>
           </div>
         )}
@@ -284,7 +263,7 @@ export function Sidebar() {
         {collapsed && (
           <div className="flex justify-center py-1">
             <div
-              className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold"
+              className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shadow-md"
               style={{
                 background:
                   "linear-gradient(135deg, hsl(var(--sidebar-primary)), hsl(260 70% 60%))",
@@ -344,21 +323,10 @@ function ThemeToggle({
       title={collapsed ? `${label} — click to cycle` : undefined}
       aria-label={`${label} — click to cycle`}
       className={cn(
-        "w-full flex items-center rounded-md transition-fast text-[13px] font-medium",
-        collapsed ? "justify-center p-2" : "gap-2.5 px-2.5 py-1.5"
+        "w-full flex items-center rounded-lg transition-all duration-300 ease-spring active:scale-[0.97] text-[13px] font-medium",
+        collapsed ? "justify-center p-2" : "gap-2.5 px-2.5 py-1.5",
+        "text-sidebar-fg hover:bg-sidebar-accent hover:text-sidebar-fg-active"
       )}
-      style={{ color: "hsl(var(--sidebar-fg))" }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLButtonElement).style.background =
-          "hsl(var(--sidebar-primary) / 0.08)";
-        (e.currentTarget as HTMLButtonElement).style.color =
-          "hsl(var(--sidebar-fg-active))";
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-        (e.currentTarget as HTMLButtonElement).style.color =
-          "hsl(var(--sidebar-fg))";
-      }}
     >
       <span className="shrink-0 animate-theme-in" key={theme}>{icon}</span>
       {!collapsed && (
@@ -390,28 +358,13 @@ function QuickAction({
       title={collapsed ? label : undefined}
       aria-label={label}
       className={cn(
-        "w-full flex items-center rounded-md transition-fast",
+        "w-full flex items-center rounded-lg transition-all duration-300 ease-spring active:scale-[0.97]",
         "text-[13px] font-medium",
-        collapsed ? "justify-center p-2" : "gap-2.5 px-2.5 py-1.5"
+        collapsed ? "justify-center p-2" : "gap-2.5 px-2.5 py-1.5",
+        highlight
+          ? "text-sidebar-primary bg-sidebar-primary/8 hover:bg-sidebar-primary/15"
+          : "text-sidebar-fg hover:bg-sidebar-accent hover:text-sidebar-fg-active"
       )}
-      style={{
-        color: highlight
-          ? "hsl(var(--sidebar-primary))"
-          : "hsl(var(--sidebar-fg))",
-      }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLButtonElement).style.background =
-          "hsl(var(--sidebar-primary) / 0.06)";
-        (e.currentTarget as HTMLButtonElement).style.color = highlight
-          ? "hsl(var(--sidebar-primary))"
-          : "hsl(var(--sidebar-fg-active))";
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-        (e.currentTarget as HTMLButtonElement).style.color = highlight
-          ? "hsl(var(--sidebar-primary))"
-          : "hsl(var(--sidebar-fg))";
-      }}
     >
       <span className="shrink-0">{icon}</span>
       {!collapsed && (
@@ -419,11 +372,7 @@ function QuickAction({
           <span className="flex-1 text-left truncate">{label}</span>
           {shortcut && (
             <span
-              className="text-[11px] font-mono px-1 py-0.5 rounded"
-              style={{
-                background: "hsl(var(--sidebar-border))",
-                color: "hsl(var(--sidebar-fg) / 0.7)",
-              }}
+              className="text-[10px] font-mono px-1 py-0.5 rounded bg-sidebar-border/60 text-sidebar-fg/80"
             >
               {shortcut}
             </span>

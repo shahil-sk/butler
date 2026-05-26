@@ -50,6 +50,14 @@ export default {
           secondary: "hsl(var(--text-secondary))",
           tertiary: "hsl(var(--text-tertiary))",
         },
+        sidebar: {
+          bg: "hsl(var(--sidebar-bg))",
+          fg: "hsl(var(--sidebar-fg))",
+          "fg-active": "hsl(var(--sidebar-fg-active))",
+          border: "hsl(var(--sidebar-border))",
+          accent: "hsl(var(--sidebar-accent))",
+          primary: "hsl(var(--sidebar-primary))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -57,8 +65,20 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        sans: ["Inter Variable", "Inter", "system-ui", "sans-serif"],
-        mono: ["JetBrains Mono", "Fira Code", "monospace"],
+        sans: ["Geist", "Inter Variable", "Inter", "system-ui", "sans-serif"],
+        mono: ["Geist Mono", "JetBrains Mono", "Fira Code", "monospace"],
+      },
+      transitionTimingFunction: {
+        spring: "cubic-bezier(0.32, 0.72, 0, 1)",
+      },
+      boxShadow: {
+        xs: "var(--shadow-xs)",
+        sm: "var(--shadow-sm)",
+        md: "var(--shadow-md)",
+        lg: "var(--shadow-lg)",
+        xl: "var(--shadow-xl)",
+        popover: "var(--shadow-popover)",
+        card: "var(--shadow-card)",
       },
       keyframes: {
         "accordion-down": {

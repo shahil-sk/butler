@@ -6,7 +6,7 @@ import {
   Search, CheckSquare, FolderKanban, FileText,
   CalendarDays, BookOpen, Database
 } from "lucide-react";
-import { cn } from "@/shared/utils";
+import { cn, getTiptapPlainText } from "@/shared/utils";
 
 import { useTaskStore } from "@/modules/tasks/store";
 import { useProjectStore } from "@/modules/projects/store";
@@ -65,7 +65,7 @@ export function GlobalSearch() {
     });
 
     notes.forEach((n) => {
-      if (n.title.toLowerCase().includes(q) || n.content.toLowerCase().includes(q)) {
+      if (n.title.toLowerCase().includes(q) || getTiptapPlainText(n.content).toLowerCase().includes(q)) {
         matched.push({ id: n.id, type: "note", title: n.title, score: 1, updatedAt: n.updatedAt });
       }
     });
@@ -77,7 +77,7 @@ export function GlobalSearch() {
     });
 
     journalEntries.forEach((e) => {
-      if (e.content.toLowerCase().includes(q)) {
+      if (getTiptapPlainText(e.content).toLowerCase().includes(q)) {
         matched.push({ id: e.id, type: "journal", title: `Journal Entry (${e.date})`, score: 1, updatedAt: e.updatedAt });
       }
     });

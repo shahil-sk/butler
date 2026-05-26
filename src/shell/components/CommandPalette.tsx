@@ -1,8 +1,9 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useMemo } from "react";
 import { Command } from "cmdk";
 import { useShellStore } from "@/shell/store";
 import { bus } from "@/kernel/event-bus";
 import { useBusEvent } from "@/kernel/event-bus";
+import { registry } from "@/kernel/router";
 import {
   CheckSquare, FolderKanban, CalendarDays, FileText,
   BookOpen, Timer, Zap, Database, Search, FileSearch,
@@ -33,6 +34,21 @@ const NAV_COMMANDS = [
   { id: "nav-focus",    label: "Focus",    icon: Zap,          path: "/focus",    moduleId: "focus" },
 ];
 
+function getIconForGroup(groupName: string) {
+  const name = groupName.toLowerCase();
+  if (name.includes("task")) return CheckSquare;
+  if (name.includes("project")) return FolderKanban;
+  if (name.includes("note")) return FileText;
+  if (name.includes("calendar")) return CalendarDays;
+  if (name.includes("planner")) return CalendarDays;
+  if (name.includes("journal")) return BookOpen;
+  if (name.includes("focus")) return Zap;
+  if (name.includes("time")) return Clock;
+  if (name.includes("database")) return Database;
+  if (name.includes("research")) return FileSearch;
+  return Zap;
+}
+
 export function CommandPalette() {
   const {
     commandPaletteOpen,
@@ -52,6 +68,32 @@ export function CommandPalette() {
     [closeCommandPalette]
   );
 
+  const runRegistryCommand = useCallback((cmd: any) => {
+    closeCommandPalette();
+
+    if (cmd.action === "navigate:to") {
+      let path = "";
+      if (cmd.id === "note.new") path = "/notes/new";
+      else if (cmd.id === "note.today") path = `/notes/daily/${new Date().toISOString().slice(0, 10)}`;
+      else if (cmd.id === "planner.today") path = "/planner";
+      else if (cmd.id === "planner.day") path = "/planner/day";
+      else if (cmd.id === "planner.week") path = "/planner/week";
+      else {
+        const mod = registry.get(cmd.moduleId);
+        path = mod?.routes[0]?.path ?? "/";
+      }
+      onNavigate(path, cmd.label, cmd.moduleId);
+      bus.emit("navigate:to", { path });
+      return;
+    }
+
+    let payload: any = undefined;
+    if (cmd.action === "journal:open-date") {
+      payload = { date: new Date().toISOString().slice(0, 10) };
+    }
+    bus.emit(cmd.action as any, payload);
+  }, [closeCommandPalette, onNavigate]);
+
   const navTo = useCallback(
     (path: string, label: string, moduleId: string) => {
       closeCommandPalette();
@@ -60,6 +102,22 @@ export function CommandPalette() {
     },
     [closeCommandPalette, onNavigate]
   );
+
+  const registryCommands = useMemo(() => {
+    return registry.getAllCommands();
+  }, [commandPaletteOpen]);
+
+  const groupedRegistryCommands = useMemo(() => {
+    const groups: Record<string, typeof registryCommands> = {};
+    registryCommands.forEach((cmd) => {
+      // Avoid duplicates with nav commands
+      if (cmd.action === "navigate:to" && NAV_COMMANDS.some(nav => nav.moduleId === cmd.moduleId && nav.path === `/` + cmd.moduleId)) {
+        return;
+      }
+      (groups[cmd.group] ??= []).push(cmd);
+    });
+    return groups;
+  }, [registryCommands]);
 
   if (!commandPaletteOpen) return null;
 
@@ -159,6 +217,29 @@ export function CommandPalette() {
                 );
               })}
             </Command.Group>
+
+            {/* Module Commands */}
+            {Object.entries(groupedRegistryCommands).map(([group, cmds]) => (
+              <Command.Group
+                key={group}
+                heading={group}
+                className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted-foreground/50"
+              >
+                {cmds.map((cmd) => {
+                  const Icon = getIconForGroup(cmd.group);
+                  return (
+                    <CommandItem
+                      key={cmd.id}
+                      icon={<Icon size={13} />}
+                      label={cmd.label}
+                      group={cmd.moduleName}
+                      onSelect={() => runRegistryCommand(cmd)}
+                      suffix={cmd.shortcut && <kbd className="kbd text-[9px] px-1 py-0.5">{cmd.shortcut}</kbd>}
+                    />
+                  );
+                })}
+              </Command.Group>
+            ))}
           </Command.List>
         </Command>
       </div>

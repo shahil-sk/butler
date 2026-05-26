@@ -776,53 +776,55 @@ export default function JournalModule() {
       )}
 
       {/* Row 1: Header */}
-      <div className="flex items-center justify-between px-6 pt-6 pb-3 shrink-0">
+      <div className="flex items-center justify-between px-6 pt-6 pb-3 shrink-0 bg-background">
         <div>
-          <h1 className="text-[18px] font-bold leading-tight tracking-tight">Journal</h1>
-          <p className="text-[12px] text-muted-foreground mt-0.5 leading-tight">
+          <h1 className="text-[20px] font-bold leading-tight tracking-tight text-gradient">Journal</h1>
+          <p className="text-[12px] text-muted-foreground mt-0.5 leading-tight font-medium">
             {new Date().toLocaleDateString("en-IN", { weekday: "long", month: "long", day: "numeric" })}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           {/* Mood sparkline */}
           <MoodSparkline entries={entries} />
           {/* Streak badge */}
           {streak >= 2 && (
-            <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-orange-500/10 text-orange-500 text-[11px] font-semibold">
+            <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-orange-500/10 text-orange-500 text-[11px] font-semibold">
               <Flame size={11} /> {streak}d
             </div>
           )}
-          <div className="w-px h-4 bg-border" />
+          <div className="w-px h-4 bg-border/40" />
           {/* Search */}
           <button
             onClick={() => setShowSearch(true)}
             title="Search (Cmd+K)"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
-            <Search size={13} />
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border/40 bg-card hover:bg-accent/40 transition-all duration-200 text-[12px] font-semibold shadow-sm hover:shadow">
+            <Search size={13} className="text-muted-foreground" />
             <kbd className="text-[10px] font-mono text-muted-foreground/40 ml-0.5">⌘K</kbd>
           </button>
-          <div className="w-px h-4 bg-border" />
+          <div className="w-px h-4 bg-border/40" />
           <button
             onClick={() => setShowNewModal(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-[12px] font-semibold hover:bg-primary/90 transition-colors">
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-[12px] font-bold hover:bg-primary/95 transition-all duration-200 shadow-sm shadow-primary/25">
             <Plus size={13} /> New entry
           </button>
         </div>
       </div>
 
       {/* Row 2: View tabs */}
-      <div className="flex items-center px-6 border-b border-border shrink-0">
-        {VIEW_TABS.map(({ id, label }) => (
-          <button key={id} onClick={() => setFilterType(id)}
-            className={cn(
-              "inline-flex items-center px-3 py-3 text-[13px] font-medium border-b-2 -mb-px transition-colors",
-              filterType === id
-                ? "border-foreground text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
-            )}>
-            {label}
-          </button>
-        ))}
+      <div className="flex items-center px-6 py-2 border-b border-border/40 shrink-0 bg-surface-1/10">
+        <div className="flex items-center gap-1 p-0.5 bg-muted/40 dark:bg-muted/25 border border-border/30 rounded-xl">
+          {VIEW_TABS.map(({ id, label }) => (
+            <button key={id} onClick={() => setFilterType(id)}
+              className={cn(
+                "inline-flex items-center px-3.5 py-1.5 rounded-lg text-[12px] font-bold transition-all duration-200",
+                filterType === id
+                  ? "bg-background text-foreground shadow-sm shadow-black/5 border border-border/20"
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent/40"
+              )}>
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Body */}

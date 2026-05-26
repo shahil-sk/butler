@@ -204,26 +204,36 @@ function KpiCard({
 }) {
   const pct = total > 0 ? Math.round((value / total) * 100) : 0;
   return (
-    <div className="rounded-xl border border-border bg-card px-4 pt-3 pb-3 flex flex-col gap-2">
+    <div className="rounded-2xl border border-border/30 bg-card/45 dark:bg-card/20 backdrop-blur-md p-5 flex flex-col gap-3 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:border-primary/25 group">
       <div className="flex items-center justify-between">
-        <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-          {label}
-        </p>
-        {warn && value > 0 && <AlertTriangle size={12} className="text-red-500" />}
-      </div>
-      <p
-        className={cn(
-          "text-[26px] font-bold tabular-nums leading-none",
-          warn && value > 0 ? "text-red-500" : "text-foreground",
+        <p className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">{label}</p>
+        {warn && value > 0 ? (
+          <AlertTriangle size={14} className="text-red-500 animate-pulse shrink-0" />
+        ) : (
+          <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", accent)} />
         )}
-      >
-        {value}
-      </p>
-      <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
-        <div
-          className={cn("h-full rounded-full transition-all duration-500", accent)}
-          style={{ width: `${pct}%` }}
-        />
+      </div>
+      <div className="flex items-baseline gap-1.5">
+        <p className={cn(
+          "text-3xl font-extrabold tabular-nums leading-none tracking-tight",
+          warn && value > 0 ? "text-red-500" : "text-foreground",
+        )}>
+          {value}
+        </p>
+        {total > 0 && (
+          <span className="text-xs text-muted-foreground/40 tabular-nums">
+            / {total}
+          </span>
+        )}
+      </div>
+      <div className="space-y-1 mt-1">
+        <div className="h-1.5 w-full rounded-full bg-muted/60 overflow-hidden">
+          <div className={cn("h-full rounded-full transition-all duration-500", accent)} style={{ width: `${pct}%` }} />
+        </div>
+        <div className="flex justify-between items-center text-[9px] font-semibold text-muted-foreground/45 tabular-nums">
+          <span>Progress</span>
+          <span>{pct}%</span>
+        </div>
       </div>
     </div>
   );
@@ -257,42 +267,43 @@ export function ProjectsModule() {
     <div className="flex flex-col h-full overflow-hidden">
 
       {/* ── Row 1: Title + action ───────────────────────── */}
-      <div className="flex items-center justify-between px-6 pt-6 pb-3 shrink-0">
+      <div className="flex items-center justify-between px-8 pt-7 pb-4 shrink-0 bg-card/15 backdrop-blur-sm border-b border-border/30">
         <div>
-          <h1 className="text-[18px] font-bold leading-tight tracking-tight">Projects</h1>
-          <p className="text-[12px] text-muted-foreground mt-0.5 leading-tight">
+          <h1 className="text-2xl font-extrabold leading-none tracking-tight text-gradient">Projects</h1>
+          <p className="text-[12px] text-muted-foreground/75 mt-2 font-medium">
             {projects.length} project{projects.length !== 1 ? "s" : ""}
           </p>
         </div>
 
         <PrimaryButton onClick={openCreateModal}>
           <Plus size={13} />
-          New project
+          New Project
         </PrimaryButton>
       </div>
 
       {/* ── Row 2: View switcher tabs (underline) ───────── */}
-      <div className="flex items-center px-6 border-b border-border shrink-0">
-        {VIEW_TABS.map(({ id, icon: Icon, label }) => (
-          <button
-            key={id}
-            onClick={() => setView(id)}
-            className={cn(
-              "inline-flex items-center gap-1.5 px-3 py-3 text-[13px] font-medium",
-              "border-b-2 -mb-px transition-colors",
-              view === id
-                ? "border-foreground text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground hover:border-border",
-            )}
-          >
-            <Icon size={13} />
-            {label}
-          </button>
-        ))}
+      <div className="flex items-center justify-between px-8 py-3 border-b border-border/30 bg-card/5 shrink-0 backdrop-blur-xs">
+        <div className="bg-muted/50 dark:bg-muted/20 p-1 rounded-xl flex gap-1 border border-border/40">
+          {VIEW_TABS.map(({ id, icon: Icon, label }) => (
+            <button
+              key={id}
+              onClick={() => setView(id)}
+              className={cn(
+                "inline-flex items-center gap-2 px-4 py-1.5 text-[12px] font-bold rounded-lg transition-all duration-200",
+                view === id
+                  ? "bg-card text-foreground shadow-sm border border-border/20 font-extrabold"
+                  : "text-muted-foreground hover:text-foreground border border-transparent"
+              )}
+            >
+              <Icon size={12} />
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* ── KPI strip ───────────────────────────────────── */}
-      <div className="grid grid-cols-4 gap-3 px-6 py-4 shrink-0">
+      {/* ── KPI DASHBOARD ───────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 px-8 py-6 bg-card/5 border-b border-border/30 shrink-0">
         <KpiCard label="Active"    value={activeCount} total={projects.length} accent="bg-emerald-500" />
         <KpiCard label="Tasks"     value={totalTasks}  total={totalTasks}      accent="bg-foreground/30" />
         <KpiCard label="Completed" value={doneTasks}   total={totalTasks}      accent="bg-blue-500" />
@@ -306,8 +317,8 @@ export function ProjectsModule() {
         onSelect={(id) => setActiveFilter(id as typeof activeFilter)}
       />
 
-      {/* ── Content ─────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto px-6 py-5">
+      {/* ── CONTENT AREA ─────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto px-8 py-6">
         {projects.length === 0 ? (
           <EmptyState
             title={activeFilter === "all" ? "No projects yet" : `No ${activeFilter} projects`}
@@ -321,7 +332,7 @@ export function ProjectsModule() {
             ))}
           </div>
         ) : view === "list" ? (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3">
             {projects.map((p) => (
               <ProjectCard key={p.id} project={p} view="list" />
             ))}

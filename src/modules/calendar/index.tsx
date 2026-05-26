@@ -80,42 +80,47 @@ export function CalendarModule() {
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border shrink-0">
-        <button onClick={goPrev} className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-fast">
-          <ChevronLeft size={14} />
-        </button>
-        <button onClick={goNext} className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-fast">
-          <ChevronRight size={14} />
-        </button>
-        <button onClick={goToday} className="px-2.5 py-1 text-xs rounded border border-border hover:bg-accent transition-fast">
-          Today
-        </button>
-        <h1 className="text-sm font-semibold flex-1 text-center">{headerLabel}</h1>
-
-        <div className="flex items-center rounded-lg border border-border overflow-hidden">
-          {(Object.keys(VIEW_LABELS) as (keyof typeof VIEW_LABELS)[]).map((v) => (
-            <button
-              key={v}
-              onClick={() => setView(v)}
-              className={cn(
-                "px-2.5 py-1 text-[11px] transition-fast border-r last:border-r-0 border-border",
-                view === v
-                  ? "bg-primary/10 text-primary font-medium"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
-              )}
-            >
-              {VIEW_LABELS[v]}
-            </button>
-          ))}
+      <div className="flex items-center justify-between px-6 pt-6 pb-3 border-b border-border/40 shrink-0 gap-4 flex-wrap md:flex-nowrap">
+        <div className="flex items-center gap-1.5 bg-muted/40 dark:bg-muted/10 p-0.5 border border-border/40 rounded-xl">
+          <button onClick={goPrev} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/40 transition-fast">
+            <ChevronLeft size={13} />
+          </button>
+          <button onClick={goToday} className="px-3 py-1 text-[11px] font-bold rounded-lg bg-background hover:bg-accent/40 text-foreground border border-border/20 transition-fast shadow-sm">
+            Today
+          </button>
+          <button onClick={goNext} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/40 transition-fast">
+            <ChevronRight size={13} />
+          </button>
         </div>
+        
+        <h1 className="text-[18px] font-bold tracking-tight text-gradient flex-1 text-center md:text-left md:pl-2 min-w-[150px]">{headerLabel}</h1>
 
-        <button
-          onClick={() => openEventForm({ startAt: `${activeDate}T09:00:00`, endAt: `${activeDate}T10:00:00` })}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-fast"
-        >
-          <Plus size={12} />
-          New event
-        </button>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-0.5 bg-muted/40 dark:bg-muted/20 p-0.5 border border-border/30 rounded-xl shrink-0">
+            {(Object.keys(VIEW_LABELS) as (keyof typeof VIEW_LABELS)[]).map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-[12px] font-bold transition-all duration-200",
+                  view === v
+                    ? "bg-background text-foreground shadow-sm shadow-black/5 border border-border/20"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent/40"
+                )}
+              >
+                {VIEW_LABELS[v]}
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={() => openEventForm({ startAt: `${activeDate}T09:00:00`, endAt: `${activeDate}T10:00:00` })}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-primary text-primary-foreground hover:bg-primary/95 transition-fast shadow-sm shadow-primary/25 shrink-0"
+          >
+            <Plus size={12} />
+            New event
+          </button>
+        </div>
       </div>
 
       {(view === "month" || view === "week") && (

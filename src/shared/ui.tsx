@@ -47,20 +47,21 @@ export function Modal({
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-[3px] animate-fade-in"
+        className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm animate-fade-in"
         onClick={onClose}
       />
-      {/* Panel */}
+      {/* Outer Shell (Double-Bezel) */}
       <div
         className={cn(
-          "relative z-10 w-full flex flex-col",
-          "bg-background border border-border rounded-2xl shadow-xl",
-          "animate-modal-in overflow-hidden",
+          "relative z-10 w-full p-1.5 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-[2rem] shadow-premium animate-modal-in flex flex-col",
           maxWidth, maxHeight,
           className
         )}
       >
-        {children}
+        {/* Inner Core */}
+        <div className="flex-1 flex flex-col bg-background rounded-[calc(2rem-0.375rem)] overflow-hidden shadow-[inset_0_1px_1px_rgba(255,255,255,0.12)] dark:shadow-[inset_0_1px_1px_rgba(255,255,255,0.06)]">
+          {children}
+        </div>
       </div>
     </div>,
     document.body
@@ -136,9 +137,9 @@ export function Popover({
       <div
         ref={popoverRef}
         className={cn(
-          "fixed z-[9999] min-w-[160px] rounded-xl border border-border bg-popover",
-          "shadow-[0_8px_30px_-4px_rgb(0_0_0/0.14),0_2px_8px_-1px_rgb(0_0_0/0.07),0_0_0_1px_rgb(0_0_0/0.05)]",
-          "py-1.5 animate-fade-in",
+          "fixed z-[9999] min-w-[160px] rounded-xl py-1.5 backdrop-blur-xl border animate-fade-in",
+          "bg-popover/85 dark:bg-popover/75 border-black/10 dark:border-white/8",
+          "shadow-premium",
           className
         )}
         style={style}
@@ -202,16 +203,16 @@ export function PageHeader({
   children?: ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-2 px-4 h-[46px] border-b border-border bg-background shrink-0">
-      <h1 className="text-sm font-semibold tracking-tight text-foreground">{title}</h1>
+    <div className="flex items-center gap-2 px-6 h-12 border-b border-border/40 bg-background/80 backdrop-blur-md shrink-0">
+      <h1 className="text-[13px] font-semibold tracking-tight text-foreground/90 uppercase tracking-wider">{title}</h1>
       {count != null && (
-        <span className="text-xs text-muted-foreground tabular-nums font-medium bg-surface-2 px-1.5 py-0.5 rounded-md">
+        <span className="text-[10px] text-muted-foreground/80 tabular-nums font-semibold bg-surface-2 px-1.5 py-0.5 rounded-full border border-border/40">
           {count}
         </span>
       )}
       <div className="flex-1" />
       {children && (
-        <div className="flex items-center gap-1">{children}</div>
+        <div className="flex items-center gap-1.5">{children}</div>
       )}
     </div>
   );
@@ -236,23 +237,23 @@ export function SubNav({
   onSelect: (id: string) => void;
 }) {
   return (
-    <nav className="w-[140px] shrink-0 border-r border-border px-1.5 py-2 space-y-px overflow-y-auto">
+    <nav className="w-[140px] shrink-0 border-r border-border/30 px-2 py-3 space-y-0.5 overflow-y-auto bg-surface-0/20">
       {items.map((item) => (
         <button
           key={item.id}
           onClick={() => onSelect(item.id)}
           className={cn(
-            "w-full flex items-center gap-1.5 px-2.5 py-[6px] rounded-md text-xs text-left transition-fast",
+            "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-left transition-all duration-300 ease-spring active:scale-[0.97]",
             activeId === item.id
-              ? "bg-primary/[0.08] text-primary font-medium"
-              : "text-muted-foreground hover:text-foreground hover:bg-accent"
+              ? "bg-primary/10 text-primary font-semibold shadow-xs"
+              : "text-muted-foreground hover:text-foreground hover:bg-accent/40"
           )}
         >
           <span className="flex-1 truncate-1">{item.label}</span>
           {item.badge != null && item.badge > 0 && (
             <span
               className={cn(
-                "inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[10px] font-semibold tabular-nums",
+                "inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold tabular-nums",
                 item.badgeColor === "red"    && "bg-red-500/10 text-red-500",
                 item.badgeColor === "blue"   && "bg-blue-500/10 text-blue-500",
                 item.badgeColor === "yellow" && "bg-amber-500/10 text-amber-600",
@@ -290,29 +291,31 @@ export function FilterBar({
   return (
     <div
       className={cn(
-        "flex items-center gap-0.5 px-3 py-1.5 border-b border-border bg-background shrink-0 overflow-x-auto",
+        "flex items-center gap-1 px-4 py-2 border-b border-border/30 bg-background/50 backdrop-blur-xs shrink-0 overflow-x-auto",
         className
       )}
     >
-      {tabs.map((tab) => (
-        <button
-          key={tab.id}
-          onClick={() => onSelect(tab.id)}
-          className={cn(
-            "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs whitespace-nowrap transition-fast",
-            activeId === tab.id
-              ? "bg-primary/[0.08] text-primary font-medium"
-              : "text-muted-foreground hover:text-foreground hover:bg-accent"
-          )}
-        >
-          {tab.label}
-          {tab.count != null && (
-            <span className="text-[10px] text-muted-foreground/50 tabular-nums font-medium">
-              {tab.count}
-            </span>
-          )}
-        </button>
-      ))}
+      <div className="flex items-center gap-0.5 p-0.5 bg-muted/40 dark:bg-muted/20 rounded-full border border-border/20">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => onSelect(tab.id)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] whitespace-nowrap transition-all duration-300 ease-spring active:scale-[0.97]",
+              activeId === tab.id
+                ? "bg-background text-foreground shadow-xs font-semibold border border-border/25 dark:border-white/5"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {tab.label}
+            {tab.count != null && (
+              <span className="text-[9px] text-muted-foreground/60 tabular-nums font-bold">
+                {tab.count}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -377,11 +380,11 @@ export function PrimaryButton({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium shrink-0 transition-fast",
-        "bg-primary text-primary-foreground",
-        "hover:opacity-90 active:scale-[0.98]",
-        "disabled:opacity-40 disabled:pointer-events-none",
-        "shadow-sm"
+        "flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold shrink-0 shadow-sm border",
+        "bg-primary text-primary-foreground border-primary/20",
+        "transition-all duration-300 ease-spring active:scale-[0.95]",
+        "hover:opacity-95 hover:shadow-md hover:shadow-primary/10",
+        "disabled:opacity-40 disabled:pointer-events-none"
       )}
     >
       {children}
@@ -407,10 +410,10 @@ export function GhostButton({
       onClick={onClick}
       title={title}
       className={cn(
-        "flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs transition-fast",
+        "flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-300 ease-spring active:scale-[0.95]",
         danger
           ? "text-red-500 hover:bg-red-500/8 hover:text-red-600"
-          : "text-muted-foreground hover:text-foreground hover:bg-accent"
+          : "text-muted-foreground hover:text-foreground hover:bg-accent/80"
       )}
     >
       {children}

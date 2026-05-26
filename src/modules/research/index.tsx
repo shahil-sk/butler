@@ -100,8 +100,7 @@ function ResearchSubNav({
 
   return (
     <nav
-      className="flex flex-col shrink-0 py-2 px-1.5 gap-px overflow-y-auto"
-      style={{ width: 148, borderRight: "1px solid hsl(var(--border))", background: "hsl(var(--surface-1))" }}
+      className="flex flex-col shrink-0 py-4 px-2 gap-px overflow-y-auto w-[160px] border-r border-border/40 bg-card/40 backdrop-blur-sm"
     >
       <SectionLabel>Research</SectionLabel>
       {items.map(({ id, label, icon: Icon, count }) => (
@@ -109,16 +108,16 @@ function ResearchSubNav({
           key={id}
           onClick={() => onSelect(id)}
           className={cn(
-            "w-full flex items-center gap-2 px-2.5 py-[6px] rounded-md text-xs text-left transition-fast",
-            activeView === id
-              ? "bg-primary/[0.08] text-primary font-medium"
-              : "text-muted-foreground hover:text-foreground hover:bg-accent"
+            "w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-left transition-all duration-150 font-semibold",
+            activeView === id || (id === "sources" && activeView === "document")
+              ? "bg-primary/10 text-primary font-bold shadow-sm"
+              : "text-muted-foreground hover:text-foreground hover:bg-accent/40"
           )}
         >
-          <Icon size={13} className="shrink-0" />
+          <Icon size={12} className="shrink-0" />
           <span className="flex-1 truncate">{label}</span>
           {count != null && count > 0 && (
-            <span className="text-[10px] text-muted-foreground/50 tabular-nums">{count}</span>
+            <span className="text-[10px] text-muted-foreground/60 tabular-nums bg-muted/60 dark:bg-muted/20 px-1.5 py-0.5 rounded-full font-bold">{count}</span>
           )}
         </button>
       ))}
@@ -434,18 +433,50 @@ function SourcesView() {
   ] satisfies { id: SourceFilter; label: string; count: number }[];
 
   return (
-    <div className="flex flex-col h-full min-h-0 overflow-hidden">
-      <PageHeader title="Sources" count={sources.length}>
-        <PrimaryButton onClick={() => setShowImport(true)}>
+    <div className="flex flex-col h-full min-h-0 overflow-hidden bg-background">
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 pt-6 pb-3 border-b border-border/40 shrink-0 gap-4 flex-wrap md:flex-nowrap bg-background">
+        <div>
+          <h1 className="text-[20px] font-bold leading-tight tracking-tight text-gradient">Sources</h1>
+          <p className="text-[12px] text-muted-foreground mt-0.5 leading-tight font-medium">{sources.length} items in knowledge base</p>
+        </div>
+        <button
+          onClick={() => setShowImport(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-[12px] font-bold hover:bg-primary/95 transition-all duration-200 shadow-sm shadow-primary/25"
+        >
           <Plus size={12} /> Import
-        </PrimaryButton>
-      </PageHeader>
+        </button>
+      </div>
 
-      <FilterBar
-        tabs={tabs}
-        activeId={filter}
-        onSelect={(id) => setFilter(id as SourceFilter)}
-      />
+      {/* Filter Tabs */}
+      <div className="flex items-center px-6 py-2 border-b border-border/40 shrink-0 bg-surface-1/10">
+        <div className="flex items-center gap-1 p-0.5 bg-muted/40 dark:bg-muted/25 border border-border/30 rounded-xl">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setFilter(tab.id as SourceFilter)}
+              className={cn(
+                "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[12px] font-bold transition-all duration-200",
+                filter === tab.id
+                  ? "bg-background text-foreground shadow-sm shadow-black/5 border border-border/20"
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent/40"
+              )}
+            >
+              {tab.label}
+              {tab.count > 0 && (
+                <span className={cn(
+                  "text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded-full ml-1",
+                  filter === tab.id
+                    ? "bg-primary/10 text-primary"
+                    : "bg-muted/80 text-muted-foreground/60"
+                )}>
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className="px-3 py-2 shrink-0" style={{ borderBottom: "1px solid hsl(var(--border))" }}>
         <div className="relative">

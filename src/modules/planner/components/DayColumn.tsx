@@ -301,7 +301,7 @@ export function DayColumn({ date, compact = false }: { date: ISODate; compact?: 
   } = usePlannerStore();
   const tasks     = useTaskStore((s) => s.tasks);
   const projects  = useProjectStore((s) => s.projects);
-  const calEvents = useCalendarStore((s) => s.getEventsForDay(date));
+  const calEvents = useCalendarStore((s) => s.getEventsForDay(date)).filter((e) => !e.isTimeBlock);
   const gridRef   = useRef<HTMLDivElement>(null);
 
   const [ghost,        setGhost]        = useState<{ y: number; height: number } | null>(null);

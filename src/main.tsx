@@ -18,6 +18,7 @@ import { RESEARCH_MIGRATIONS } from '@/modules/research/db';
 
 // ── Kernel services ───────────────────────────────────────────
 import { startTaskCalendarSync } from "@/kernel/task-calendar-sync";
+import { initCron } from "@/kernel/cron";
 
 import "./styles/globals.css";
 
@@ -49,6 +50,7 @@ async function boot() {
 
     // Start kernel services that depend on the DB being ready
     startTaskCalendarSync();
+    initCron();
 
     ReactDOM.createRoot(document.getElementById("root")!).render(
       <React.StrictMode>

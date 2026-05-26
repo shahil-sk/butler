@@ -1,7 +1,7 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { format, formatDistanceToNow, isToday, isTomorrow, isYesterday, parseISO } from "date-fns";
-import type { ISODate, ISODateTime, ID } from "./types";
+import { format, formatDistanceToNow, isToday, isTomorrow, isYesterday, parseISO, addDays, addWeeks, addMonths, addYears } from "date-fns";
+import type { ISODate, ISODateTime, ID, RecurrenceRule } from "./types";
 
 // ── Styling ──────────────────────────────────────────────────
 
@@ -37,6 +37,52 @@ export function toISODate(date: Date): ISODate {
 
 export function fromISODate(date: ISODate): Date {
   return parseISO(date);
+}
+
+export function getNextRecurrenceDate(currentDateStr: string, rule: RecurrenceRule): string | undefined {
+  const currentDate = parseISO(currentDateStr);
+  const interval = rule.interval || 1;
+  let nextDate = currentDate;
+
+  switch (rule.frequency) {
+    case "daily":
+      nextDate = addDays(currentDate, interval);
+      break;
+    case "weekly":
+      if (rule.daysOfWeek && rule.daysOfWeek.length > 0) {
+        const sortedDays = [...rule.daysOfWeek].sort((a, b) => a - b);
+        const currentDay = currentDate.getDay();
+        const nextDayInWeek = sortedDays.find((d) => d > currentDay);
+        if (nextDayInWeek !== undefined) {
+          nextDate = addDays(currentDate, nextDayInWeek - currentDay);
+        } else {
+          const firstDayOfList = sortedDays[0];
+          const daysToNextWeek = (7 - currentDay) + firstDayOfList + (interval - 1) * 7;
+          nextDate = addDays(currentDate, daysToNextWeek);
+        }
+      } else {
+        nextDate = addWeeks(currentDate, interval);
+      }
+      break;
+    case "monthly":
+      nextDate = addMonths(currentDate, interval);
+      break;
+    case "yearly":
+      nextDate = addYears(currentDate, interval);
+      break;
+    default:
+      nextDate = addDays(currentDate, interval);
+      break;
+  }
+
+  if (rule.endDate) {
+    const end = parseISO(rule.endDate);
+    if (nextDate.getTime() > end.getTime()) {
+      return undefined;
+    }
+  }
+
+  return format(nextDate, "yyyy-MM-dd");
 }
 
 export function formatDate(date: ISODate | ISODateTime | undefined): string {
@@ -95,6 +141,32 @@ export function sortBy<T>(arr: T[], key: (item: T) => string | number): T[] {
 
 export function truncate(str: string, max: number): string {
   return str.length > max ? str.slice(0, max - 1) + "…" : str;
+}
+
+export function getTiptapPlainText(rawJson: string): string {
+  if (!rawJson) return "";
+  if (rawJson.startsWith("<")) {
+    return rawJson;
+  }
+  try {
+    const doc = JSON.parse(rawJson);
+    if (!doc || typeof doc !== "object" || doc.type !== "doc") {
+      return rawJson;
+    }
+    const text: string[] = [];
+    const recurse = (node: any) => {
+      if (node.type === "text" && node.text) {
+        text.push(node.text);
+      }
+      if (node.content && Array.isArray(node.content)) {
+        node.content.forEach(recurse);
+      }
+    };
+    recurse(doc);
+    return text.join(" ");
+  } catch {
+    return rawJson;
+  }
 }
 
 export function slugify(str: string): string {

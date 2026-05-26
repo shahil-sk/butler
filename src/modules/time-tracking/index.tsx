@@ -18,7 +18,7 @@ import { TIME_MANIFEST } from "./manifest";
 import { useTaskStore } from "@/modules/tasks/store";
 import { useProjectStore } from "@/modules/projects/store";
 import { PageHeader, SubNav, EmptyState, ProjectDot } from "@/shared/ui";
-import { formatDate, today } from "@/shared/utils";
+import { cn, formatDate, today } from "@/shared/utils";
 import type { TimeEntry, ID } from "@/shared/types";
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -253,7 +253,7 @@ function EntryRow({ entry, onEdit, onDelete, onResume }: EntryRowProps) {
         <div className="flex items-center gap-2 mt-0.5">
           {project && (
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
-              <ProjectDot color={project.color} size="xs" />
+              <ProjectDot color={project.color} size={6} />
               {project.name}
             </span>
           )}
@@ -391,9 +391,8 @@ function TrackerView() {
       <div className="flex-1 overflow-y-auto">
         {completedEntries.length === 0 ? (
           <EmptyState
-            icon={<Clock size={32} className="text-muted-foreground" />}
             title="No entries yet"
-            description="Start a timer or add an entry manually"
+            subtitle="Start a timer or add an entry manually"
           />
         ) : (
           grouped.map(([date, dayEntries]) => (
@@ -560,7 +559,7 @@ function ReportsView() {
             {projectRows.map(({ project, mins }) => (
               <div key={project?.id ?? "none"} className="flex items-center gap-3">
                 {project ? (
-                  <ProjectDot color={project.color} size="sm" />
+                  <ProjectDot color={project.color} size={8} />
                 ) : (
                   <div className="w-3 h-3 rounded-full bg-muted-foreground/30" />
                 )}
@@ -601,34 +600,46 @@ export default function TimeTrackingModule() {
   }, [isLoaded, load]);
 
   return (
-    <div className="flex flex-col h-full">
-      <PageHeader
-        icon={<Timer size={18} />}
-        title="Time Tracking"
-        actions={
-          <SubNav>
-            <NavLink
-              to="/time"
-              end
-              className={({ isActive }) =>
-                `subnav-item ${isActive ? "active" : ""}`
-              }
-            >
-              <Clock size={14} /> Tracker
-            </NavLink>
-            <NavLink
-              to="/time/reports"
-              className={({ isActive }) =>
-                `subnav-item ${isActive ? "active" : ""}`
-              }
-            >
-              <BarChart2 size={14} /> Reports
-            </NavLink>
-          </SubNav>
-        }
-      />
+    <div className="flex flex-col h-full bg-background">
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 pt-6 pb-3 border-b border-border/40 shrink-0 gap-4 flex-wrap md:flex-nowrap bg-background">
+        <div>
+          <h1 className="text-[20px] font-bold leading-tight tracking-tight text-gradient">Time Tracking</h1>
+          <p className="text-[12px] text-muted-foreground mt-0.5 leading-tight font-medium">Track productivity, billable tasks, and review metrics</p>
+        </div>
 
-      <div className="flex-1 overflow-hidden">
+        <div className="flex items-center gap-1 p-0.5 bg-muted/40 dark:bg-muted/25 border border-border/30 rounded-xl shrink-0">
+          <NavLink
+            to="/time"
+            end
+            className={({ isActive }) =>
+              cn(
+                "flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[12px] font-bold transition-all duration-200 select-none",
+                isActive
+                  ? "bg-background text-foreground shadow-sm shadow-black/5 border border-border/20"
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent/40"
+              )
+            }
+          >
+            <Clock size={12} /> Tracker
+          </NavLink>
+          <NavLink
+            to="/time/reports"
+            className={({ isActive }) =>
+              cn(
+                "flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[12px] font-bold transition-all duration-200 select-none",
+                isActive
+                  ? "bg-background text-foreground shadow-sm shadow-black/5 border border-border/20"
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent/40"
+              )
+            }
+          >
+            <BarChart2 size={12} /> Reports
+          </NavLink>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-hidden bg-background">
         <Routes>
           <Route path="/"        element={<TrackerView />} />
           <Route path="/reports" element={<ReportsView />} />
