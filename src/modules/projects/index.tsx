@@ -70,8 +70,8 @@ function ProjectsBoardView({ projects }: { projects: Project[] }) {
                   No projects
                 </div>
               ) : (
-                colProjects.map((p) => (
-                  <div key={p.id} onClick={() => openProject(p.id)}>
+                colProjects.map((p, i) => (
+                  <div key={p.id} onClick={() => openProject(p.id)} className="animate-slide-in" style={{ animationDelay: `${i * 40}ms`, animationFillMode: 'both' }}>
                     <ProjectCard project={p} view="grid" />
                   </div>
                 ))
@@ -127,11 +127,11 @@ function ProjectsTimelineView({ projects }: { projects: Project[] }) {
         <div className="flex-1 overflow-x-auto min-h-[400px] relative">
           <div className="min-w-[800px] h-full flex flex-col">
             {/* Header Row */}
-            <div className="flex pb-4 mb-4 text-[11px] uppercase font-bold text-muted-foreground tracking-wider select-none border-b border-border/40">
-              <div className="w-1/4 shrink-0 px-2">Project</div>
+            <div className="flex pb-4 mb-4 text-[11px] uppercase font-bold text-muted-foreground tracking-wider select-none border-b border-border/40 sticky top-0 bg-card z-20">
+              <div className="w-1/4 min-w-[200px] shrink-0 px-2 sticky left-0 bg-card z-30">Project</div>
               <div className="flex-1 relative h-6 border-l border-border/30">
                 <div 
-                  className="absolute w-px h-[600px] bg-red-500/50 z-10 pointer-events-none"
+                  className="absolute w-px h-[200vh] bg-red-500/50 z-10 pointer-events-none"
                   style={{ left: `${getPercentage(todayStr)}%` }}
                 >
                   <div className="absolute -top-3 -translate-x-1/2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold shadow-sm">TODAY</div>
@@ -146,7 +146,7 @@ function ProjectsTimelineView({ projects }: { projects: Project[] }) {
                   No active projects to display.
                 </div>
               ) : (
-                projects.map((p) => {
+                projects.map((p, i) => {
                   const start = p.startDate ?? p.createdAt.slice(0, 10);
                   const due = p.dueDate ?? start;
                   const leftPct = getPercentage(start);
@@ -154,8 +154,8 @@ function ProjectsTimelineView({ projects }: { projects: Project[] }) {
                   const widthPct = Math.max(8, rightPct - leftPct);
 
                   return (
-                    <div key={p.id} className="flex items-center group cursor-pointer hover:bg-muted/30 p-2 rounded-2xl transition-colors" onClick={() => openProject(p.id)}>
-                      <div className="w-1/4 pr-4 min-w-0 flex items-center gap-4">
+                    <div key={p.id} className="flex items-center group cursor-pointer hover:bg-muted/30 p-2 rounded-2xl transition-colors animate-slide-in" style={{ animationDelay: `${i * 30}ms`, animationFillMode: 'both' }} onClick={() => openProject(p.id)}>
+                      <div className="w-1/4 min-w-[200px] pr-4 flex items-center gap-4 sticky left-0 bg-card group-hover:bg-muted/10 z-10 transition-colors">
                         <div className="w-3 h-3 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: p.color }} />
                         <div className="min-w-0">
                           <span className="text-[14px] font-semibold text-foreground block truncate group-hover:text-primary transition-colors">{p.name}</span>
@@ -271,14 +271,18 @@ export function ProjectsModule() {
           </div>
         ) : activeView === "grid" ? (
           <div className="px-8 md:px-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {projects.map((p) => (
-              <ProjectCard key={p.id} project={p} view="grid" />
+            {projects.map((p, i) => (
+              <div key={p.id} className="animate-slide-in" style={{ animationDelay: `${i * 30}ms`, animationFillMode: 'both' }}>
+                <ProjectCard project={p} view="grid" />
+              </div>
             ))}
           </div>
         ) : activeView === "list" ? (
           <div className="px-8 md:px-12 flex flex-col gap-4 max-w-6xl mx-auto mt-4">
-            {projects.map((p) => (
-              <ProjectCard key={p.id} project={p} view="list" />
+            {projects.map((p, i) => (
+              <div key={p.id} className="animate-slide-in" style={{ animationDelay: `${i * 30}ms`, animationFillMode: 'both' }}>
+                <ProjectCard project={p} view="list" />
+              </div>
             ))}
           </div>
         ) : activeView === "board" ? (

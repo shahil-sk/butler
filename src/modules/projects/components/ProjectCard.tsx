@@ -57,7 +57,7 @@ export function ProjectCard({
         <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: project.color }} />
         
         <div className="flex-1 min-w-0">
-          <p className="text-[14px] font-semibold leading-tight truncate group-hover:text-primary transition-colors">{project.name}</p>
+          <p className="text-[14px] font-semibold leading-tight truncate group-hover:text-primary transition-colors" title={project.name}>{project.name}</p>
         </div>
 
         {total > 0 && (
@@ -93,7 +93,7 @@ export function ProjectCard({
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-3 h-3 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: project.color }} />
-          <h3 className="font-bold text-[16px] tracking-tight truncate group-hover:text-primary transition-colors">{project.name}</h3>
+          <h3 className="font-bold text-[16px] tracking-tight truncate group-hover:text-primary transition-colors" title={project.name}>{project.name}</h3>
         </div>
         <StatusBadge status={project.status} />
       </div>
