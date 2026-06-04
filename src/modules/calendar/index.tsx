@@ -123,8 +123,7 @@ export function CalendarModule() {
     <div className="flex flex-col h-full bg-background overflow-hidden relative pt-4">
 
       {/* Glassmorphism Toolbar (View Selector) at the very top */}
-      <div className="z-[80] mx-auto mb-8 shrink-0 w-fit">
-        <div className="flex items-center gap-2 p-2 bg-card/70 backdrop-blur-xl border border-border/50 rounded-full shadow-2xl">
+      <div className="sticky top-6 mx-auto w-fit z-[80] flex items-center gap-2 p-2 bg-card/70 backdrop-blur-xl border border-border/50 rounded-full shadow-2xl mb-8">
           <div className="flex items-center gap-1 pl-2">
             <button onClick={goPrev} className="p-1.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-fast" aria-label="Previous">
               <ChevronLeft size={16} />
@@ -183,7 +182,6 @@ export function CalendarModule() {
             Projects
           </button>
         </div>
-      </div>
       
       {/* Hero Header */}
       <CalendarHeroHeader anchor={anchor} eventsCount={eventsCount} />
