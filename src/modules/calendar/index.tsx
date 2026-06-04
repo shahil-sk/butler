@@ -46,16 +46,16 @@ function CalendarHeroHeader({ anchor, eventsCount }: { anchor: Date, eventsCount
   }, { scope: container });
 
   return (
-    <div ref={container} className="relative w-full px-4 md:px-8 mx-auto pt-16 pb-12 flex flex-col items-center text-center shrink-0">
+    <div ref={container} className="relative w-full px-4 md:px-8 mx-auto pt-4 pb-4 flex flex-col items-center text-center shrink-0">
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/20 blur-[120px] rounded-full pointer-events-none -z-10" />
       
-      <p className="hero-text text-sm md:text-base font-medium tracking-widest uppercase text-muted-foreground mb-4">
+      <p className="hero-text text-xs md:text-sm font-medium tracking-widest uppercase text-muted-foreground mb-2">
         {format(anchor, "EEEE, MMMM do")}
       </p>
       
-      <h1 className="hero-text text-5xl md:text-[5rem] font-black tracking-tighter leading-[0.9] text-foreground w-full mx-auto flex flex-wrap justify-center items-center gap-x-4 gap-y-2">
+      <h1 className="hero-text text-3xl md:text-5xl font-black tracking-tighter leading-[0.9] text-foreground w-full mx-auto flex flex-wrap justify-center items-center gap-x-4 gap-y-2">
         <span>You have</span>
-        <span className="relative inline-block px-6 py-2 bg-primary text-primary-foreground rounded-full -rotate-2 transform hover:rotate-0 transition-transform duration-500 shadow-2xl">
+        <span className="relative inline-block px-4 py-1 bg-primary text-primary-foreground rounded-full -rotate-2 transform hover:rotate-0 transition-transform duration-500 shadow-xl">
           {eventsCount} events
         </span>
         <span>this {format(anchor, "MMMM")}.</span>
@@ -122,21 +122,21 @@ export function CalendarModule() {
   const eventsCount = allEvents.filter(e => e.startAt >= from.toISOString() && e.startAt <= to.toISOString()).length;
 
   return (
-    <div className="flex flex-col h-full bg-background overflow-y-auto overflow-x-hidden relative">
+    <div className="flex flex-col h-full bg-background overflow-hidden relative">
       
       <CalendarHeroHeader anchor={anchor} eventsCount={eventsCount} />
 
       {/* Floating Action CTA */}
       <button 
         onClick={() => openEventForm({ startAt: `${activeDate}T09:00:00`, endAt: `${activeDate}T10:00:00` })}
-        className="fixed bottom-8 right-8 z-[90] w-16 h-16 bg-primary text-primary-foreground rounded-full shadow-[0_8px_40px_-12px_rgba(0,0,0,0.5)] flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-300"
+        className="fixed bottom-8 right-8 z-[90] w-14 h-14 bg-primary text-primary-foreground rounded-full shadow-[0_8px_40px_-12px_rgba(0,0,0,0.5)] flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-300"
         title="New Event"
       >
-        <Plus size={32} />
+        <Plus size={28} />
       </button>
 
       {/* Glassmorphism Toolbar */}
-      <div className="sticky top-4 z-[80] mx-auto mb-8 animate-slide-in" style={{ animationDelay: '300ms', animationFillMode: 'both' }}>
+      <div className="z-[80] mx-auto mb-4 animate-slide-in shrink-0" style={{ animationDelay: '300ms', animationFillMode: 'both' }}>
         <div className="flex items-center gap-4 px-6 py-3 bg-background/60 backdrop-blur-2xl border border-border/50 shadow-2xl rounded-full">
           <div className="flex items-center gap-1">
             <button onClick={goPrev} className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-fast" aria-label="Previous">
@@ -197,7 +197,7 @@ export function CalendarModule() {
       </div>
 
       {/* Main content area */}
-      <div className="flex flex-col flex-1 min-h-[800px] w-full mx-auto px-4 md:px-6 pb-32 animate-slide-in" style={{ animationDelay: '400ms', animationFillMode: 'both' }}>
+      <div className="flex flex-col flex-1 min-h-0 w-full mx-auto px-2 md:px-4 pb-4 animate-slide-in" style={{ animationDelay: '400ms', animationFillMode: 'both' }}>
         <div className="flex flex-1 rounded-[2rem] border border-border/50 bg-card/30 backdrop-blur-xl shadow-2xl overflow-hidden relative">
           <div className="flex flex-col flex-1 min-w-0 overflow-hidden bg-background/50">
             {(view === "month" || view === "week") && (

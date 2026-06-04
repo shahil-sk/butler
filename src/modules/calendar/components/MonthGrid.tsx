@@ -91,7 +91,7 @@ export function MonthGrid() {
     <>
       <div className="flex flex-col flex-1 overflow-hidden">
         {/* Day cells */}
-        <div className="grid grid-cols-7 flex-1 overflow-hidden">
+        <div className="grid grid-cols-7 auto-rows-fr flex-1 overflow-hidden">
           {days.map((day) => {
             const dateStr    = toISODate(day);
             const isToday    = dateStr === todayStr;
