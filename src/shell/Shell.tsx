@@ -1,7 +1,3 @@
-// ============================================================
-// BUTLER — SHELL  (updated: /settings/* → SettingsModule)
-// ============================================================
-
 import { useEffect } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { Sidebar } from "./components/Sidebar";
@@ -35,40 +31,6 @@ import TimeTrackingModule    from "@/modules/time-tracking";
 import { SettingsModule }    from "@/modules/settings";
 import AIModule              from "@/modules/ai";
 
-function ModuleLoader() {
-  return (
-    <div className="flex-1 flex flex-col p-5 gap-4 overflow-hidden">
-      <div className="flex items-center justify-between">
-        <div className="skeleton h-5 w-32 rounded-md" />
-        <div className="skeleton h-7 w-20 rounded-md" />
-      </div>
-      <div className="grid grid-cols-4 gap-3">
-        {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="dashboard-card">
-            <div className="skeleton h-3 w-16 rounded mb-3" />
-            <div className="skeleton h-6 w-10 rounded" />
-          </div>
-        ))}
-      </div>
-      <div className="grid grid-cols-3 gap-3 flex-1">
-        <div className="col-span-2 dashboard-card flex flex-col gap-2">
-          {[0, 1, 2, 3, 4].map((i) => (
-            <div key={i} className="flex items-center gap-3">
-              <div className="skeleton w-4 h-4 rounded-full shrink-0" />
-              <div className="skeleton h-3 rounded flex-1" style={{ width: `${60 + i * 7}%` }} />
-            </div>
-          ))}
-        </div>
-        <div className="dashboard-card flex flex-col gap-3">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="skeleton h-12 rounded-lg" />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function Shell() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -80,7 +42,6 @@ export function Shell() {
     if (replace) navigate(path, { replace: true });
     else navigate(path);
   });
-
   useBusEvent("navigate:back", () => navigate(-1));
 
   useEffect(() => {
@@ -88,29 +49,26 @@ export function Shell() {
     const module = path.split("/")[1] ?? "tasks";
     const label = module.charAt(0).toUpperCase() + module.slice(1);
     onNavigate(path, label, module);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <ThemeProvider>
-      <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground ambient-bg">
+      <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground antialiased selection:bg-primary/20">
         <Sidebar />
 
-        <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-          <div className="flex flex-1 min-w-0 overflow-hidden">
+        <div className="flex flex-col flex-1 min-w-0 overflow-hidden bg-background">
+          <div className="flex flex-1 min-w-0 overflow-hidden p-2 gap-2">
             {panels.map((panel, idx) => (
               <div
                 key={panel.id}
                 onClick={() => setActivePanel(panel.id)}
                 className={cn(
-                  "flex flex-col flex-1 min-w-0 overflow-hidden",
-                  idx > 0 && "border-l border-border/60",
-                  activePanelId === panel.id && panels.length > 1
-                    && "ring-inset ring-1 ring-primary/20"
+                  "flex flex-col flex-1 min-w-0 overflow-hidden rounded-xl border border-border/80 shadow-sm bg-background transition-shadow",
+                  activePanelId === panel.id && panels.length > 1 && "ring-2 ring-primary/20 shadow-md"
                 )}
               >
                 <TabBar panel={panel} />
-                <div className="flex-1 overflow-hidden">
+                <div className="flex-1 overflow-hidden relative">
                   <ErrorBoundary name="module">
                     <Routes>
                       <Route path="/"             element={<Navigate to="/tasks" replace />} />
