@@ -79,9 +79,7 @@ export function HeroHeader({ priorityFilter, onPriorityFilter }: HeroHeaderProps
       {/* Background radial gradient */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/20 blur-[120px] rounded-full pointer-events-none -z-10" />
       
-      <p className="hero-text text-sm md:text-base font-medium tracking-widest uppercase text-muted-foreground mb-6">
-        {format(new Date(), "EEEE, MMMM do")}
-      </p>
+
       
       <h1 className="hero-text text-5xl md:text-7xl lg:text-[5rem] font-black tracking-tighter leading-[0.9] text-foreground max-w-5xl mx-auto flex flex-wrap justify-center items-center gap-x-4 gap-y-2">
         <span>You have</span>

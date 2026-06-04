@@ -49,9 +49,7 @@ function CalendarHeroHeader({ anchor, eventsCount }: { anchor: Date, eventsCount
     <div ref={container} className="relative w-full px-4 md:px-8 mx-auto pt-4 pb-4 flex flex-col items-center text-center shrink-0">
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/20 blur-[120px] rounded-full pointer-events-none -z-10" />
       
-      <p className="hero-text text-xs md:text-sm font-medium tracking-widest uppercase text-muted-foreground mb-2">
-        {format(anchor, "EEEE, MMMM do")}
-      </p>
+
       
       <h1 className="hero-text text-3xl md:text-5xl font-black tracking-tighter leading-[0.9] text-foreground w-full mx-auto flex flex-wrap justify-center items-center gap-x-4 gap-y-2">
         <span>You have</span>

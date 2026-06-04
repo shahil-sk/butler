@@ -12,6 +12,7 @@ import type { Project, ProjectStatus } from "@/shared/types";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import { useRef } from "react";
+import { format } from "date-fns";
 
 registry.register(projectsManifest);
 
@@ -35,14 +36,13 @@ function ProjectsHeroHeader({ activeCount, doneTasks }: { activeCount: number, d
     });
   }, { scope: container });
 
+  {/* Hero Header */}
+
   return (
     <div ref={container} className="relative w-full px-4 md:px-8 mx-auto pt-6 pb-8 md:py-25 flex flex-col items-center text-center">
       {/* Background radial gradient */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/20 blur-[120px] rounded-full pointer-events-none -z-10" />
       
-      <p className="hero-text text-sm md:text-base font-medium tracking-widest uppercase text-muted-foreground mb-6">
-        {formatDate(new Date().toISOString())}
-      </p>
       
       <h1 className="hero-text text-5xl md:text-7xl lg:text-[5rem] font-black tracking-tighter leading-[0.9] text-foreground max-w-5xl mx-auto flex flex-wrap justify-center items-center gap-x-4 gap-y-2">
         <span>You are driving</span>

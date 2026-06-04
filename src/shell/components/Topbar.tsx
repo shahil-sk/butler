@@ -1,3 +1,5 @@
+import { useState, useEffect } from "react";
+import { format } from "date-fns";
 import { cn } from "@/shared/utils";
 import { useShellStore } from "@/shell/store";
 import { useTheme } from "@/shell/components/ThemeProvider";
@@ -10,8 +12,7 @@ const NAV_ITEMS = [
   { id: "tasks",    label: "Tasks",    icon: CheckSquare,  path: "/tasks" },
   { id: "projects", label: "Projects", icon: FolderKanban, path: "/projects" },
   { id: "calendar", label: "Calendar", icon: CalendarDays, path: "/calendar" },
-  { id: "focus",    label: "Focus",    icon: Focus,        path: "/focus" },
-  { id: "time",     label: "Time",     icon: Timer,        path: "/time" },
+  { id: "focus",    label: "Focus & Time", icon: Timer,        path: "/focus" },
   { id: "habits",   label: "Habits",   icon: Activity,     path: "/habits" },
   { id: "goals",    label: "Goals",    icon: Target,       path: "/goals" },
   { id: "ai",       label: "AI",       icon: Bot,          path: "/ai" },
@@ -21,6 +22,14 @@ export function Topbar() {
   const { activeSidebarItem, onNavigate, openCommandPalette } = useShellStore();
   const { theme, setTheme } = useTheme();
 
+  const [timeStr, setTimeStr] = useState("");
+  useEffect(() => {
+    const tick = () => setTimeStr(format(new Date(), "EEEE, MMM do hh:mm a"));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+
   const navigate = (item: any) => {
     onNavigate(item.path, item.label, item.id);
     bus.emit("navigate:to", { path: item.path });
@@ -28,9 +37,15 @@ export function Topbar() {
 
   return (
     <header className="h-14 w-full flex items-center justify-between px-4 mac-glass border-b shrink-0 z-50">
-      <div className="flex items-center gap-2 pr-2">
-        <img src={appIcon} alt="Butler" width={24} height={24} className="rounded-md shadow-sm" draggable={false} />
-        <span className="text-[14px] font-semibold tracking-tight text-foreground hidden sm:block">Butler</span>
+      <div className="flex items-center gap-4 pr-2">
+        <div className="flex items-center gap-2">
+          <img src={appIcon} alt="Butler" width={24} height={24} className="rounded-md shadow-sm" draggable={false} />
+          <span className="text-[14px] font-semibold tracking-tight text-foreground hidden sm:block">Butler</span>
+        </div>
+        <div className="hidden md:block w-px h-4 bg-border/50" />
+        <span className="text-[11px] uppercase tracking-widest font-medium text-muted-foreground hidden md:block">
+          {timeStr}
+        </span>
       </div>
 
       <nav className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1 overflow-x-auto scrollbar-none max-w-[60vw]">
