@@ -49,7 +49,7 @@ export function HeroHeader({ priorityFilter, onPriorityFilter, dueFilter, onDueF
     if (t.status === "done" || t.status === "archived") return false;
     const date = t.scheduledDate || t.dueDate;
     if (!date) return true;
-    return date <= tDay;
+    return true;
   });
   
   const incomplete = activeTasks.length;

@@ -59,7 +59,7 @@ export function TasksModule() {
         }
 
         if (!dateStr) return true;
-        return dateStr <= tDay || dueFilter != null;
+        return true;
       })
       .sort((a, b) => {
         const pA = a.priority ? pWeight[a.priority as keyof typeof pWeight] || 0 : 0;
