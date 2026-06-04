@@ -24,9 +24,7 @@ import { ErrorBoundary } from "@/shared/ErrorBoundary";
 import { TasksModule }       from "@/modules/tasks";
 import { ProjectsModule }    from "@/modules/projects";
 import { PlannerModule }     from "@/modules/planner";
-import { NotesModule }       from "@/modules/notes";
 import { CalendarModule }    from "@/modules/calendar";
-import JournalModule         from "@/modules/journal";
 import HabitsModule          from "@/modules/habits";
 import GoalsModule           from "@/modules/goals";
 import FocusModule           from "@/modules/focus";
@@ -119,9 +117,7 @@ export function Shell() {
                       <Route path="/tasks/*"      element={<TasksModule />} />
                       <Route path="/projects/*"   element={<ProjectsModule />} />
                       <Route path="/planner/*"    element={<PlannerModule />} />
-                      <Route path="/notes/*"      element={<NotesModule />} />
                       <Route path="/calendar/*"   element={<CalendarModule />} />
-                      <Route path="/journal/*"    element={<JournalModule />} />
                       <Route path="/habits/*"     element={<HabitsModule />} />
                       <Route path="/goals/*"      element={<GoalsModule />} />
                       <Route path="/focus/*"      element={<FocusModule />} />
