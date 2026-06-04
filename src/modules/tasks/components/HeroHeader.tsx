@@ -72,7 +72,7 @@ export function HeroHeader({ priorityFilter, onPriorityFilter }: HeroHeaderProps
   const hasPills = Object.values(counts).some(c => c > 0);
 
   return (
-    <div ref={container} className="relative w-full max-w-7xl mx-auto py-24 md:py-32 flex flex-col items-center text-center">
+    <div ref={container} className="relative w-full max-w-7xl mx-auto py-24 md:py-20 pt-8 flex flex-col items-center text-center">
       {/* Background radial gradient */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/20 blur-[120px] rounded-full pointer-events-none -z-10" />
       
@@ -109,9 +109,6 @@ export function HeroHeader({ priorityFilter, onPriorityFilter }: HeroHeaderProps
                 <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", cfg.dot)} />
                 <span className="tabular-nums font-bold">{counts[p]}</span>
                 <span>{cfg.label}</span>
-                {isActive && (
-                  <span className="ml-1 opacity-60 text-xs">✕</span>
-                )}
               </button>
             );
           })}

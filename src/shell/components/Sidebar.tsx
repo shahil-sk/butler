@@ -30,7 +30,6 @@ const NAV_SECTIONS = [
       { id: "notes",    label: "Notes",    icon: FileText,   path: "/notes" },
       { id: "journal",  label: "Journal",  icon: BookOpen,   path: "/journal" },
       { id: "habits",   label: "Habits",   icon: Activity,   path: "/habits" },
-      { id: "research", label: "Research", icon: FileSearch, path: "/research" },
     ],
   },
   {
@@ -44,7 +43,6 @@ const NAV_SECTIONS = [
   {
     label: "Data",
     items: [
-      { id: "database", label: "Database", icon: Database, path: "/database" },
       { id: "ai",       label: "AI",       icon: Bot,      path: "/ai"       },
     ],
   },

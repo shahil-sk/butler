@@ -34,10 +34,8 @@ import { FocusHUD }          from "@/modules/focus/components/FocusHUD";
 import { BreakScreen }       from "@/modules/focus/components/BreakScreen";
 import { PostSessionReview } from "@/modules/focus/components/PostSessionReview";
 import TimeTrackingModule    from "@/modules/time-tracking";
-import { ResearchModule }    from "@/modules/research";
 import { SettingsModule }    from "@/modules/settings";
 import AIModule              from "@/modules/ai";
-import DatabaseModule         from "@/modules/database";
 
 function ModuleLoader() {
   return (
@@ -128,8 +126,6 @@ export function Shell() {
                       <Route path="/goals/*"      element={<GoalsModule />} />
                       <Route path="/focus/*"      element={<FocusModule />} />
                       <Route path="/time/*"       element={<TimeTrackingModule />} />
-                      <Route path="/research/*"   element={<ResearchModule />} />
-                      <Route path="/database/*"   element={<DatabaseModule />} />
                       <Route path="/settings/*"   element={<SettingsModule />} />
                       <Route path="/ai/*"         element={<AIModule />} />
                       <Route path="*"             element={<Navigate to="/tasks" replace />} />
