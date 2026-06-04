@@ -9,6 +9,9 @@ import { ProjectDetail } from "./components/ProjectDetail";
 import { CreateProjectModal } from "./components/CreateProjectModal";
 import { cn, formatDate } from "@/shared/utils";
 import type { Project, ProjectStatus } from "@/shared/types";
+import { useGSAP } from "@gsap/react";
+import gsap from "gsap";
+import { useRef } from "react";
 
 registry.register(projectsManifest);
 
@@ -20,30 +23,39 @@ const STATUS_OPTIONS: { value: ProjectStatus; label: string }[] = [
 ];
 
 function ProjectsHeroHeader({ activeCount, doneTasks }: { activeCount: number, doneTasks: number }) {
-  return (
-    <div className="px-8 md:px-12 pt-8 pb-12">
-      <div className="max-w-4xl">
-        <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight text-foreground leading-none mb-6 animate-slide-in">
-          Projects
-        </h1>
-        <p className="text-lg md:text-xl text-muted-foreground max-w-2xl leading-relaxed animate-slide-in" style={{ animationDelay: '100ms', animationFillMode: 'both' }}>
-          You are currently driving <span className="font-bold text-foreground">{activeCount} active projects</span>. 
-          Across all initiatives, <span className="font-bold text-foreground">{doneTasks} tasks</span> have been completed.
-        </p>
-      </div>
+  const container = useRef<HTMLDivElement>(null);
+  
+  useGSAP(() => {
+    gsap.from(".hero-text", {
+      y: 40,
+      opacity: 0,
+      duration: 1,
+      stagger: 0.1,
+      ease: "power4.out"
+    });
+  }, { scope: container });
 
-      <div className="flex flex-wrap gap-4 mt-10 animate-slide-in" style={{ animationDelay: '200ms', animationFillMode: 'both' }}>
-        <div className="px-6 py-4 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 flex flex-col gap-2 min-w-[200px]">
-          <span className="text-xs font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
-            <Activity size={14} /> Active
-          </span>
-          <span className="text-4xl font-extrabold tabular-nums text-emerald-600 dark:text-emerald-400">{activeCount}</span>
-        </div>
-        <div className="px-6 py-4 rounded-3xl bg-blue-500/10 border border-blue-500/20 flex flex-col gap-2 min-w-[200px]">
-          <span className="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 flex items-center gap-2">
-            <CheckCircle2 size={14} /> Tasks Done
-          </span>
-          <span className="text-4xl font-extrabold tabular-nums text-blue-600 dark:text-blue-400">{doneTasks}</span>
+  return (
+    <div ref={container} className="relative w-full px-4 md:px-8 mx-auto py-24 md:py-25 flex flex-col items-center text-center">
+      {/* Background radial gradient */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/20 blur-[120px] rounded-full pointer-events-none -z-10" />
+      
+      <p className="hero-text text-sm md:text-base font-medium tracking-widest uppercase text-muted-foreground mb-6">
+        {formatDate(new Date().toISOString())}
+      </p>
+      
+      <h1 className="hero-text text-5xl md:text-7xl lg:text-[5rem] font-black tracking-tighter leading-[0.9] text-foreground max-w-5xl mx-auto flex flex-wrap justify-center items-center gap-x-4 gap-y-2">
+        <span>You are driving</span>
+        <span className="relative inline-block px-6 py-2 bg-emerald-500 text-white rounded-full -rotate-2 transform hover:rotate-0 transition-transform duration-500 shadow-2xl">
+          {activeCount} active
+        </span>
+        <span>projects.</span>
+      </h1>
+
+      <div className="hero-text mt-8 flex flex-wrap justify-center items-center gap-8 text-sm">
+        <div className="flex flex-col items-center">
+          <span className="text-3xl font-black text-blue-500">{doneTasks}</span>
+          <span className="text-muted-foreground uppercase tracking-widest font-semibold text-[10px]">Tasks Completed</span>
         </div>
       </div>
     </div>

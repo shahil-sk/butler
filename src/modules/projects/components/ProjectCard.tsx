@@ -3,7 +3,7 @@ import { useProjectStore } from "../store";
 import { useTaskStore } from "@/modules/tasks/store";
 import type { Project } from "@/shared/types";
 import { useEffect } from "react";
-import { CircleDot, Calendar, CheckSquare } from "lucide-react";
+import { Calendar, CheckSquare, GitBranch, ArrowRight } from "lucide-react";
 
 const STATUS_CONFIG: Record<string, { label: string; text: string; bg: string }> = {
   active:    { label: "Active",    text: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-500/10" },
@@ -81,44 +81,84 @@ export function ProjectCard({
     );
   }
 
-  // Grid view (Linear style)
+  // Grid view (Linear style mimicking TaskCard)
+  const isWide = project.name.length > 50;
+  const completedMilestones = project.milestones?.filter(m => m.completedAt).length || 0;
+  const totalMilestones = project.milestones?.length || 0;
+
   return (
     <div
       role="button"
       tabIndex={0}
       onClick={() => openProject(project.id)}
       onKeyDown={(e) => { if (e.key === "Enter") openProject(project.id); }}
-      className="group relative flex flex-col p-6 bg-card border border-border/60 rounded-[1.25rem] cursor-pointer transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] hover:border-border"
+      className={cn(
+        "group relative flex flex-col justify-between overflow-hidden cursor-pointer",
+        "bg-card/50 backdrop-blur-md border border-border hover:border-primary/50",
+        "p-6 transition-all duration-700 ease-out h-full min-h-0 rounded-[1.25rem]",
+        "hover:shadow-2xl hover:-translate-y-1",
+        isWide ? "col-span-1 md:col-span-2 row-span-1 min-h-[220px]" : "col-span-1 row-span-1 min-h-[220px]",
+        project.status === "completed" && "opacity-50 grayscale hover:grayscale-0"
+      )}
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-3 h-3 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: project.color }} />
-          <h3 className="font-bold text-[16px] tracking-tight truncate group-hover:text-primary transition-colors" title={project.name}>{project.name}</h3>
+      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700" style={{ background: `linear-gradient(to bottom right, ${project.color}10, transparent)` }} />
+      
+      <div className="relative z-10 flex items-start justify-between gap-4 mb-4">
+        <div className="w-4 h-4 rounded-full shrink-0 shadow-sm mt-0.5 border border-black/10 dark:border-white/10" style={{ backgroundColor: project.color }} />
+        <div className="flex flex-wrap gap-2 justify-end items-center flex-1">
+          <StatusBadge status={project.status} />
+          {project.dueDate && (
+            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest">
+              <Calendar size={12} />
+              {formatDate(project.dueDate)}
+            </span>
+          )}
         </div>
-        <StatusBadge status={project.status} />
       </div>
       
-      <p className="mt-4 text-[13.5px] text-muted-foreground leading-relaxed line-clamp-2 min-h-[40px]">
-        {project.description || "No project description provided."}
-      </p>
+      <div className="relative z-10 mt-auto flex-1 flex flex-col justify-center pb-8 min-h-0">
+        <h3 className={cn(
+          "font-bold leading-tight tracking-tight text-foreground transition-all duration-500 group-hover:translate-x-2",
+          "text-lg md:text-xl line-clamp-3",
+          project.status === "completed" && "line-through text-muted-foreground"
+        )} title={project.name}>
+          {project.name}
+        </h3>
+        
+        {project.description && (
+          <p className="mt-3 text-sm text-muted-foreground line-clamp-2 leading-relaxed max-w-[90%] flex-shrink-0">
+            {project.description}
+          </p>
+        )}
+      </div>
       
-      <div className="mt-6 pt-5 border-t border-border/40 flex items-center justify-between">
-        <div className="flex flex-col gap-1.5 w-full">
-          <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-            <span>Progress</span>
+      {/* Integration Meta Bar */}
+      <div className="relative z-10 flex flex-wrap items-center gap-4 text-xs font-semibold text-muted-foreground/70 pr-10 shrink-0">
+        <div className="flex items-center gap-1.5" title="Tasks">
+          <CheckSquare size={14} />
+          <span>{done}/{total}</span>
+        </div>
+        
+        {totalMilestones > 0 && (
+          <div className="flex items-center gap-1.5" title="Milestones">
+            <GitBranch size={14} />
+            <span>{completedMilestones}/{totalMilestones} Milestones</span>
+          </div>
+        )}
+        
+        {total > 0 && (
+          <div className="flex items-center gap-1.5" title="Progress">
+            <div className="w-16 h-1.5 rounded-full bg-muted overflow-hidden">
+               <div className="h-full rounded-full transition-all duration-500" style={{ width: `${progress}%`, backgroundColor: project.color }} />
+            </div>
             <span style={{ color: project.color }}>{progress}%</span>
           </div>
-          <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-            <div className="h-full rounded-full transition-all duration-500" style={{ width: `${progress}%`, backgroundColor: project.color }} />
-          </div>
-          <div className="flex items-center justify-between mt-2 text-[12px] text-muted-foreground font-medium">
-            <span className="flex items-center gap-1.5"><CheckSquare size={12} /> {done}/{total} tasks</span>
-            {project.dueDate && (
-              <span className={cn("flex items-center gap-1.5", isOverdue && "text-red-500")}>
-                <Calendar size={12} /> {formatDate(project.dueDate)}
-              </span>
-            )}
-          </div>
+        )}
+      </div>
+      
+      <div className="absolute bottom-6 right-6 opacity-0 translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-500 ease-out z-20">
+        <div className="w-10 h-10 rounded-full text-white flex items-center justify-center shadow-lg" style={{ backgroundColor: project.color }}>
+          <ArrowRight size={18} />
         </div>
       </div>
     </div>
