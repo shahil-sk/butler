@@ -70,11 +70,11 @@ const INSERT_SQL = `
   INSERT INTO tasks (
     id, title, description, status, priority, due_date, due_time, start_date, scheduled_at,
     scheduled_duration, completed_at, cancelled_at, project_id, parent_task_id, goal_id, assignee_id,
-    recurrence_rule, recurrence_parent, next_occurrence_at, estimate_minutes, actual_minutes,
+    recurrence, recurrence_rule, recurrence_parent, next_occurrence_at, estimate_minutes, actual_minutes,
     energy_level, context, size, tags, labels, watchers, attachments, depends_on, blocks,
     checklist_items, custom_fields, position, section_id, created_at, updated_at, created_by, source, version,
     linked_note_ids, linked_event_ids, linked_planner_block_ids, linked_research_ids, sort_order, dependencies
-  ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 `;
 
 const UPDATE_SQL = `
@@ -92,7 +92,7 @@ function insertParams(t: Task): unknown[] {
   return [
     t.id, t.title, t.description ?? null, t.status, t.priority, t.dueDate ?? null, t.dueTime ?? null, t.startDate ?? null, t.scheduledDate ?? t.scheduledAt ?? null,
     t.scheduledDuration ?? null, t.completedAt ?? null, t.cancelledAt ?? null, t.projectId ?? null, t.parentTaskId ?? null, t.goalId ?? null, t.assigneeId ?? null,
-    t.recurrenceRule ?? null, t.recurrenceParent ?? null, t.nextOccurrenceAt ?? null, t.estimateMinutes ?? null, t.actualMinutes ?? null,
+    t.recurrence ? JSON.stringify(t.recurrence) : null, t.recurrenceRule ?? null, t.recurrenceParent ?? null, t.nextOccurrenceAt ?? null, t.estimateMinutes ?? null, t.actualMinutes ?? null,
     t.energyLevel ?? null, JSON.stringify(t.context ?? []), t.size ?? null, JSON.stringify(t.tags ?? []), JSON.stringify(t.labels ?? []), JSON.stringify(t.watchers ?? []), JSON.stringify(t.attachments ?? []), JSON.stringify(t.dependsOn ?? []), JSON.stringify(t.blocks ?? []),
     JSON.stringify(t.checklistItems ?? []), t.customFields ? JSON.stringify(t.customFields) : null, t.position ?? 0, t.sectionId ?? null, t.createdAt, t.updatedAt, t.createdBy ?? 'system', t.source ?? 'manual', t.version ?? 1,
     JSON.stringify(t.linkedNoteIds ?? []), JSON.stringify(t.linkedEventIds ?? []), JSON.stringify(t.linkedPlannerBlockIds ?? []), JSON.stringify(t.linkedResearchIds ?? []), t.order ?? 0, JSON.stringify(t.dependencies ?? [])
@@ -307,6 +307,11 @@ export const useTaskStore = create<TaskState & TaskActions>()((set, get) => ({
     // ── Auto-spawn next recurring instance ──────────────────
     if (task?.recurrence) {
       void spawnNextRecurring(task, get().createTask);
+      bus.emit("ui:notification", {
+        type: "success",
+        message: `Next occurrence of "${task.title}" has been scheduled.`,
+        durationMs: 4000,
+      });
     }
 
     // ── Emit task:unblocked for any task whose blockers are all done ─
