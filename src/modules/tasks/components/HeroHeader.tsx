@@ -51,8 +51,8 @@ export function HeroHeader({ priorityFilter, onPriorityFilter }: HeroHeaderProps
   });
   
   const incomplete = activeTasks.length;
-  const overdueCount = tasks.filter(t => t.status !== "done" && t.status !== "archived" && t.dueDate && t.dueDate < tDay).length;
-  const completedTodayCount = tasks.filter(t => t.status === "done").length; // Note: for simplicity showing total completed or completed recently
+  // const overdueCount = tasks.filter(t => t.status !== "done" && t.status !== "archived" && t.dueDate && t.dueDate < tDay).length;
+  // const completedTodayCount = tasks.filter(t => t.status === "done").length; // Note: for simplicity showing total completed or completed recently
   
   const counts: Record<string, number> = {
     urgent: activeTasks.filter(t => t.priority === "urgent").length,
@@ -91,7 +91,7 @@ export function HeroHeader({ priorityFilter, onPriorityFilter }: HeroHeaderProps
         <span>remaining today.</span>
       </h1>
 
-      <div className="hero-text mt-8 flex flex-wrap justify-center items-center gap-8 text-sm">
+      {/* <div className="hero-text mt-8 flex flex-wrap justify-center items-center gap-8 text-sm">
         <div className="flex flex-col items-center">
           <span className="text-3xl font-black text-emerald-500">{completedTodayCount}</span>
           <span className="text-muted-foreground uppercase tracking-widest font-semibold text-[10px]">Completed</span>
@@ -100,7 +100,7 @@ export function HeroHeader({ priorityFilter, onPriorityFilter }: HeroHeaderProps
           <span className="text-3xl font-black text-red-500">{overdueCount}</span>
           <span className="text-muted-foreground uppercase tracking-widest font-semibold text-[10px]">Overdue</span>
         </div>
-      </div>
+      </div> */}
       
       {hasPills && (
         <div className="hero-text mt-8 flex flex-wrap justify-center items-center gap-3">

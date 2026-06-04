@@ -1,5 +1,5 @@
-import { useEffect, useState, useMemo } from "react";
-import { Plus, LayoutGrid, List, FolderKanban, AlertTriangle, CalendarRange } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Plus, LayoutGrid, List, FolderKanban, CalendarRange, Activity, CheckCircle2 } from "lucide-react";
 import { registry } from "@/kernel/router";
 import { projectsManifest } from "./manifest";
 import { useProjectStore } from "./store";
@@ -7,19 +7,10 @@ import { useTaskStore } from "@/modules/tasks/store";
 import { ProjectCard } from "./components/ProjectCard";
 import { ProjectDetail } from "./components/ProjectDetail";
 import { CreateProjectModal } from "./components/CreateProjectModal";
-import { FilterBar, PrimaryButton, EmptyState, type FilterTab } from "@/shared/ui";
 import { cn, formatDate } from "@/shared/utils";
 import type { Project, ProjectStatus } from "@/shared/types";
 
 registry.register(projectsManifest);
-
-const FILTER_TABS: FilterTab[] = [
-  { id: "all",       label: "All" },
-  { id: "active",    label: "Active" },
-  { id: "on_hold",   label: "On hold" },
-  { id: "completed", label: "Completed" },
-  { id: "archived",  label: "Archived" },
-];
 
 const VIEW_TABS = [
   { id: "grid" as const, icon: LayoutGrid, label: "Grid" },
@@ -40,23 +31,23 @@ function ProjectsBoardView({ projects }: { projects: Project[] }) {
   const { openProject } = useProjectStore();
 
   return (
-    <div className="flex gap-4 h-full overflow-x-auto pb-4 select-none">
+    <div className="flex gap-6 h-full overflow-x-auto pb-4 pt-2">
       {STATUS_OPTIONS.map((opt) => {
         const colProjects = projects.filter((p) => p.status === opt.value);
         return (
-          <div key={opt.value} className="flex flex-col w-72 shrink-0 bg-muted/20 border border-border/50 rounded-xl p-3">
-            <div className="flex items-center justify-between mb-3 px-1">
-              <span className="text-sm font-semibold text-foreground capitalize">{opt.label}</span>
-              <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-medium tabular-nums">{colProjects.length}</span>
+          <div key={opt.value} className="flex flex-col w-[320px] shrink-0">
+            <div className="flex items-center gap-3 mb-4 px-1">
+              <span className="text-sm font-semibold tracking-tight text-foreground">{opt.label}</span>
+              <span className="text-[11px] font-bold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{colProjects.length}</span>
             </div>
-            <div className="flex-1 overflow-y-auto space-y-3 min-h-0">
+            <div className="flex-1 overflow-y-auto space-y-3 min-h-0 pr-2">
               {colProjects.length === 0 ? (
-                <div className="border border-dashed border-border/55 rounded-lg py-8 text-center text-xs text-muted-foreground/40 italic">
+                <div className="border border-dashed border-border/40 rounded-xl py-8 text-center text-[13px] text-muted-foreground/50">
                   No projects
                 </div>
               ) : (
                 colProjects.map((p) => (
-                  <div key={p.id} className="cursor-pointer" onClick={() => openProject(p.id)}>
+                  <div key={p.id} onClick={() => openProject(p.id)}>
                     <ProjectCard project={p} view="grid" />
                   </div>
                 ))
@@ -100,39 +91,34 @@ function ProjectsTimelineView({ projects }: { projects: Project[] }) {
   };
 
   return (
-    <div className="border border-border/60 bg-card rounded-xl p-4 overflow-hidden flex flex-col h-full min-h-[400px]">
-      <div className="flex items-center justify-between mb-4 border-b border-border pb-3">
-        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <CalendarRange size={16} className="text-primary" />
-          Project Roadmap Timeline
-        </h3>
-        <span className="text-[11px] text-muted-foreground/60">
-          Timeline: {minDate.toISOString().slice(0, 10)} to {maxDate.toISOString().slice(0, 10)}
+    <div className="border border-border/60 bg-card rounded-2xl p-6 overflow-hidden flex flex-col h-full shadow-sm">
+      <div className="flex items-center justify-between mb-6 pb-4 border-b border-border/40">
+        <h3 className="text-sm font-semibold text-foreground tracking-tight">Roadmap</h3>
+        <span className="text-[12px] font-medium text-muted-foreground">
+          {formatDate(minDate.toISOString())} – {formatDate(maxDate.toISOString())}
         </span>
       </div>
 
       <div className="flex-1 overflow-x-auto min-h-0 relative">
         <div className="min-w-[800px] h-full flex flex-col">
           {/* Header Row */}
-          <div className="flex border-b border-border/40 pb-2 mb-2 text-[10px] uppercase font-bold text-muted-foreground tracking-wider select-none">
-            <div className="w-1/4 shrink-0">Project</div>
+          <div className="flex pb-3 mb-3 text-[11px] uppercase font-bold text-muted-foreground tracking-wider select-none border-b border-border/40">
+            <div className="w-1/4 shrink-0 px-2">Project</div>
             <div className="flex-1 relative h-6 border-l border-border/30">
               <div 
-                className="absolute w-0.5 h-64 bg-red-500/40 z-10 pointer-events-none flex flex-col items-center"
+                className="absolute w-px h-[600px] bg-red-500/50 z-10 pointer-events-none"
                 style={{ left: `${getPercentage(todayStr)}%` }}
               >
-                <span className="bg-red-500 text-white text-[8px] px-1 py-0.5 rounded -mt-2.5 font-bold shadow">TODAY</span>
+                <div className="absolute -top-3 -translate-x-1/2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold shadow-sm">TODAY</div>
               </div>
-              <div className="absolute left-0 text-left pl-1">Past</div>
-              <div className="absolute right-0 text-right pr-1">Future</div>
             </div>
           </div>
 
           {/* Rows */}
-          <div className="flex-1 overflow-y-auto space-y-4 min-h-0 pr-1">
+          <div className="flex-1 overflow-y-auto space-y-3 min-h-0">
             {projects.length === 0 ? (
-              <div className="text-center py-12 text-sm text-muted-foreground/40 italic">
-                No active projects to display on roadmap.
+              <div className="text-center py-12 text-sm text-muted-foreground/50">
+                No active projects to display.
               </div>
             ) : (
               projects.map((p) => {
@@ -143,36 +129,25 @@ function ProjectsTimelineView({ projects }: { projects: Project[] }) {
                 const widthPct = Math.max(8, rightPct - leftPct);
 
                 return (
-                  <div key={p.id} className="flex items-center group cursor-pointer hover:bg-muted/10 p-1.5 rounded-lg transition-fast" onClick={() => openProject(p.id)}>
-                    <div className="w-1/4 pr-3 min-w-0 flex items-center gap-2.5">
-                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
+                  <div key={p.id} className="flex items-center group cursor-pointer hover:bg-muted/30 p-2 rounded-xl transition-colors" onClick={() => openProject(p.id)}>
+                    <div className="w-1/4 pr-4 min-w-0 flex items-center gap-3">
+                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
                       <div className="min-w-0">
-                        <span className="text-xs font-semibold text-foreground leading-tight block truncate group-hover:text-primary transition-fast">{p.name}</span>
-                        <span className="text-[10px] text-muted-foreground/60 block truncate mt-0.5">
-                          {p.milestones.length} milestones
-                        </span>
+                        <span className="text-[13px] font-semibold text-foreground block truncate group-hover:text-primary transition-colors">{p.name}</span>
                       </div>
                     </div>
 
-                    <div className="flex-1 relative h-10 bg-muted/10 rounded-lg border border-border/30 overflow-hidden">
+                    <div className="flex-1 relative h-8 rounded-lg overflow-hidden bg-muted/20 border border-border/30">
                       <div
-                        className="absolute h-6 top-2 rounded-md shadow-sm border flex items-center justify-between px-2 overflow-hidden transition-all duration-300 group-hover:shadow-md"
+                        className="absolute h-full top-0 rounded-md flex items-center justify-between px-3 overflow-hidden transition-all duration-300 shadow-sm"
                         style={{
                           left: `${leftPct}%`,
                           width: `${widthPct}%`,
                           backgroundColor: `${p.color}15`,
-                          borderColor: p.color,
+                          border: `1px solid ${p.color}40`,
                         }}
                       >
-                        <div 
-                          className="absolute left-0 top-0 bottom-0 opacity-15"
-                          style={{
-                            width: `${p.milestones.length > 0 ? (p.milestones.filter(m => m.completedAt).length / p.milestones.length) * 100 : 50}%`,
-                            backgroundColor: p.color,
-                          }}
-                        />
-
-                        <span className="text-[9px] font-bold tracking-tight uppercase truncate select-none z-10" style={{ color: p.color }}>
+                        <span className="text-[10px] font-bold tracking-wide uppercase truncate z-10" style={{ color: p.color }}>
                           {formatDate(start)} → {formatDate(due)}
                         </span>
                       </div>
@@ -188,62 +163,12 @@ function ProjectsTimelineView({ projects }: { projects: Project[] }) {
   );
 }
 
-// ── KPI card ────────────────────────────────────────────────
-function KpiCard({
-  label,
-  value,
-  total,
-  accent,
-  warn = false,
-}: {
-  label: string;
-  value: number;
-  total: number;
-  accent: string;
-  warn?: boolean;
-}) {
-  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
-  return (
-    <div className="rounded-2xl border border-border/30 bg-card/45 dark:bg-card/20 backdrop-blur-md p-5 flex flex-col gap-3 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:border-primary/25 group">
-      <div className="flex items-center justify-between">
-        <p className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">{label}</p>
-        {warn && value > 0 ? (
-          <AlertTriangle size={14} className="text-red-500 animate-pulse shrink-0" />
-        ) : (
-          <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", accent)} />
-        )}
-      </div>
-      <div className="flex items-baseline gap-1.5">
-        <p className={cn(
-          "text-3xl font-extrabold tabular-nums leading-none tracking-tight",
-          warn && value > 0 ? "text-red-500" : "text-foreground",
-        )}>
-          {value}
-        </p>
-        {total > 0 && (
-          <span className="text-xs text-muted-foreground/40 tabular-nums">
-            / {total}
-          </span>
-        )}
-      </div>
-      <div className="space-y-1 mt-1">
-        <div className="h-1.5 w-full rounded-full bg-muted/60 overflow-hidden">
-          <div className={cn("h-full rounded-full transition-all duration-500", accent)} style={{ width: `${pct}%` }} />
-        </div>
-        <div className="flex justify-between items-center text-[9px] font-semibold text-muted-foreground/45 tabular-nums">
-          <span>Progress</span>
-          <span>{pct}%</span>
-        </div>
-      </div>
-    </div>
-  );
-}
 // ── Module ───────────────────────────────────────────────────
 export function ProjectsModule() {
   const {
     loadProjects, getFilteredProjects,
     openProjectId, createModalOpen,
-    openCreateModal, activeFilter, setActiveFilter,
+    openCreateModal
   } = useProjectStore();
   const { loadTasks } = useTaskStore();
 
@@ -257,85 +182,74 @@ export function ProjectsModule() {
 
   const projects = getFilteredProjects();
 
-  // KPI aggregates across visible projects
-  const totalTasks  = allTasks.filter((t) => t.projectId != null && t.status !== "archived").length;
   const doneTasks   = allTasks.filter((t) => t.projectId != null && t.status === "done").length;
-  const today       = new Date().toISOString().slice(0, 10);
-  const overdue     = allTasks.filter(
-    (t) => t.projectId != null && t.status !== "done" && t.status !== "archived" && t.dueDate && t.dueDate < today,
-  ).length;
   const activeCount = projects.filter((p) => p.status === "active").length;
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-
-      {/* ── Row 1: Title + action ───────────────────────── */}
-      <div className="flex items-center justify-between px-8 pt-7 pb-4 shrink-0 bg-card/15 backdrop-blur-sm border-b border-border/30">
+    <div className="flex flex-col h-full bg-background overflow-hidden relative">
+      
+      {/* ── Minimalist Header ───────────────────────── */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between px-8 md:px-12 pt-14 pb-8 shrink-0">
         <div>
-          <h1 className="text-2xl font-extrabold leading-none tracking-tight text-gradient">Projects</h1>
-          <p className="text-[12px] text-muted-foreground/75 mt-2 font-medium">
-            {projects.length} project{projects.length !== 1 ? "s" : ""}
-          </p>
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-foreground">Projects</h1>
+          <div className="flex gap-6 mt-5 text-[13px] font-medium text-muted-foreground">
+            <span className="flex items-center gap-2">
+              <Activity size={14} className="text-emerald-500" />
+              {activeCount} Active
+            </span>
+            <span className="flex items-center gap-2">
+              <CheckCircle2 size={14} className="text-blue-500" />
+              {doneTasks} Completed Tasks
+            </span>
+          </div>
         </div>
 
-        <PrimaryButton onClick={openCreateModal}>
-          <Plus size={13} />
-          New Project
-        </PrimaryButton>
-      </div>
-
-      {/* ── Row 2: View switcher tabs (underline) ───────── */}
-      <div className="flex items-center justify-between px-8 py-3 border-b border-border/30 bg-card/5 shrink-0 backdrop-blur-xs">
-        <div className="bg-muted/50 dark:bg-muted/20 p-1 rounded-xl flex gap-1 border border-border/40">
-          {VIEW_TABS.map(({ id, icon: Icon, label }) => (
-            <button
-              key={id}
-              onClick={() => setView(id)}
-              className={cn(
-                "inline-flex items-center gap-2 px-4 py-1.5 text-[12px] font-bold rounded-lg transition-all duration-200",
-                view === id
-                  ? "bg-card text-foreground shadow-sm border border-border/20 font-extrabold"
-                  : "text-muted-foreground hover:text-foreground border border-transparent"
-              )}
-            >
-              <Icon size={12} />
-              {label}
-            </button>
-          ))}
+        <div className="flex items-center gap-4 mt-6 md:mt-0">
+          <div className="flex bg-muted/40 p-1 rounded-xl border border-border/40">
+            {VIEW_TABS.map(({ id, icon: Icon, label }) => (
+              <button
+                key={id}
+                onClick={() => setView(id)}
+                className={cn(
+                  "inline-flex items-center justify-center w-10 h-8 rounded-lg transition-all duration-200 text-muted-foreground hover:text-foreground",
+                  view === id && "bg-card text-foreground shadow-[0_2px_10px_rgb(0,0,0,0.04)] border border-border/50"
+                )}
+                title={label}
+              >
+                <Icon size={14} />
+              </button>
+            ))}
+          </div>
+          <button 
+            onClick={openCreateModal} 
+            className="h-10 px-4 bg-foreground text-background font-semibold rounded-xl text-[13px] flex items-center gap-2 shadow-sm hover:opacity-90 transition-opacity"
+          >
+            <Plus size={16} /> New Project
+          </button>
         </div>
       </div>
 
-      {/* ── KPI DASHBOARD ───────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 px-8 py-6 bg-card/5 border-b border-border/30 shrink-0">
-        <KpiCard label="Active"    value={activeCount} total={projects.length} accent="bg-emerald-500" />
-        <KpiCard label="Tasks"     value={totalTasks}  total={totalTasks}      accent="bg-foreground/30" />
-        <KpiCard label="Completed" value={doneTasks}   total={totalTasks}      accent="bg-blue-500" />
-        <KpiCard label="Overdue"   value={overdue}     total={totalTasks}      accent="bg-red-500" warn />
-      </div>
-
-      {/* ── Filter bar ──────────────────────────────────── */}
-      <FilterBar
-        tabs={FILTER_TABS}
-        activeId={activeFilter}
-        onSelect={(id) => setActiveFilter(id as typeof activeFilter)}
-      />
-
-      {/* ── CONTENT AREA ─────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto px-8 py-6">
+      {/* ── Content Area ─────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto px-8 md:px-12 pb-12">
         {projects.length === 0 ? (
-          <EmptyState
-            title={activeFilter === "all" ? "No projects yet" : `No ${activeFilter} projects`}
-            subtitle="Create a project to organise your work and track progress."
-            action={{ label: "New project", onClick: openCreateModal }}
-          />
+          <div className="flex flex-col items-center justify-center h-64 text-center border border-dashed border-border/60 rounded-3xl">
+            <div className="w-12 h-12 bg-muted rounded-2xl flex items-center justify-center text-muted-foreground mb-4">
+              <LayoutGrid size={24} />
+            </div>
+            <h3 className="text-lg font-semibold text-foreground mb-1">No projects yet</h3>
+            <p className="text-sm text-muted-foreground max-w-sm mb-6">Create a project to organise your work and track progress.</p>
+            <button onClick={openCreateModal} className="h-9 px-4 bg-primary text-primary-foreground font-semibold rounded-lg text-[13px] shadow-sm hover:opacity-90">
+              Create Project
+            </button>
+          </div>
         ) : view === "grid" ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
             {projects.map((p) => (
               <ProjectCard key={p.id} project={p} view="grid" />
             ))}
           </div>
         ) : view === "list" ? (
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3 max-w-5xl">
             {projects.map((p) => (
               <ProjectCard key={p.id} project={p} view="list" />
             ))}
@@ -347,7 +261,7 @@ export function ProjectsModule() {
         )}
       </div>
 
-      {openProjectId   && <ProjectDetail />}
+      {openProjectId && <ProjectDetail />}
       {createModalOpen && <CreateProjectModal />}
     </div>
   );
