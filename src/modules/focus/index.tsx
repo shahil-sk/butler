@@ -1266,59 +1266,64 @@ export default function FocusModule() {
   }, [activeView]);
 
   return (
-    <main className="w-full h-full overflow-y-auto overflow-x-hidden bg-background text-foreground pb-32">
+    <main className="w-full h-full overflow-hidden flex flex-col bg-background text-foreground">
       
       {/* Top Glass Navigation */}
-      <div className="sticky top-6 mx-auto w-fit z-50 flex items-center gap-2 p-2 bg-card/70 backdrop-blur-xl border border-border/50 rounded-full shadow-2xl mb-8">
-        <button
-          onClick={() => setActiveView("focus")}
-          className={cn(
-            "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all",
-            activeView === "focus" ? "bg-foreground text-background shadow-md" : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          <Target size={16} /> Focus
-        </button>
-        <button
-          onClick={() => setActiveView("tracker")}
-          className={cn(
-            "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all",
-            activeView === "tracker" ? "bg-foreground text-background shadow-md" : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          <Clock size={16} /> Tracker
-        </button>
-        <button
-          onClick={() => setActiveView("reports")}
-          className={cn(
-            "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all",
-            activeView === "reports" ? "bg-foreground text-background shadow-md" : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          <BarChart2 size={16} /> Reports
-        </button>
+      <div className="shrink-0 pt-6 px-6 z-50 flex items-center justify-center mb-6">
+        <div className="flex items-center gap-2 p-2 bg-card/70 backdrop-blur-xl border border-border/50 rounded-full shadow-2xl">
+          <button
+            onClick={() => setActiveView("focus")}
+            className={cn(
+              "flex items-center gap-2 px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-300",
+              activeView === "focus" ? "bg-foreground text-background shadow-md scale-105" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+            )}
+          >
+            <Target size={16} /> Focus
+          </button>
+          <button
+            onClick={() => setActiveView("tracker")}
+            className={cn(
+              "flex items-center gap-2 px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-300",
+              activeView === "tracker" ? "bg-foreground text-background shadow-md scale-105" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+            )}
+          >
+            <Clock size={16} /> Tracker
+          </button>
+          <button
+            onClick={() => setActiveView("reports")}
+            className={cn(
+              "flex items-center gap-2 px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-300",
+              activeView === "reports" ? "bg-foreground text-background shadow-md scale-105" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+            )}
+          >
+            <BarChart2 size={16} /> Reports
+          </button>
+        </div>
       </div>
 
-      <div className="px-6 lg:px-12 max-w-7xl mx-auto view-content h-full">
+      <div className="flex-1 view-content overflow-hidden px-4 pb-4">
         {activeView === "focus" && (
-          <div className="flex flex-col lg:flex-row gap-6 h-[80vh]">
-            <div className="hidden lg:block border border-border/40 rounded-3xl h-full w-[300px] shrink-0 bg-card/50 overflow-hidden">
+          <div className="flex flex-col lg:flex-row gap-4 h-full">
+            <div className="hidden lg:block border border-border/40 rounded-3xl h-full w-[320px] shrink-0 bg-card/30 overflow-hidden shadow-sm backdrop-blur-sm">
               <FocusTabHistoryOnly />
             </div>
-            <div className="flex-1 rounded-3xl border border-border/50 bg-card shadow-sm overflow-hidden flex flex-col items-center justify-center p-8">
+            <div className="flex-1 rounded-3xl border border-border/50 bg-card/80 backdrop-blur-md shadow-lg overflow-hidden flex flex-col items-center justify-center p-8 relative">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent pointer-events-none" />
               <FocusTabCoreOnly />
             </div>
           </div>
         )}
 
         {activeView === "tracker" && (
-          <div className="rounded-3xl border border-border/50 bg-card shadow-sm overflow-hidden flex flex-col h-[80vh]">
+          <div className="rounded-3xl border border-border/50 bg-card/80 backdrop-blur-md shadow-lg overflow-hidden flex flex-col h-full relative">
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-transparent pointer-events-none" />
             <TrackerTab />
           </div>
         )}
 
         {activeView === "reports" && (
-          <div className="rounded-3xl border border-border/50 bg-card shadow-sm overflow-hidden h-[80vh]">
+          <div className="rounded-3xl border border-border/50 bg-card/80 backdrop-blur-md shadow-lg overflow-hidden h-full relative flex flex-col">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-transparent pointer-events-none" />
             <ReportsTab />
           </div>
         )}
