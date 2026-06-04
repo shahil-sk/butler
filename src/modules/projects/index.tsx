@@ -42,7 +42,7 @@ function ProjectsHeroHeader({ activeCount, doneTasks }: { activeCount: number, d
     <div ref={container} className="relative w-full px-4 md:px-8 mx-auto pt-6 pb-8 md:py-25 flex flex-col items-center text-center">
       {/* Background radial gradient */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/20 blur-[120px] rounded-full pointer-events-none -z-10" />
-      
+       
       
       <h1 className="hero-text text-5xl md:text-7xl lg:text-[5rem] font-black tracking-tighter leading-[0.9] text-foreground max-w-5xl mx-auto flex flex-wrap justify-center items-center gap-x-4 gap-y-2">
         <span>You are driving</span>
@@ -58,6 +58,28 @@ function ProjectsHeroHeader({ activeCount, doneTasks }: { activeCount: number, d
           <span className="text-muted-foreground uppercase tracking-widest font-semibold text-[10px]">Tasks Completed</span>
         </div>
       </div>
+
+    </div>
+  );
+}
+
+function ProjectsGrid({ projects }: { projects: Project[] }) {
+  const gridRef = useRef<HTMLDivElement>(null);
+  useGSAP(() => {
+    if (!gridRef.current) return;
+    const cards = gsap.utils.toArray<HTMLElement>(".project-card");
+    if (cards.length === 0) return;
+    gsap.fromTo(cards, 
+      { y: 60, opacity: 0, scale: 0.95 },
+      { y: 0, opacity: 1, scale: 1, duration: 0.6, stagger: 0.05, ease: "power3.out", clearProps: "all" }
+    );
+  }, { scope: gridRef, dependencies: [projects.map(p => p.id).join(",")] });
+
+  return (
+    <div ref={gridRef} className="px-8 md:px-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 auto-rows-min gap-4 md:gap-6" style={{ gridAutoFlow: 'dense' }}>
+      {projects.map((p) => (
+        <ProjectCard key={p.id} project={p} view="grid" />
+      ))}
     </div>
   );
 }
@@ -295,19 +317,11 @@ export function ProjectsModule() {
             </button>
           </div>
         ) : activeView === "grid" ? (
-          <div className="px-8 md:px-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {projects.map((p, i) => (
-              <div key={p.id} className="animate-slide-in" style={{ animationDelay: `${i * 30}ms`, animationFillMode: 'both' }}>
-                <ProjectCard project={p} view="grid" />
-              </div>
-            ))}
-          </div>
+          <ProjectsGrid projects={projects} />
         ) : activeView === "list" ? (
           <div className="px-8 md:px-12 flex flex-col gap-4 max-w-6xl mx-auto mt-4">
-            {projects.map((p, i) => (
-              <div key={p.id} className="animate-slide-in" style={{ animationDelay: `${i * 30}ms`, animationFillMode: 'both' }}>
-                <ProjectCard project={p} view="list" />
-              </div>
+            {projects.map((p) => (
+              <ProjectCard key={p.id} project={p} view="list" />
             ))}
           </div>
         ) : activeView === "board" ? (

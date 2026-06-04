@@ -52,7 +52,7 @@ export function ProjectCard({
         tabIndex={0}
         onClick={() => openProject(project.id)}
         onKeyDown={(e) => { if (e.key === "Enter") openProject(project.id); }}
-        className="group flex items-center gap-6 rounded-2xl border border-border/60 bg-card hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:border-primary/30 transition-all duration-300 cursor-pointer px-5 py-3.5"
+        className="project-card group flex items-center gap-6 rounded-2xl border border-border/60 bg-card hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:border-primary/30 transition-all duration-300 cursor-pointer px-5 py-3.5"
       >
         <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: project.color }} />
         
@@ -83,6 +83,7 @@ export function ProjectCard({
 
   // Grid view (Linear style mimicking TaskCard)
   const isWide = project.name.length > 50;
+  const isLarge = total > 5 || project.description != null;
   const completedMilestones = project.milestones?.filter(m => m.completedAt).length || 0;
   const totalMilestones = project.milestones?.length || 0;
 
@@ -93,11 +94,13 @@ export function ProjectCard({
       onClick={() => openProject(project.id)}
       onKeyDown={(e) => { if (e.key === "Enter") openProject(project.id); }}
       className={cn(
-        "group relative flex flex-col justify-between overflow-hidden cursor-pointer",
+        "project-card group relative flex flex-col justify-between overflow-hidden cursor-pointer",
         "bg-card/50 backdrop-blur-md border border-border hover:border-primary/50",
         "p-6 transition-all duration-700 ease-out h-full min-h-0",
         "hover:shadow-2xl hover:-translate-y-1",
-        isWide ? "col-span-1 md:col-span-2 row-span-1 min-h-[220px]" : "col-span-1 row-span-1 min-h-[220px]",
+        isLarge && isWide ? "col-span-1 md:col-span-2 row-span-2 min-h-[300px]" : 
+        isWide ? "col-span-1 md:col-span-2 row-span-1 min-h-[220px]" :
+        isLarge ? "col-span-1 row-span-2 min-h-[380px]" : "col-span-1 row-span-1 min-h-[220px]",
         project.status === "completed" && "opacity-50 grayscale hover:grayscale-0"
       )}
     >
