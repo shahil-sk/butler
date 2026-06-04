@@ -12,7 +12,7 @@ import {
   startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   format, parseISO,
 } from "date-fns";
-import { ChevronLeft, ChevronRight, Plus, Calendar } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Calendar, Layers } from "lucide-react";
 import { cn } from "@/shared/utils";
 import { useCalendarStore } from "./store";
 import { MonthGrid }          from "./components/MonthGrid";
@@ -30,10 +30,10 @@ const VIEW_LABELS = { month: "Month", week: "Week", day: "Day", agenda: "Agenda"
 
 export function CalendarModule() {
   const {
-    view, activeDate,
+    view, activeDate, showProjectsLayer, contextMenu,
     loadCalendars, loadEvents,
     setView, goNext, goPrev, goToday,
-    openEventForm,
+    openEventForm, setShowProjectsLayer, closeContextMenu, deleteEvent
   } = useCalendarStore();
 
   const loadTasks = useTaskStore((s) => s.loadTasks);
@@ -124,6 +124,20 @@ export function CalendarModule() {
           </div>
 
           <button
+            onClick={() => setShowProjectsLayer(!showProjectsLayer)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl transition-fast shrink-0",
+              showProjectsLayer 
+                ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800"
+                : "text-muted-foreground hover:bg-accent/40 border border-transparent"
+            )}
+            title="Toggle Projects layer (milestones)"
+          >
+            <Layers size={12} />
+            Projects
+          </button>
+
+          <button
             onClick={() => openEventForm({ startAt: `${activeDate}T09:00:00`, endAt: `${activeDate}T10:00:00` })}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-primary text-primary-foreground hover:bg-primary/95 transition-fast shadow-sm shadow-primary/25 shrink-0"
           >
@@ -158,6 +172,47 @@ export function CalendarModule() {
 
       {/* Jump-to-date overlay */}
       {jumpOpen && <JumpToDateOverlay onClose={() => setJumpOpen(false)} />}
+      {/* Context Menu Overlay */}
+      {contextMenu && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={closeContextMenu}
+            onContextMenu={(e) => { e.preventDefault(); closeContextMenu(); }}
+          />
+          <div
+            className="fixed z-50 bg-popover border border-border rounded-md shadow-md text-sm py-1 min-w-[160px] animate-in fade-in zoom-in-95 duration-100"
+            style={{
+              left: Math.min(contextMenu.x, window.innerWidth - 170),
+              top: Math.min(contextMenu.y, window.innerHeight - 100)
+            }}
+          >
+            <button
+              className="w-full text-left px-3 py-1.5 hover:bg-accent text-foreground transition-fast flex items-center gap-2 text-[13px]"
+              onClick={async () => {
+                const { event } = contextMenu;
+                closeContextMenu();
+                if (event.id.startsWith("task:")) return;
+                
+                const start = new Date(event.startAt).getTime();
+                const end = new Date(event.endAt).getTime();
+                const durationMins = Math.max((end - start) / 60000, 15);
+                
+                await useTaskStore.getState().createTask({
+                  title: event.title,
+                  description: event.description,
+                  scheduledDate: event.startAt.slice(0, 10),
+                  scheduledAt: event.startAt,
+                  scheduledDuration: durationMins,
+                });
+                await deleteEvent(event.id);
+              }}
+            >
+              Convert to Task
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

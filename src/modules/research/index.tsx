@@ -921,6 +921,12 @@ function HighlightsPanel({
   highlights: any[];
   onDelete: (id: string) => void;
 }) {
+  const handleCollect = () => {
+    if (highlights.length > 0) {
+      bus.emit("research:collect-highlights", { sourceId: highlights[0].sourceId });
+    }
+  };
+
   if (highlights.length === 0) {
     return (
       <EmptyState
@@ -930,7 +936,18 @@ function HighlightsPanel({
     );
   }
   return (
-    <div className="px-3 py-2 space-y-2">
+    <div className="flex flex-col h-full">
+      <div className="px-3 pt-2 pb-1 shrink-0 flex items-center justify-between">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">Highlights</span>
+        <button
+          type="button"
+          onClick={handleCollect}
+          className="text-[10px] font-medium text-primary hover:text-primary/80 transition-fast"
+        >
+          Collect into Note
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
       {highlights.map((h) => (
         <div
           key={h.id}
@@ -949,6 +966,7 @@ function HighlightsPanel({
           </button>
         </div>
       ))}
+      </div>
     </div>
   );
 }

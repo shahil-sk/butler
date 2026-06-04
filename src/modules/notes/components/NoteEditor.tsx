@@ -5,9 +5,12 @@
 // and is separate from the formatting toolbar inside RichEditor.
 // ============================================================
 
+import { useEffect } from "react";
 import { RichEditor } from "@/shared/RichEditor";
 import { cn } from "@/shared/utils";
 import { useNoteStore } from "../store";
+import { useTaskStore } from "@/modules/tasks/store";
+import { bus } from "@/kernel/event-bus";
 import type { Note } from "@/shared/types";
 
 interface NoteEditorProps {
@@ -17,6 +20,14 @@ interface NoteEditorProps {
 
 export function NoteEditor({ note, className }: NoteEditorProps) {
   const { updateNote } = useNoteStore();
+  const openQuickAdd = useTaskStore(s => s.openQuickAdd);
+
+  useEffect(() => {
+    const unsub = bus.on("editor:slash-task", () => {
+      openQuickAdd({ linkedNoteIds: [note.id] });
+    });
+    return unsub;
+  }, [note.id, openQuickAdd]);
 
   return (
     <div className={cn("flex flex-col flex-1 overflow-hidden", className)}>

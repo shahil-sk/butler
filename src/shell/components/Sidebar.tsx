@@ -6,8 +6,8 @@ import { bus, useBusEvent } from "@/kernel/event-bus";
 import {
   CheckSquare, FolderKanban, CalendarDays, FileText,
   BookOpen, Timer, Focus, Database, Search, FileSearch,
-  PanelLeftClose, Settings, Plus,
-  LayoutDashboard, ChevronRight, Sun, Moon, Monitor,
+  PanelLeftClose, Settings, Plus, Activity,
+  LayoutDashboard, ChevronRight, Sun, Moon, Monitor, Target, Bot
 } from "lucide-react";
 
 // Tauri app icon — resolved by Vite at build time
@@ -18,6 +18,7 @@ const NAV_SECTIONS = [
   {
     label: "Workspace",
     items: [
+      { id: "goals",    label: "Goals",    icon: Target,          path: "/goals" },
       { id: "tasks",    label: "Tasks",    icon: CheckSquare,     path: "/tasks" },
       { id: "projects", label: "Projects", icon: FolderKanban,    path: "/projects" },
       { id: "planner",  label: "Planner",  icon: LayoutDashboard, path: "/planner" },
@@ -28,6 +29,7 @@ const NAV_SECTIONS = [
     items: [
       { id: "notes",    label: "Notes",    icon: FileText,   path: "/notes" },
       { id: "journal",  label: "Journal",  icon: BookOpen,   path: "/journal" },
+      { id: "habits",   label: "Habits",   icon: Activity,   path: "/habits" },
       { id: "research", label: "Research", icon: FileSearch, path: "/research" },
     ],
   },
@@ -43,6 +45,7 @@ const NAV_SECTIONS = [
     label: "Data",
     items: [
       { id: "database", label: "Database", icon: Database, path: "/database" },
+      { id: "ai",       label: "AI",       icon: Bot,      path: "/ai"       },
     ],
   },
 ];
@@ -410,8 +413,9 @@ function FocusMiniPlayer({ collapsed }: { collapsed: boolean }) {
 
   useBusEvent("focus:session-started", ({ session }) => {
     setActive(true);
-    setType(session.type);
-    setTimeLeft(session.plannedMinutes * 60);
+    setType(session.type as any);
+    const duration = session.plannedMinutes ?? session.plannedDuration ?? 25;
+    setTimeLeft(duration * 60);
   });
   useBusEvent("focus:session-completed", () => {
     setActive(false);

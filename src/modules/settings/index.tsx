@@ -9,15 +9,20 @@ import {
   Sun, Moon, Monitor, ChevronRight,
 } from "lucide-react";
 import { cn } from "@/shared/utils";
-import { IntegrationDashboard } from "@/modules/integration/IntegrationDashboard";
+import { IntegrationDashboard } from "./components/IntegrationDashboard";
+import { AIConfigPanel } from "@/modules/ai/index";
 import { useShellStore } from "@/shell/store";
+import { registry } from "@/kernel/router";
+import { SETTINGS_MANIFEST } from "./manifest";
+
+registry.register(SETTINGS_MANIFEST);
 
 type Tab = "general" | "integrations" | "shortcuts" | "appearance";
 
 const TABS: { id: Tab; label: string; icon: typeof Settings }[] = [
-  { id: "general",      label: "General",      icon: Settings  },
-  { id: "integrations", label: "Integrations", icon: Zap       },
-  { id: "shortcuts",    label: "Shortcuts",    icon: Keyboard  },
+  { id: "general",      label: "General",          icon: Settings  },
+  { id: "integrations", label: "AI & Integrations", icon: Zap       },
+  { id: "shortcuts",    label: "Shortcuts",        icon: Keyboard  },
   { id: "appearance",   label: "Appearance",   icon: Palette   },
 ];
 
@@ -72,7 +77,16 @@ export function SettingsModule() {
       {/* Tab content */}
       <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
         {activeTab === "general"      && <GeneralTab />}
-        {activeTab === "integrations" && <IntegrationDashboard />}
+        {activeTab === "integrations" && (
+          <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
+            <div className="flex-1 overflow-y-auto border-r border-border">
+              <AIConfigPanel />
+            </div>
+            <div className="flex-1 min-w-0 flex">
+              <IntegrationDashboard />
+            </div>
+          </div>
+        )}
         {activeTab === "shortcuts"    && <ShortcutsTab />}
         {activeTab === "appearance"   && <AppearanceTab />}
       </div>

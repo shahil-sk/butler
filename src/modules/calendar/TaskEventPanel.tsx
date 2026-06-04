@@ -91,7 +91,7 @@ export function TaskEventPanel({ taskId, onClose }: Props) {
   };
 
   const handleOpenInTasks = () => {
-    bus.emit("navigate:to", { module: "tasks" });
+    bus.emit("navigate:to", { path: "/tasks" });
     bus.emit("task:open",   { taskId: task.id });
     onClose();
   };

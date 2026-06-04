@@ -12,7 +12,8 @@ export const DATABASE_MIGRATIONS: Migration[] = [
         icon        TEXT,
         description TEXT,
         created_at  TEXT NOT NULL,
-        updated_at  TEXT NOT NULL
+        updated_at  TEXT NOT NULL,
+        project_id  TEXT
       );
 
       CREATE TABLE IF NOT EXISTS db_columns (

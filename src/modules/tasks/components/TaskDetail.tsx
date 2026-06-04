@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import {
-  X, Flag, Calendar, Clock, Plus, Trash2,
+  X, Flag, Calendar, Clock, Plus, Trash2, Sparkles,
   CheckSquare, Circle, ChevronDown, FolderKanban,
-  FileText, ExternalLink, CalendarClock, Play, Lock, RefreshCw,
+  FileText, ExternalLink, CalendarClock, Play, Lock, RefreshCw, Target
 } from "lucide-react";
 import { cn, formatDate, PRIORITY_COLORS, PRIORITY_LABELS, today, now } from "@/shared/utils";
 import { Modal, Popover, PopoverItem, PopoverDivider, ProjectDot, SectionLabel } from "@/shared/ui";
@@ -10,9 +10,11 @@ import { useTaskStore } from "../store";
 import { useProjectStore } from "@/modules/projects/store";
 import { useNoteStore } from "@/modules/notes/store";
 import { useCalendarStore } from "@/modules/calendar/store";
+import { useGoalsStore } from "@/modules/goals/store";
 import { bus } from "@/kernel/event-bus";
 import type { Task, Priority, TaskStatus, RecurrenceRule } from "@/shared/types";
 import { EntityBadge } from "@/shared/EntityBadge";
+import { NoteEditor } from "@/modules/notes/components/NoteEditor";
 
 function parseDurationToMinutes(val: string): number | undefined {
   const clean = val.trim().toLowerCase();
@@ -75,6 +77,8 @@ export function TaskDetail() {
 
   const activeProjects = useProjectStore((s) => s.projects.filter((p) => p.status === "active"));
   const allProjects    = useProjectStore((s) => s.projects);
+  const activeGoals    = useGoalsStore((s) => s.goals.filter((g) => g.status === "active" || g.status === "draft"));
+  const allGoals       = useGoalsStore((s) => s.goals);
   const allNotes       = useNoteStore((s) => s.notes);
   const allEvents      = useCalendarStore((s) => s.events);
 
@@ -83,6 +87,7 @@ export function TaskDetail() {
   const task       = openTaskId ? getTaskById(openTaskId) : null;
 
   const project       = task?.projectId ? allProjects.find((p) => p.id === task.projectId) : undefined;
+  const goal          = task?.goalId ? allGoals.find((g) => g.id === task.goalId) : undefined;
   const linkedNotes   = allNotes.filter((n)  => task?.linkedNoteIds.includes(n.id));
   const linkedEvents  = allEvents.filter((e) => task?.linkedEventIds.includes(e.id));
 
@@ -92,6 +97,7 @@ export function TaskDetail() {
   const [dueDate,       setDueDate]       = useState("");
   const [priority,      setPriority]      = useState<Priority>("none");
   const [projectId,     setProjectId]     = useState("");
+  const [goalId,        setGoalId]        = useState("");
   const [status,        setStatus]        = useState<TaskStatus>("todo");
   const [estimateMins,  setEstimateMins]  = useState<number | "">("");
   const [newCheckItem,  setNewCheckItem]   = useState("");
@@ -107,6 +113,7 @@ export function TaskDetail() {
   const [linkNoteOpen,  setLinkNoteOpen]   = useState(false);
   const [noteSearch,    setNoteSearch]     = useState("");
   const [estimateInputStr, setEstimateInputStr] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Dependencies states
   const depAnchor = useRef<HTMLButtonElement>(null);
@@ -136,9 +143,11 @@ export function TaskDetail() {
   const statusAnchor   = useRef<HTMLButtonElement>(null);
   const priorityAnchor = useRef<HTMLButtonElement>(null);
   const projectAnchor  = useRef<HTMLButtonElement>(null);
+  const goalAnchor     = useRef<HTMLButtonElement>(null);
   const [statusOpen,   setStatusOpen]   = useState(false);
   const [priorityOpen, setPriorityOpen] = useState(false);
   const [projectOpen,  setProjectOpen]  = useState(false);
+  const [goalOpen,     setGoalOpen]     = useState(false);
 
   const titleRef = useRef<HTMLInputElement>(null);
 
@@ -192,6 +201,7 @@ export function TaskDetail() {
       setDueDate(quickAddPrefill.dueDate ?? "");
       setPriority((quickAddPrefill.priority as Priority) ?? "none");
       setProjectId(quickAddPrefill.projectId ?? "");
+      setGoalId(quickAddPrefill.goalId ?? "");
       setStatus("todo");
       setEstimateMins("");
       setEstimateInputStr("");
@@ -221,6 +231,7 @@ export function TaskDetail() {
       setDueDate(task.dueDate ?? "");
       setPriority(task.priority);
       setProjectId(task.projectId ?? "");
+      setGoalId(task.goalId ?? "");
       setStatus(task.status);
       setEstimateMins(task.estimateMinutes ?? "");
       setEstimateInputStr(task.estimateMinutes ? formatMinutesToDurationString(task.estimateMinutes) : "");
@@ -266,14 +277,18 @@ export function TaskDetail() {
   };
 
   const handleCreate = async () => {
+    if (isSubmitting) return;
     if (!title.trim()) { titleRef.current?.focus(); return; }
-    await createTask({
+    setIsSubmitting(true);
+    try {
+      await createTask({
       ...quickAddPrefill,
       title:          title.trim(),
       description:    description.trim() || undefined,
       dueDate:        dueDate || undefined,
       priority,
       projectId:      projectId || undefined,
+      goalId:         goalId || undefined,
       status,
       estimateMinutes: estimateMins !== "" ? Number(estimateMins) : undefined,
       checklistItems: checklistItems.map((item, i) => ({ ...item, order: i })),
@@ -298,8 +313,10 @@ export function TaskDetail() {
         linkedTaskIds: [], // task id not known yet at create time — acceptable
       });
     }
-
-    closeQuickAdd();
+    } finally {
+      setIsSubmitting(false);
+      closeQuickAdd();
+    }
   };
 
   /**
@@ -546,6 +563,16 @@ export function TaskDetail() {
             />
           </div>
 
+          {!projectId && !goalId && (
+            <div className="mx-5 mb-4 p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-xs text-amber-600 dark:text-amber-400 flex items-start gap-2 animate-fade-in">
+              <Target size={14} className="shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold mb-0.5">Missing alignment</p>
+                <p className="opacity-90 leading-relaxed">This task isn't aligned with any project or goal. Is that intentional? Pure inbox capture is fine, but consider assigning it to a larger objective.</p>
+              </div>
+            </div>
+          )}
+
           {/* Metadata grid */}
           <div className="border-y border-border divide-y divide-border/50">
 
@@ -556,9 +583,23 @@ export function TaskDetail() {
                 onClick={() => setProjectOpen((v) => !v)}
                 className="flex items-center gap-2 text-sm hover:text-primary transition-fast"
               >
-                {activeProject
-                  ? <><ProjectDot color={activeProject.color} size={8} />{activeProject.name}</>
+                {project
+                  ? <><ProjectDot color={project.color} size={8} />{project.name}</>
                   : <span className="text-muted-foreground/60 text-xs">No project</span>}
+                <ChevronDown size={11} className="opacity-40" />
+              </button>
+            </MetaRow>
+
+            {/* Goal */}
+            <MetaRow label="Goal" icon={<Target size={13} />}>
+              <button
+                ref={goalAnchor}
+                onClick={() => setGoalOpen((v) => !v)}
+                className="flex items-center gap-2 text-sm hover:text-primary transition-fast"
+              >
+                {goal
+                  ? <><span className="text-muted-foreground" style={{ color: goal.color }}>{goal.icon || "🎯"}</span> {goal.title}</>
+                  : <span className="text-muted-foreground/60 text-xs">No goal aligned</span>}
                 <ChevronDown size={11} className="opacity-40" />
               </button>
             </MetaRow>
@@ -883,6 +924,28 @@ export function TaskDetail() {
                   </span>
                 )}
               </span>
+              {!isCreating && task && (
+                <button
+                  onClick={async () => {
+                    bus.emit("ui:notification", { type: "info", message: "Breaking down task..." });
+                    try {
+                      const { AIService } = await import("@/modules/ai/service");
+                      const steps = await AIService.breakdownTask(task.title, task.description || undefined);
+                      if (steps && steps.length > 0) {
+                        for (const step of steps) {
+                          await addChecklistItem(task.id, step.title);
+                        }
+                        bus.emit("ui:notification", { type: "success", message: "Task broken down" });
+                      }
+                    } catch (e) {
+                      bus.emit("ui:notification", { type: "error", message: "Failed to break down task" });
+                    }
+                  }}
+                  className="flex items-center gap-1 text-[11px] font-medium text-indigo-500 hover:text-indigo-400 transition-fast"
+                >
+                  <Sparkles size={11} /> AI Breakdown
+                </button>
+              )}
             </div>
 
             {totalChecklist > 0 && (
@@ -970,12 +1033,40 @@ export function TaskDetail() {
               {linkedNotes.map((n) => (
                 <button
                   key={n.id}
-                  onClick={() => useNoteStore.getState().openNote(n.id)}
-                  className="flex items-center gap-2 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-fast w-full"
+                  className="bg-background rounded-lg border border-border shadow-sm overflow-hidden flex flex-col mt-2"
                 >
-                  <FileText size={13} className="shrink-0" />
-                  <span className="flex-1 truncate text-left">{n.title || "Untitled"}</span>
-                  <ExternalLink size={11} className="shrink-0 opacity-40" />
+                  <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/30 group">
+                    <div className="flex items-center gap-2">
+                      <FileText size={14} className="text-muted-foreground" />
+                      <input
+                        value={n.title}
+                        onChange={(e) => useNoteStore.getState().updateNote(n.id, { title: e.target.value })}
+                        placeholder="Untitled Note"
+                        className="text-sm font-semibold bg-transparent outline-none flex-1 min-w-0"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => useNoteStore.getState().openNote(n.id)}
+                        className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
+                        title="Open in Notes"
+                      >
+                        <ExternalLink size={12} />
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (task) save({ linkedNoteIds: task.linkedNoteIds.filter(id => id !== n.id) });
+                        }}
+                        className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-muted rounded"
+                        title="Unlink Note"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="p-3 bg-background">
+                    <NoteEditor note={n} className="min-h-[150px]" />
+                  </div>
                 </button>
               ))}
               {linkNoteOpen && (
@@ -1031,7 +1122,7 @@ export function TaskDetail() {
                 </button>
                 <button
                   onClick={() => void handleCreate()}
-                  disabled={!title.trim()}
+                  disabled={!title.trim() || isSubmitting}
                   className={cn(
                     "px-4 py-1.5 rounded-lg text-[12px] font-semibold transition-fast",
                     "bg-primary text-primary-foreground hover:bg-primary/90",
@@ -1080,12 +1171,55 @@ export function TaskDetail() {
             key={s.value}
             active={(isCreating ? status : task?.status) === s.value}
             onClick={() => {
-              if (isCreating) setStatus(s.value);
-              else save({ status: s.value });
+              if (isCreating) {
+                setStatus(s.value);
+              } else {
+                if (s.value === "done" && task?.status !== "done") {
+                  void useTaskStore.getState().completeTask(task!.id);
+                } else if (task?.status === "done" && s.value !== "done") {
+                  void useTaskStore.getState().restoreTask(task!.id);
+                  if (s.value !== "todo") {
+                    save({ status: s.value });
+                  }
+                } else {
+                  save({ status: s.value });
+                }
+              }
               setStatusOpen(false);
             }}
           >
             {s.label}
+          </PopoverItem>
+        ))}
+      </Popover>
+
+      {/* Goal Popover */}
+      <Popover open={goalOpen} anchor={goalAnchor} onClose={() => setGoalOpen(false)}>
+        <PopoverItem
+          onClick={() => {
+            setGoalId("");
+            if (!isCreating) save({ goalId: null as any });
+            setGoalOpen(false);
+          }}
+        >
+          <span className="flex-1 text-sm font-medium">No goal aligned</span>
+          {!goalId && <CheckSquare size={14} className="text-primary" />}
+        </PopoverItem>
+        <PopoverDivider />
+        {activeGoals.map((g) => (
+          <PopoverItem
+            key={g.id}
+            onClick={() => {
+              setGoalId(g.id);
+              if (!isCreating) save({ goalId: g.id });
+              setGoalOpen(false);
+            }}
+          >
+            <div className="flex items-center gap-2 flex-1">
+              <span className="text-[10px]" style={{ color: g.color }}>{g.icon || "🎯"}</span>
+              <span className="text-sm font-medium text-foreground">{g.title}</span>
+            </div>
+            {goalId === g.id && <CheckSquare size={14} className="text-primary" />}
           </PopoverItem>
         ))}
       </Popover>

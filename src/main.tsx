@@ -15,6 +15,10 @@ import { FOCUS_MIGRATIONS }    from "@/modules/focus/db";
 import { TIME_MIGRATIONS }     from "@/modules/time-tracking/db";
 import { DATABASE_MIGRATIONS } from '@/modules/database/db';
 import { RESEARCH_MIGRATIONS } from '@/modules/research/db';
+import { SEARCH_MIGRATIONS }   from '@/modules/search/db';
+import { HABIT_MIGRATIONS }    from '@/modules/habits/db';
+import { GOAL_MIGRATIONS }     from "@/modules/goals/db";
+import { AI_MIGRATIONS }       from "@/modules/ai/db";
 
 // ── Kernel services ───────────────────────────────────────────
 import { startTaskCalendarSync } from "@/kernel/task-calendar-sync";
@@ -32,6 +36,10 @@ db.registerMigrations(FOCUS_MIGRATIONS);
 db.registerMigrations(TIME_MIGRATIONS);
 db.registerMigrations(DATABASE_MIGRATIONS);
 db.registerMigrations(RESEARCH_MIGRATIONS);
+db.registerMigrations(SEARCH_MIGRATIONS);
+db.registerMigrations(HABIT_MIGRATIONS);
+db.registerMigrations(GOAL_MIGRATIONS);
+db.registerMigrations(AI_MIGRATIONS);
 
 const queryClient = new QueryClient({
   defaultOptions: {

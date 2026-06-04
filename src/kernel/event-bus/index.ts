@@ -8,6 +8,7 @@ import type {
   ID,
   Task,
   Project,
+  Goal,
   Note,
   CalendarEvent,
   FocusSession,
@@ -60,12 +61,22 @@ export interface ButlerEventMap {
   "project:deleted":           { projectId: ID };
   "project:open":              { projectId: ID };
 
+  // ── Goal events ───────────────────────────────────────
+  "goal:created":              { goal: Goal };
+  "goal:updated":              { goal: Goal };
+  "goal:deleted":              { goalId: ID };
+  "goal:open":                 { goalId: ID };
+
   // ── Note events ───────────────────────────────────────
   "note:created":              { note: Note };
   "note:updated":              { note: Note };
   "note:deleted":              { noteId: ID };
   "note:open":                 { noteId: ID };
   "note:link-to-task":         { noteId: ID; taskId: ID };
+  "editor:slash-task":         void;
+  "editor:insert-link":        { result: SearchResult };
+  "ai:extract-tasks":          { noteId: ID; content: string };
+  "ai:create-task":            { query: string };
 
   // ── Calendar events ──────────────────────────────────
   "calendar:event-created":    { event: CalendarEvent };
@@ -92,7 +103,7 @@ export interface ButlerEventMap {
   "planner:task-unblocked":  { task: Task };
 
   // ── Focus events ─────────────────────────────────────
-  "focus:start-requested":     { taskId?: ID };
+  "focus:start-requested":     { taskId?: ID; timeBlockId?: ID; startImmediately?: boolean };
   "focus:session-started":     { session: FocusSession };
   "focus:session-paused":      { sessionId: ID };
   "focus:session-resumed":     { sessionId: ID };
@@ -112,7 +123,9 @@ export interface ButlerEventMap {
   // ── Journal events ───────────────────────────────────
   "journal:entry-created":     { entry: JournalEntry };
   "journal:entry-updated":     { entry: JournalEntry };
+  "journal:entry-deleted":     { entryId: ID };
   "journal:open-date":         { date: string };
+  "calendar:open-for-date":    { date: string };
 
   // ── Database events ──────────────────────────────────
   "database:created":       { database: DatabaseTable };
@@ -120,12 +133,16 @@ export interface ButlerEventMap {
   "database:deleted":       { databaseId: string };
   "database:row:created":   { databaseId: string; rowId: string };
   "database:row:deleted":   { databaseId: string; rowId: string };
+  /** Aliases — emitted by database/store.ts (hyphen form). Keep both until store migrated. */
+  "database:row-created":   { tableId: string; rowId: string };
+  "database:row-deleted":   { tableId: string; rowId: string };
   /** Notify database module to mark linked rows as Done */
   "database:task-completed": { taskId: ID; linkedNoteIds: ID[] };
 
   // ── Research events ──────────────────────────────────
   "research:source-imported":      { source: ResearchSource };
   "research:document-processed":   { document: ResearchDocument; sourceId: ID };
+  "research:collect-highlights":   { sourceId: ID };
   "research:chunk-created":        { chunk: ResearchChunk };
   "research:embedding-created":    { chunkId: ID; embeddingId: string };
   "research:entity-detected":      { entity: ResearchEntity; documentId: ID };
@@ -151,7 +168,7 @@ export interface ButlerEventMap {
   "research:search-for-context":   { query: string; sourceId: ID; sourceType: "task" | "note" | "event" };
 
   // ── Search events ─────────────────────────────────────
-  "search:open":               { query?: string };
+  "search:open":               { query?: string; mode?: "navigate" | "link" };
   "search:close":              void;
   "search:result-selected":    { result: SearchResult };
   "search:index-invalidated":  { entityType: string; id: ID };
@@ -189,6 +206,7 @@ export interface ButlerEventMap {
 
   // ── Habit Events (Journal) ─────────────────────────────
   "habit:checked":             { habitId: ID; date: string; value: boolean };
+  "habit:logged":              { habitId: ID; date: string; status: string };
   "habit:streak-updated":      { habitId: ID; streak: number };
 
   // ── Focus Flow Mode ────────────────────────────────────
@@ -210,6 +228,12 @@ export interface ButlerEventMap {
   // ── AI hooks ─────────────────────────────────────────
   "ai:context-update":         { context: Record<string, unknown> };
   "ai:suggestion":             { type: string; payload: unknown };
+
+  // ── Research UI Triggers (internal) ──────────────────
+  /** Emitted by Research UI to open the import dialog */
+  "research:trigger-import":       void;
+  /** Emitted by Research UI to open the new-thread dialog */
+  "research:trigger-new-thread":   void;
 }
 
 export type ButlerEventKey = keyof ButlerEventMap;

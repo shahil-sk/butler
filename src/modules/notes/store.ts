@@ -11,6 +11,26 @@ function rowToNote(r: Record<string, unknown>): Note {
     id:               r.id as string,
     title:            r.title as string,
     content:          r.content as string,
+    // New Module 07 fields
+    contentText:      (r.content_text as string) || undefined,
+    status:           (r.status as Note["status"]) || "active",
+    noteType:         (r.note_type as Note["noteType"]) || "note",
+    isDaily:          Boolean(r.is_daily),
+    dailyDate:        (r.daily_date as string) || undefined,
+    parentId:         (r.parent_id as string) || undefined,
+    notebookId:       (r.notebook_id as string) || undefined,
+    properties:       r.properties ? JSON.parse(r.properties as string) : undefined,
+    aliases:          r.aliases ? JSON.parse(r.aliases as string) : undefined,
+    pinned:           Boolean(r.pinned),
+    starred:          Boolean(r.starred),
+    wordCount:        (r.word_count as number) || 0,
+    readingTimeMin:   (r.reading_time_min as number) || 0,
+    lastOpenedAt:     (r.last_opened_at as string) || undefined,
+    createdBy:        (r.created_by as string) || undefined,
+    embedding:        r.embedding ? JSON.parse(r.embedding as string) : undefined,
+    embeddingUpdatedAt: (r.embedding_updated_at as string) || undefined,
+
+    // Legacy fields
     type:             r.type as Note["type"],
     date:             (r.date as string | null) ?? undefined,
     linkedTaskIds:    JSON.parse((r.linked_task_ids as string) || "[]"),
@@ -27,34 +47,35 @@ function rowToNote(r: Record<string, unknown>): Note {
 
 const INSERT_SQL = `
   INSERT INTO notes
-    (id, title, content, type, date, linked_task_ids, linked_project_ids,
-     linked_event_ids, linked_research_ids, backlinks, tags, is_pinned, created_at, updated_at)
-  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    (id, title, content, content_text, status, note_type, is_daily, daily_date, parent_id, notebook_id,
+     properties, aliases, pinned, starred, word_count, reading_time_min, last_opened_at, created_by, embedding, embedding_updated_at,
+     type, date, linked_task_ids, linked_project_ids, linked_event_ids, linked_research_ids, backlinks, tags, is_pinned, created_at, updated_at)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 `;
 const UPDATE_SQL = `
   UPDATE notes SET
-    title=?, content=?, type=?, date=?,
-    linked_task_ids=?, linked_project_ids=?, linked_event_ids=?, linked_research_ids=?,
+    title=?, content=?, content_text=?, status=?, note_type=?, is_daily=?, daily_date=?, parent_id=?, notebook_id=?,
+    properties=?, aliases=?, pinned=?, starred=?, word_count=?, reading_time_min=?, last_opened_at=?, created_by=?, embedding=?, embedding_updated_at=?,
+    type=?, date=?, linked_task_ids=?, linked_project_ids=?, linked_event_ids=?, linked_research_ids=?,
     backlinks=?, tags=?, is_pinned=?, updated_at=?
   WHERE id=?
 `;
 
 function insertParams(n: Note): unknown[] {
   return [
-    n.id, n.title, n.content, n.type, n.date ?? null,
-    JSON.stringify(n.linkedTaskIds), JSON.stringify(n.linkedProjectIds),
-    JSON.stringify(n.linkedEventIds), JSON.stringify(n.linkedResearchIds),
-    JSON.stringify(n.backlinks),
-    JSON.stringify(n.tags), n.isPinned ? 1 : 0,
-    n.createdAt, n.updatedAt,
+    n.id, n.title, n.content, n.contentText ?? null, n.status ?? 'active', n.noteType ?? 'note', n.isDaily ? 1 : 0, n.dailyDate ?? null, n.parentId ?? null, n.notebookId ?? null,
+    n.properties ? JSON.stringify(n.properties) : null, n.aliases ? JSON.stringify(n.aliases) : null, n.pinned ? 1 : 0, n.starred ? 1 : 0, n.wordCount ?? 0, n.readingTimeMin ?? 0, n.lastOpenedAt ?? null, n.createdBy ?? null, n.embedding ? JSON.stringify(n.embedding) : null, n.embeddingUpdatedAt ?? null,
+    n.type, n.date ?? null, JSON.stringify(n.linkedTaskIds), JSON.stringify(n.linkedProjectIds),
+    JSON.stringify(n.linkedEventIds), JSON.stringify(n.linkedResearchIds), JSON.stringify(n.backlinks),
+    JSON.stringify(n.tags), n.isPinned ? 1 : 0, n.createdAt, n.updatedAt,
   ];
 }
 function updateParams(n: Note): unknown[] {
   return [
-    n.title, n.content, n.type, n.date ?? null,
-    JSON.stringify(n.linkedTaskIds), JSON.stringify(n.linkedProjectIds),
-    JSON.stringify(n.linkedEventIds), JSON.stringify(n.linkedResearchIds),
-    JSON.stringify(n.backlinks),
+    n.title, n.content, n.contentText ?? null, n.status ?? 'active', n.noteType ?? 'note', n.isDaily ? 1 : 0, n.dailyDate ?? null, n.parentId ?? null, n.notebookId ?? null,
+    n.properties ? JSON.stringify(n.properties) : null, n.aliases ? JSON.stringify(n.aliases) : null, n.pinned ? 1 : 0, n.starred ? 1 : 0, n.wordCount ?? 0, n.readingTimeMin ?? 0, n.lastOpenedAt ?? null, n.createdBy ?? null, n.embedding ? JSON.stringify(n.embedding) : null, n.embeddingUpdatedAt ?? null,
+    n.type, n.date ?? null, JSON.stringify(n.linkedTaskIds), JSON.stringify(n.linkedProjectIds),
+    JSON.stringify(n.linkedEventIds), JSON.stringify(n.linkedResearchIds), JSON.stringify(n.backlinks),
     JSON.stringify(n.tags), n.isPinned ? 1 : 0, n.updatedAt,
     n.id,
   ];
@@ -67,7 +88,7 @@ interface NoteState {
   loading:      boolean;
   openNoteId:   ID | null;
   searchQuery:  string;
-  activeFilter: "all" | "note" | "daily" | "meeting" | "pinned";
+  activeFilter: "all" | "note" | "daily" | "meeting" | "pinned" | "graph";
 }
 
 interface NoteActions {
@@ -108,6 +129,25 @@ export const useNoteStore = create<NoteState & NoteActions>()((set, get) => ({
       id:               generateId(),
       title:            input.title ?? "Untitled",
       content:          input.content ?? JSON.stringify({ type: "doc", content: [] }),
+      contentText:      input.contentText,
+      status:           input.status ?? "active",
+      noteType:         input.noteType ?? "note",
+      isDaily:          input.isDaily ?? false,
+      dailyDate:        input.dailyDate,
+      parentId:         input.parentId,
+      notebookId:       input.notebookId,
+      properties:       input.properties,
+      aliases:          input.aliases,
+      pinned:           input.pinned ?? false,
+      starred:          input.starred ?? false,
+      wordCount:        input.wordCount ?? 0,
+      readingTimeMin:   input.readingTimeMin ?? 0,
+      lastOpenedAt:     input.lastOpenedAt,
+      createdBy:        input.createdBy,
+      embedding:        input.embedding,
+      embeddingUpdatedAt: input.embeddingUpdatedAt,
+      
+      // Legacy
       type:             input.type ?? "note",
       date:             input.date,
       linkedTaskIds:    input.linkedTaskIds    ?? [],

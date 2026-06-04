@@ -2,6 +2,7 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/shared/utils";
 import { useProjectStore } from "../store";
+import { useGoalsStore } from "@/modules/goals/store";
 
 const PRESET_COLORS = [
   "#3b82f6", "#8b5cf6", "#ec4899", "#f97316",
@@ -14,13 +15,17 @@ export function CreateProjectModal() {
   const [description, setDescription] = useState("");
   const [color, setColor] = useState("#3b82f6");
   const [dueDate, setDueDate] = useState("");
+  const [goalId, setGoalId] = useState("");
+
+  const { goals } = useGoalsStore();
+  const activeGoals = goals.filter(g => g.status === "active" || g.status === "draft");
 
   if (!createModalOpen) return null;
 
   const submit = async () => {
     if (!name.trim()) return;
-    await createProject({ name: name.trim(), description, color, dueDate: dueDate || undefined });
-    setName(""); setDescription(""); setColor("#3b82f6"); setDueDate("");
+    await createProject({ name: name.trim(), description, color, dueDate: dueDate || undefined, goalId: goalId || undefined });
+    setName(""); setDescription(""); setColor("#3b82f6"); setDueDate(""); setGoalId("");
     closeCreateModal();
   };
 
@@ -93,6 +98,21 @@ export function CreateProjectModal() {
               onChange={(e) => setDueDate(e.target.value)}
               className="text-sm bg-transparent outline-none"
             />
+          </div>
+
+          {/* Goal Alignment */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground w-16">Goal</span>
+            <select
+              value={goalId}
+              onChange={(e) => setGoalId(e.target.value)}
+              className="text-sm bg-transparent outline-none flex-1 border-b border-border border-dashed pb-1"
+            >
+              <option value="">No goal aligned</option>
+              {activeGoals.map(g => (
+                <option key={g.id} value={g.id}>{g.title}</option>
+              ))}
+            </select>
           </div>
         </div>
 

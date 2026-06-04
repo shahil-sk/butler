@@ -27,7 +27,7 @@ function taskIdFromEvent(evt: CalendarEvent) {
 }
 
 export function MonthGrid() {
-  const { activeDate, getEventsForDay, calendars, openEventForm, setActiveDate, setView } = useCalendarStore();
+  const { activeDate, getEventsForDay, calendars, openEventForm, setActiveDate, setView, openContextMenu } = useCalendarStore();
   const tasks = useTaskStore((s) => s.tasks);
   const [taskPanelId, setTaskPanelId] = useState<string | null>(null);
   const [expandedCell, setExpandedCell] = useState<string | null>(null);
@@ -55,6 +55,35 @@ export function MonthGrid() {
       setTaskPanelId(taskIdFromEvent(evt));
     } else {
       openEventForm(evt, evt.id);
+    }
+  };
+
+  const handleContextMenu = (e: React.MouseEvent, evt: CalendarEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openContextMenu(e.clientX, e.clientY, evt);
+  };
+
+  const handleDrop = (e: React.DragEvent, dateStr: string) => {
+    e.preventDefault();
+    const evtId = e.dataTransfer.getData("text/plain");
+    if (!evtId) return;
+
+    if (evtId.startsWith("task:")) {
+      const taskId = evtId.replace("task:", "");
+      useTaskStore.getState().updateTask(taskId, { dueDate: dateStr });
+    } else {
+      const evt = useCalendarStore.getState().events.find(x => x.id === evtId);
+      if (evt) {
+        const timeStart = evt.startAt.slice(10);
+        const timeEnd = evt.endAt.slice(10);
+        useCalendarStore.getState().updateEvent(evt.id, {
+          startAt: `${dateStr}${timeStart}`,
+          endAt: `${dateStr}${timeEnd}`,
+          startDatetime: `${dateStr}${timeStart}`,
+          endDatetime: `${dateStr}${timeEnd}`,
+        });
+      }
     }
   };
 
@@ -90,6 +119,8 @@ export function MonthGrid() {
                   setActiveDate(dateStr);
                   setView("day");
                 }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => handleDrop(e, dateStr)}
                 className={cn(
                   "border-r border-b border-border p-1.5 cursor-pointer transition-fast overflow-hidden",
                   "hover:bg-accent/40",
@@ -132,12 +163,19 @@ export function MonthGrid() {
                     return (
                       <div
                         key={evt.id}
+                        draggable
+                        onDragStart={(e) => {
+                          e.stopPropagation();
+                          e.dataTransfer.setData("text/plain", evt.id);
+                        }}
                         onClick={(e) => handleEventClick(e, evt)}
+                        onContextMenu={(e) => handleContextMenu(e, evt)}
                         className={cn(
                           "flex items-center gap-1 px-1 py-0.5 rounded text-[10px] truncate cursor-pointer transition-fast",
                           isTask
                             ? "hover:brightness-95 border border-dashed border-current/30"
-                            : "hover:brightness-95"
+                            : "hover:brightness-95",
+                          (evt.status === "cancelled" || evt.status === "completed") && "line-through opacity-60"
                         )}
                         style={{ backgroundColor: `${color}20`, color }}
                         title={isTask ? "Click to view/edit task" : evt.title}

@@ -15,7 +15,7 @@ export type Milliseconds = number;
 
 export type Priority = "none" | "low" | "medium" | "high" | "urgent";
 export type TaskStatus = "todo" | "in_progress" | "done" | "cancelled" | "archived";
-export type ProjectStatus = "active" | "on_hold" | "completed" | "archived";
+export type ProjectStatus = "planning" | "active" | "on_hold" | "completed" | "cancelled" | "archived";
 export type FocusState = "idle" | "focusing" | "break" | "paused";
 
 // ── Core Entities ────────────────────────────────────────────
@@ -23,7 +23,7 @@ export type FocusState = "idle" | "focusing" | "break" | "paused";
 export interface Task {
   id: ID;
   title: string;
-  description?: string;        // markdown
+  description?: string;        // RichText
   status: TaskStatus;
   priority: Priority;
   projectId?: ID;
@@ -31,28 +31,103 @@ export interface Task {
   labels: string[];
   tags: string[];
   dueDate?: ISODate;
+  dueTime?: string;
   startDate?: ISODate;
-  scheduledDate?: ISODate;
+  scheduledDate?: ISODateTime; // restored
+  scheduledAt?: ISODateTime;   // new
+  scheduledDuration?: number;
   completedAt?: ISODateTime;
+  cancelledAt?: ISODateTime;
+  goalId?: ID;
+  assigneeId?: ID;
+  recurrence?: RecurrenceRule; // restored
+  recurrenceRule?: string;     // new string rule
+  recurrenceParent?: ID;
+  nextOccurrenceAt?: ISODate;
   estimateMinutes?: number;
-  actualMinutes?: number;      // from time tracking
-  recurrence?: RecurrenceRule;
-  dependencies: ID[];          // task IDs this task depends on
-  checklistItems: ChecklistItem[];
-  linkedNoteIds: ID[];
-  linkedEventIds: ID[];
-  linkedPlannerBlockIds: ID[];
-  linkedResearchIds: ID[];
-  order: number;               // for manual sorting
+  actualMinutes?: number;
+  energyLevel?: "low" | "medium" | "high";
+  context?: string[];
+  size?: "xs" | "s" | "m" | "l" | "xl";
+  watchers?: ID[];
+  attachments?: ID[];
+  dependencies: ID[];          // restored
+  dependsOn?: ID[];
+  blocks?: ID[];
+  checklistItems: ChecklistItem[]; // restored
+  customFields?: Record<string, unknown>;
+  order: number;               // restored
+  position: number;
+  sectionId?: ID;
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
+  createdBy?: ID;
+  source?: "manual" | "ai_generated" | "recurring" | "imported" | "email";
+  version?: number;
+
+  linkedNoteIds: ID[];         // restored required
+  linkedEventIds: ID[];        // restored required
+  linkedPlannerBlockIds: ID[]; // restored required
+  linkedResearchIds: ID[];     // restored required
 }
 
 export interface ChecklistItem {
   id: ID;
-  text: string;
-  checked: boolean;
-  order: number;
+  taskId?: ID;
+  text: string;                // restored
+  checked: boolean;            // restored
+  order: number;               // restored
+  title?: string;
+  done?: boolean;
+  position?: number;
+  createdAt?: ISODateTime;
+}
+
+export interface TaskSection {
+  id: ID;
+  title: string;
+  projectId?: ID;
+  color?: string;
+  position: number;
+  collapsed: boolean;
+}
+
+export interface TaskDependency {
+  id: ID;
+  predecessorId: ID;
+  successorId: ID;
+  type: "finish_to_start" | "start_to_start" | "finish_to_finish" | "start_to_finish";
+  lagDays: number;
+  createdAt: ISODateTime;
+}
+
+export interface Label {
+  id: ID;
+  name: string;
+  color: string;
+  icon?: string;
+}
+
+export interface TaskComment {
+  id: ID;
+  taskId: ID;
+  authorId: ID;
+  body: string;
+  mentions: ID[];
+  reactions: Record<string, ID[]>;
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
+  edited: boolean;
+}
+
+export interface TaskActivity {
+  id: ID;
+  taskId: ID;
+  actorId: ID;
+  event: "created" | "status_changed" | "field_updated" | "comment_added" | "assignee_changed" | "due_date_changed" | "dependency_added" | "moved";
+  oldValue?: Record<string, unknown>;
+  newValue?: Record<string, unknown>;
+  occurredAt: ISODateTime;
 }
 
 export interface RecurrenceRule {
@@ -63,63 +138,248 @@ export interface RecurrenceRule {
   count?: number;
 }
 
-export interface Project {
+export interface ProjectMember {
+  id: ID;
+  projectId: ID;
+  personId: ID;
+  role: "owner" | "manager" | "member" | "viewer" | "client";
+  joinedAt: ISODateTime;
+  invitedBy?: ID;
+}
+
+export interface ProjectPhase {
+  id: ID;
+  projectId: ID;
+  name: string;
+  startDate: ISODate;
+  endDate: ISODate;
+  color: string;
+  position: number;
+}
+
+export interface ProjectNote {
+  projectId: ID;
+  noteId: ID;
+  linkedAt: ISODateTime;
+  linkedBy: ID;
+  noteType: "general" | "meeting" | "decision" | "spec" | "retrospective";
+}
+
+export interface ProjectTemplate {
   id: ID;
   name: string;
   description?: string;
+  defaultPhases: Record<string, unknown>; // JSON
+  defaultMilestones: Record<string, unknown>; // JSON
+  defaultTaskSections: Record<string, unknown>; // JSON
+  defaultMemberRoles: Record<string, unknown>; // JSON
+  createdAt: ISODateTime;
+}
+
+export interface Project {
+  id: ID;
+  name: string;
+  description?: string; // RichText JSON
   status: ProjectStatus;
-  color: string;               // hex
-  icon?: string;               // lucide icon name
+  health?: "on_track" | "at_risk" | "off_track";
+  priority: "none" | "low" | "medium" | "high" | "critical";
+  visibility: "private" | "team" | "public";
+  goalId?: ID;
+  parentProjectId?: ID;
   startDate?: ISODate;
-  dueDate?: ISODate;
-  milestones: Milestone[];
-  linkedNoteIds: ID[];
-  order: number;
+  targetDate?: ISODate;
+  hardDeadline?: ISODate;
+  completedAt?: ISODateTime;
+  ownerId: ID;
+  color: string;
+  icon?: string;
+  coverImageUrl?: string;
+  budgetHours?: number;
+  budgetCost?: number;
+  currency?: string;
+  tags: string[];
+  labels: ID[];
+  customFields: Record<string, unknown>;
+  progressMode: "manual" | "task_based" | "milestone_based";
+  progressPercent: number;
+  templateId?: ID;
+  isTemplate: boolean;
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
+  createdBy: ID;
+  archivedAt?: ISODateTime;
+  
+  // Legacy / Temp
+  milestones: Milestone[];
+  dueDate?: ISODate;
+  linkedNoteIds: ID[];
+  attachments: ID[];
+  order: number;
 }
 
 export interface Milestone {
   id: ID;
   projectId: ID;
   title: string;
-  dueDate?: ISODate;
+  description?: string;
+  dueDate: ISODate;
+  status: "pending" | "at_risk" | "completed" | "missed";
   completedAt?: ISODateTime;
-  linkedTaskIds: ID[];
+  tasks: ID[];
+  dependsOn: ID[];
+  calendarEventId?: ID;
+  createdAt: ISODateTime;
+  
+  linkedTaskIds: ID[]; // Legacy
 }
 
 export interface Note {
   id: ID;
   title: string;
   content: string;             // tiptap JSON string
+  contentText?: string;        // plain text for FTS
+  status?: "active" | "archived" | "trashed";
+  noteType?: "note" | "daily" | "template" | "meeting" | "literature" | "atomic";
+  isDaily?: boolean;
+  dailyDate?: ISODate;
+  parentId?: ID;
+  notebookId?: ID;
+  
+  // Legacy / Temp fields (keeping for compatibility during transition)
   type: "note" | "daily" | "meeting" | "template";
   date?: ISODate;              // for daily notes
   linkedTaskIds: ID[];
   linkedProjectIds: ID[];
   linkedEventIds: ID[];
   linkedResearchIds: ID[];
-  backlinks: ID[];             // note IDs that link to this note
+  backlinks: ID[];             // legacy backlinks
+  
   tags: string[];
-  isPinned: boolean;
+  properties?: Record<string, unknown>;
+  aliases?: string[];
+  
+  isPinned: boolean; // legacy
+  pinned?: boolean;
+  starred?: boolean;
+  
+  wordCount?: number;
+  readingTimeMin?: number;
+  
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
+  lastOpenedAt?: ISODateTime;
+  createdBy?: ID;
+  
+  embedding?: number[];
+  embeddingUpdatedAt?: ISODateTime;
+}
+
+export interface NoteLink {
+  id: ID;
+  sourceNoteId: ID;
+  targetNoteId?: ID;
+  targetRaw: string;
+  blockId?: string;
+  isEmbed: boolean;
+  createdAt: ISODateTime;
+}
+
+export interface NoteBlock {
+  id: ID;
+  noteId: ID;
+  blockId: string;
+  type: "paragraph" | "heading" | "bullet" | "numbered" | "code" | "quote" | "image" | "embed" | "callout" | "table" | "divider" | "task" | "toggle" | "database_embed";
+  content: string;
+  position: number;
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
+}
+
+export interface Notebook {
+  id: ID;
+  name: string;
+  icon?: string;
+  color?: string;
+  parentId?: ID;
+  position: number;
+  createdAt: ISODateTime;
+}
+
+export interface NoteVersion {
+  id: ID;
+  noteId: ID;
+  content: string; // RichText JSON
+  wordCount: number;
+  savedAt: ISODateTime;
+  savedBy: ID;
+  changeSummary?: string;
+}
+
+export interface Attendee {
+  id: ID;
+  eventId: ID;
+  name: string;
+  email: string;
+  status: "invited" | "accepted" | "declined" | "tentative" | "needs_action";
+  isOrganizer: boolean;
+  isSelf: boolean;
+}
+
+export interface Reminder {
+  id: ID;
+  eventId: ID;
+  method: "notification" | "email";
+  minutes: number;
 }
 
 export interface CalendarEvent {
   id: ID;
   title: string;
   description?: string;
+  status?: "confirmed" | "tentative" | "cancelled" | "completed";
+  visibility?: "default" | "private" | "public";
+  
+  startDatetime: ISODateTime; // backward compat with startAt in some places?
   startAt: ISODateTime;
+  endDatetime: ISODateTime;
   endAt: ISODateTime;
-  allDay: boolean;
-  color?: string;
+  isAllDay: boolean;
+  allDay: boolean; // backward compat
+  timezone: string;
+  
+  location?: string;
+  locationLat?: number;
+  locationLng?: number;
+  meetingUrl?: string;
+  meetingPassword?: string;
+  
+  recurrenceRule?: string; // RRULE string
+  recurrenceParent?: ID;
+  recurrence?: any; // backward compat
+  
   calendarId: ID;
+  externalId?: string;
+  externalSource?: "google" | "outlook" | "ical" | "local";
+  
+  attendees?: Attendee[];
+  reminders?: Reminder[];
+  attachments?: ID[];
+  
+  color?: string;
+  category?: "work" | "personal" | "health" | "social" | "travel" | "focus" | "blocked" | "milestone";
+  
+  taskId?: ID;
+  projectId?: ID;
+  goalId?: ID;
+
   linkedTaskIds: ID[];
   linkedNoteIds: ID[];
-  isTimeBlock: boolean;        // time-blocked from planner
-  recurrence?: RecurrenceRule;
+
+  isTimeBlock?: boolean; // backward compat
+  
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
+  createdBy?: ID;
 }
 
 export interface Calendar {
@@ -128,25 +388,80 @@ export interface Calendar {
   color: string;
   isDefault: boolean;
   isVisible: boolean;
-  source: "local" | "google" | "ical";
-  sourceUrl?: string;
+  source: "local" | "google" | "outlook" | "ical_url";
+  icalUrl?: string;
+  syncToken?: string;
+  lastSyncedAt?: ISODateTime;
+  createdAt: ISODateTime;
 }
 
 export interface FocusSession {
   id: ID;
+  type: "pomodoro" | "deep_work" | "break" | "custom" | "focus" | "short_break" | "long_break";
+  status: "active" | "paused" | "completed" | "abandoned";
   taskId?: ID;
+  timeBlockId?: ID;
   projectId?: ID;
-  type: "focus" | "short_break" | "long_break";
-  plannedMinutes: number;
-  actualMinutes?: number;
-  state: FocusState;
-  startedAt?: ISODateTime;
-  completedAt?: ISODateTime;
+  plannedDuration: number;
+  actualDuration?: number;
+  workDuration?: number;
+  startedAt: ISODateTime;
+  endedAt?: ISODateTime;
+  pauses: SessionPause[];
+  interruptionCount: number;
+  idleTimeMinutes?: number;
+  flowScore?: number;
   notes?: string;
-  goal?: string;              // intention set before starting
-  interruptCount?: number;    // times paused manually during session
-  mood?: 1 | 2 | 3 | 4 | 5; // post-session self-rating
+  accomplishment?: string;
+  pomodoroNumber?: number;
+  workSetId?: ID;
+  tags: string[];
   createdAt: ISODateTime;
+
+  // Legacy fields
+  completedAt?: ISODateTime;
+  plannedMinutes?: number;
+  actualMinutes?: number;
+  state?: FocusState;
+  goal?: string;
+  interruptCount?: number;
+  mood?: 1 | 2 | 3 | 4 | 5;
+}
+
+export interface SessionPause {
+  id: ID;
+  sessionId: ID;
+  pausedAt: ISODateTime;
+  resumedAt?: ISODateTime;
+  reason?: "break" | "distraction" | "interruption" | "emergency";
+}
+
+export interface PomodoroWorkSet {
+  id: ID;
+  sessions: ID[]; // FKs to FocusSession
+  workSessions: number;
+  shortBreakMin: number;
+  longBreakMin: number;
+  completedAt?: ISODateTime;
+  createdAt: ISODateTime;
+}
+
+export interface FocusConfig {
+  id: ID;
+  defaultType: "pomodoro" | "deep_work";
+  pomodoroWorkMin: number;
+  pomodoroShortBreak: number;
+  pomodoroLongBreak: number;
+  pomodoroSetCount: number;
+  deepWorkDefaultMin: number;
+  autoStartBreaks: boolean;
+  autoStartNextPomodoro: boolean;
+  idleDetectionMin: number;
+  blockApps: boolean;
+  blockUrls: string[];
+  ambientSound?: "none" | "rain" | "forest" | "cafe" | "white_noise" | "brown_noise";
+  ambientVolume: number;
+  endSound: "bell" | "chime" | "gong" | "none";
 }
 
 export interface TimeEntry {
@@ -158,10 +473,27 @@ export interface TimeEntry {
   startAt: ISODateTime;
   endAt?: ISODateTime;
   durationMinutes?: number;
+  isManual?: boolean;
   isBillable: boolean;
+  billableRate?: number;
+  billableAmount?: number;
   tags: string[];
+  category?: "deep_work" | "meeting" | "admin" | "communication" | "research" | "design" | "development" | "review" | "planning" | "other";
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
+  createdBy?: ID;
+}
+
+export interface TimeTrackingSettings {
+  id: ID;
+  defaultBillable: boolean;
+  defaultHourlyRate?: number;
+  currency: string;
+  roundEntries: "none" | "5min" | "10min" | "15min" | "30min" | "1hour";
+  idleDetectionMin: number;
+  reminderIntervalMin: number;
+  workHoursStart: string; // HH:MM
+  workHoursEnd: string;   // HH:MM
 }
 
 export interface JournalEntry {
@@ -169,44 +501,105 @@ export interface JournalEntry {
   date: ISODate;
   type: "daily" | "weekly" | "monthly" | "gratitude" | "reflection";
   content: string;             // tiptap JSON string
-  mood?: 1 | 2 | 3 | 4 | 5;
+  mood?: 1 | 2 | 3 | 4 | 5 | number;
   linkedTaskIds: ID[];
   linkedProjectIds: ID[];
   tags: string[];
+
+  noteId?: ID;
+  status?: "draft" | "complete";
+  moodMorning?: number;
+  moodEvening?: number;
+  energyMorning?: number;
+  energyEvening?: number;
+  gratitude?: string[];
+  wins?: string[];
+  challenges?: string[];
+  learnings?: string[];
+  morningIntention?: string;
+  eveningReflection?: string;
+  tasksCompleted?: number;
+  tasksDeferred?: number;
+  focusMinutes?: number;
+  habitSummary?: Record<string, boolean>;
+  lifeAreaRatings?: Record<string, number>;
+  customPrompts?: Record<string, string>;
+  wordCount?: number;
+  writeStreak?: number;
+
   createdAt: ISODateTime;
+  completedAt?: ISODateTime;
   updatedAt: ISODateTime;
+}
+
+export interface SelectOption {
+  id: string;
+  label: string;
+  color: string;
 }
 
 export interface DatabaseTable {
   id: ID;
   name: string;
+  icon?: string;
   description?: string;
-  schema: DatabaseColumn[];
-  linkedProjectId?: ID;
-  linkedNoteId?: ID;
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
+  projectId?: ID;
 }
+
+export type DatabaseColumnType = "text" | "number" | "date" | "boolean" | "select" | "multi_select" | "relation" | "url" | "email" | "checkbox";
 
 export interface DatabaseColumn {
   id: ID;
+  tableId: ID;
   name: string;
-  type: "text" | "number" | "date" | "boolean" | "select" | "multi_select" | "relation" | "url" | "email";
-  options?: string[];          // for select / multi_select
-  relationTableId?: ID;        // for relation
-  isRequired: boolean;
-  order: number;
+  type: DatabaseColumnType;
+  options?: { selectOptions?: SelectOption[] } & Record<string, any>;
+  position: number;
+  isPrimary: boolean;
+  createdAt: ISODateTime;
 }
 
 export interface DatabaseRow {
   id: ID;
   tableId: ID;
+  position: number;
   cells: Record<ID, unknown>;  // columnId → value
-  order: number;
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
 }
 
+export type DatabaseViewType = "grid" | "kanban" | "calendar" | "gallery";
+
+export interface DatabaseView {
+  id: ID;
+  tableId: ID;
+  name: string;
+  type: DatabaseViewType;
+  config: Record<string, any>;
+  position: number;
+  createdAt: ISODateTime;
+}
+
+export type FilterOperator = "equals" | "not_equals" | "contains" | "not_contains" | "greater_than" | "less_than" | "gt" | "lt" | "gte" | "lte" | "is_empty" | "is_not_empty";
+
+export interface DatabaseFilter {
+  id: ID;
+  viewId: ID;
+  columnId: ID;
+  operator: FilterOperator;
+  value: any;
+  position: number;
+}
+
+export interface DatabaseSort {
+  id: ID;
+  viewId: ID;
+  columnId: ID;
+  direction: "asc" | "desc";
+  position: number;
+}
 export interface PdfDocument {
   id: ID;
   title: string;
@@ -273,18 +666,23 @@ export type SearchableEntityType =
   | "note"
   | "event"
   | "journal"
+  | "goal"
   | "database_row"
   | "pdf_annotation"
+  | "source"
   | "research_document"
   | "research_chunk"
   | "research_entity"
-  | "research_thread";
+  | "research_thread"
+  | "focus_session";
 
 export interface SearchResult {
   id: ID;
   type: SearchableEntityType;
   title: string;
   excerpt?: string;
+  tags?: string[];
+  projectId?: ID;
   score: number;
   updatedAt: ISODateTime;
 }
@@ -600,3 +998,392 @@ export interface ResearchLink {
   linkedEntityId: ID;
   createdAt: ISODateTime;
 }
+
+// ============================================================================
+// Module 02 — Daily Planner
+// ============================================================================
+
+export interface TimeBlock {
+  id: ID;
+  date: ISODate;
+  startTime: string; // HH:MM (24h)
+  endTime: string;   // HH:MM (24h)
+  durationMinutes?: number;
+  title?: string;
+  color?: string;
+  category?: "deep_work" | "shallow_work" | "admin" | "meeting" | "break" | "personal" | "buffer" | "blocked";
+  isBreak?: boolean;
+  taskId?: ID;
+  eventId?: ID;
+  note?: string;
+  notes?: string;
+  isOverflow?: boolean;
+  actualStart?: ISODateTime;
+  actualEnd?: ISODateTime;
+  actualDuration?: number;
+  focusSessionId?: ID;
+  completed?: boolean;
+  isCompleted?: boolean;
+  position?: number;
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
+}
+
+export interface DayPlan {
+  id: ID;
+  date: ISODate; // PK
+  status: "draft" | "active" | "completed" | "skipped";
+  morningIntention?: string; // RichText
+  eveningReflection?: string; // RichText
+  energyLevel?: "very_low" | "low" | "medium" | "high" | "very_high";
+  moodStart?: number; // 1-10
+  moodEnd?: number; // 1-10
+  plannedMinutes: number;
+  actualMinutes: number;
+  tasksPlanned: number;
+  tasksCompleted: number;
+  overflowCount: number;
+  createdAt: ISODateTime;
+  completedAt?: ISODateTime;
+}
+
+export interface TemplateBlock {
+  title: string;
+  startTime: string;
+  endTime: string;
+  color?: string;
+  isBreak: boolean;
+  notes?: string;
+  category?: string;
+}
+
+export interface PlannerTemplate {
+  id: ID;
+  name: string;
+  blocks: TemplateBlock[];
+  isDefault?: boolean;
+  daysOfWeek?: number[]; // 0-6
+  createdAt: ISODateTime;
+}
+
+// ============================================================================
+// Module 08 — Journal System
+// ============================================================================
+
+
+
+export interface JournalPromptSet {
+  id: ID;
+  name: string;
+  prompts: { key: string; question: string; type: "text" | "rating" | "checklist" | "list" }[];
+  isDefault: boolean;
+  trigger: "morning" | "evening" | "weekly" | "monthly" | "custom";
+}
+
+export interface WeeklyReview {
+  id: ID;
+  weekStart: ISODate; // Monday
+  noteId?: ID;
+
+  highlight?: string;
+  challenge?: string;
+  learning?: string;
+  intention?: string;
+
+  habitConsistency?: Record<string, { done: number; total: number }>;
+  tasksCompleted: number;
+  tasksDeferred: number;
+  focusHours: number;
+  goalProgress?: Record<string, { startPercent: number; endPercent: number }>;
+  avgMood?: number;
+  avgEnergy?: number;
+
+  lifeAreasSummary?: Record<string, number>;
+  
+  createdAt: ISODateTime;
+  completedAt?: ISODateTime;
+}
+
+// ============================================================================
+// Module 09 — Habits & Routines
+// ============================================================================
+
+export interface Habit {
+  id: ID;
+  name: string;
+  description?: string;
+  icon?: string;
+  color: string;
+  category?: "health" | "learning" | "fitness" | "mindfulness" | "productivity" | "social" | "creative" | "finance" | "custom";
+
+  frequencyType: "daily" | "weekly" | "monthly" | "custom";
+  frequencyDays?: number[]; // weekly: [1,3,5], monthly: [1,15]
+  customIntervalDays?: number;
+  timesPerPeriod: number;
+  targetValue?: number;
+  targetUnit?: string;
+
+  reminderTime?: string;
+  reminderEnabled: boolean;
+
+  linkedGoalId?: ID;
+  routineId?: ID;
+
+  startDate: ISODate;
+  endDate?: ISODate;
+  archivedAt?: ISODateTime;
+
+  difficulty?: "easy" | "medium" | "hard";
+  cue?: string;
+  craving?: string;
+  reward?: string;
+  notes?: string;
+
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
+}
+
+export interface HabitLog {
+  id: ID;
+  habitId: ID;
+  date: ISODate;
+  status: "done" | "skipped" | "missed" | "partial";
+  value?: number;
+  note?: string;
+  loggedAt: ISODateTime;
+  source: "manual" | "journal" | "planner" | "ai_detected";
+}
+
+export interface Routine {
+  id: ID;
+  name: string;
+  type: "morning" | "evening" | "custom";
+  habitIds: ID[]; // Ordered list
+  triggerTime?: string;
+  durationMin?: number;
+  days: number[]; // 0-6
+  active: boolean;
+  createdAt: ISODateTime;
+}
+
+export interface HabitStreak {
+  habitId: ID;
+  streakType: "current" | "longest";
+  count: number;
+  startDate: ISODate;
+  endDate?: ISODate;
+  lastUpdated: ISODateTime;
+}
+
+export interface MoodDataPoint {
+  id: ID;
+  recordedAt: ISODateTime;
+  mood: number; // 1-10
+  energy?: number; // 1-10
+  note?: string;
+  source: "morning_journal" | "evening_journal" | "manual" | "checkin";
+}
+
+// ============================================================================
+// Module 11 — Search System
+// ============================================================================
+
+export interface SearchHistoryEntry {
+  id: ID;
+  query: string;
+  resultCount: number;
+  selectedEntityType?: string;
+  selectedEntityId?: ID;
+  searchedAt: ISODateTime;
+}
+
+export interface RecentItem {
+  entityType: string;
+  entityId: ID;
+  openedAt: ISODateTime;
+  title: string;
+}
+
+export interface CommandResult {
+  id: string;
+  title: string;
+  action: () => void;
+  icon?: string;
+  module: string;
+}
+
+// ============================================================
+// GOAL TYPES (Module 10)
+// ============================================================
+
+export type GoalStatus = "draft" | "active" | "achieved" | "abandoned" | "paused";
+export type GoalHorizon = "lifetime" | "annual" | "quarterly" | "monthly" | "weekly";
+export type GoalArea = "work" | "health" | "learning" | "relationships" | "finance" | "creativity" | "personal_growth" | "family" | "community" | "custom";
+export type GoalProgressType = "manual" | "task_based" | "key_result_based" | "habit_based";
+export type GoalReviewCadence = "weekly" | "biweekly" | "monthly" | "quarterly";
+
+export interface Goal {
+  id: ID;
+  title: string;
+  description?: string; // RichText
+  status: GoalStatus;
+  horizon: GoalHorizon;
+  parentGoalId?: ID;
+  area?: GoalArea;
+  startDate?: ISODate;
+  targetDate?: ISODate;
+  achievedAt?: ISODateTime;
+  abandonedAt?: ISODateTime;
+  progressType: GoalProgressType;
+  progressPercent: number;
+  progressNotes?: string;
+  motivation?: string;
+  outcome?: string;
+  obstacles: string[];
+  tags: string[];
+  color?: string;
+  icon?: string;
+  reviewCadence?: GoalReviewCadence;
+  nextReviewDate?: ISODate;
+  lastReviewedAt?: ISODateTime;
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
+  createdBy: ID;
+}
+
+export type KeyResultMetricType = "boolean" | "numeric" | "percentage" | "currency";
+export type GoalConfidence = "low" | "medium" | "high";
+
+export interface KeyResult {
+  id: ID;
+  goalId: ID;
+  title: string;
+  description?: string;
+  metricType: KeyResultMetricType;
+  startValue?: number;
+  targetValue: number;
+  currentValue: number;
+  unit?: string;
+  confidence?: GoalConfidence;
+  dueDate?: ISODate;
+  completedAt?: ISODateTime;
+  position: number;
+}
+
+export interface GoalCheckIn {
+  id: ID;
+  goalId: ID;
+  checkInDate: ISODate;
+  progressPercent: number;
+  confidence: GoalConfidence;
+  notes?: string; // RichText
+  keyResultUpdates: Record<string, number>; // JSON
+  mood?: number; // 1-10
+  calendarEventId?: ID;
+  createdAt: ISODateTime;
+}
+
+export interface GoalLink {
+  goalId: ID;
+  entityType: "project" | "habit" | "note" | "task";
+  entityId: ID;
+  linkStrength: "primary" | "supporting";
+  createdAt: ISODateTime;
+}
+
+// ── AI Assistant (Module 12) ──────────────────────────────────
+
+export type AIProvider = "local_ollama" | "lm_studio" | "openai" | "anthropic" | "gemini";
+export type AIContextType = "task" | "note" | "project" | "goal" | "planner" | "journal" | "global";
+export type AIActionType =
+  | "task_created"
+  | "task_extracted"
+  | "note_summarised"
+  | "plan_proposed"
+  | "schedule_suggested"
+  | "connection_suggested"
+  | "prompt_generated"
+  | "insight_generated"
+  | "task_breakdown"
+  | "meeting_processed";
+
+export interface AIMessage {
+  role: "user" | "assistant" | "system";
+  content: string;
+  timestamp: ISODateTime;
+}
+
+export interface AIConversation {
+  id: ID;
+  contextType: AIContextType;
+  contextId?: ID;
+  title?: string;
+  messages: AIMessage[];
+  model: string;
+  provider: AIProvider;
+  tokensUsed: number;
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
+}
+
+export interface AIAction {
+  id: ID;
+  actionType: AIActionType;
+  inputContext: Record<string, unknown>;
+  output: Record<string, unknown>;
+  accepted?: boolean;
+  acceptedAt?: ISODateTime;
+  createdAt: ISODateTime;
+}
+
+export interface AIConfig {
+  id: ID;
+  provider: AIProvider;
+  localModel?: string;
+  localBaseUrl?: string;
+  openaiKey?: string;
+  anthropicKey?: string;
+  geminiKey?: string;
+  embeddingModel: string;
+  enabledFeatures: string[];
+  maxTokens: number;
+  temperature: number;
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
+}
+
+export interface ParsedTask {
+  title: string;
+  dueDate?: ISODate;
+  dueTime?: string;
+  priority?: Priority;
+  projectName?: string;
+  tags?: string[];
+  estimateMinutes?: number;
+  description?: string;
+}
+
+export interface TaskBreakdown {
+  taskId: ID;
+  subtasks: Array<{ title: string; estimateMinutes?: number; description?: string }>;
+}
+
+export interface MeetingNoteResult {
+  summary: string;
+  decisions: string[];
+  actionItems: Array<{ title: string; assignee?: string; dueDate?: ISODate }>;
+  openQuestions: string[];
+  followUpDates: Array<{ description: string; date: ISODate }>;
+}
+
+export interface JournalPrompt {
+  question: string;
+  context: string;
+}
+
+export interface GoalHealthReport {
+  summary: string;
+  trajectory: "on_track" | "at_risk" | "stalled";
+  suggestedAction: string;
+}
+

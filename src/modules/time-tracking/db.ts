@@ -34,4 +34,30 @@ export const TIME_MIGRATIONS: Migration[] = [
       DROP TABLE IF EXISTS time_entries;
     `,
   },
+  {
+    version: 81,
+    module: "time-tracking",
+    up: `
+      ALTER TABLE time_entries ADD COLUMN is_manual INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE time_entries ADD COLUMN billable_rate REAL;
+      ALTER TABLE time_entries ADD COLUMN billable_amount REAL;
+      ALTER TABLE time_entries ADD COLUMN category TEXT;
+      ALTER TABLE time_entries ADD COLUMN created_by TEXT;
+
+      CREATE TABLE IF NOT EXISTS time_tracking_settings (
+        id TEXT PRIMARY KEY,
+        default_billable INTEGER NOT NULL DEFAULT 0,
+        default_hourly_rate REAL,
+        currency TEXT NOT NULL DEFAULT 'USD',
+        round_entries TEXT NOT NULL DEFAULT 'none',
+        idle_detection_min INTEGER NOT NULL DEFAULT 0,
+        reminder_interval_min INTEGER NOT NULL DEFAULT 0,
+        work_hours_start TEXT NOT NULL DEFAULT '09:00',
+        work_hours_end TEXT NOT NULL DEFAULT '17:00'
+      );
+    `,
+    down: `
+      DROP TABLE IF EXISTS time_tracking_settings;
+    `
+  }
 ];

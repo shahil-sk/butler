@@ -35,7 +35,7 @@ interface DatabaseState {
   loadTables: () => Promise<void>;
   loadTable:  (tableId: string) => Promise<void>;
 
-  createTable: (payload: { name: string; icon?: string; description?: string }) => Promise<string>;
+  createTable: (payload: { name: string; icon?: string; description?: string; projectId?: string }) => Promise<string>;
   updateTable: (tableId: string, patch: Partial<Pick<DatabaseTable, "name" | "icon" | "description">>) => Promise<void>;
   deleteTable: (tableId: string) => Promise<void>;
 
@@ -145,14 +145,14 @@ export const useDatabaseStore = create<DatabaseState>()(immer((set, get) => ({
 
   // ─── TABLE CRUD ──────────────────────────────────────────────────────────
 
-  createTable: async ({ name, icon, description }) => {
+  createTable: async ({ name, icon, description, projectId }) => {
     const id = generateId();
     const ts = now();
     await db.execute(
-      "INSERT INTO db_tables (id, name, icon, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-      [id, name, icon ?? null, description ?? null, ts, ts],
+      "INSERT INTO db_tables (id, name, icon, description, project_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [id, name, icon ?? null, description ?? null, projectId ?? null, ts, ts],
     );
-    const table: DatabaseTable = { id, name, icon, description, createdAt: ts, updatedAt: ts };
+    const table: DatabaseTable = { id, name, icon, description, projectId, createdAt: ts, updatedAt: ts };
     set((s) => { s.tables.push(table); });
     await get().addColumn({
       tableId:   id,
@@ -192,7 +192,7 @@ export const useDatabaseStore = create<DatabaseState>()(immer((set, get) => ({
         s.activeViewId  = null;
       }
     });
-    bus.emit("database:deleted", { tableId });
+    bus.emit("database:deleted", { databaseId: tableId });
   },
 
   // ─── COLUMN CRUD ─────────────────────────────────────────────────────────

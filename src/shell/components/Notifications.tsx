@@ -30,16 +30,15 @@ export function Notifications() {
 
   useBusEvent("ui:notification", (payload) => {
     notify({
+      id: (payload as any).id,
       type: payload.type,
       message: payload.message,
       durationMs: payload.durationMs ?? 4000,
     });
   });
 
-  if (notifications.length === 0) return null;
-
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 w-full max-w-[340px] pointer-events-none">
+    <div className="fixed bottom-4 right-4 z-[10000] flex flex-col gap-2 w-full max-w-[340px] pointer-events-none">
       {notifications.map((n) => (
         <Toast key={n.id} notification={n} onDismiss={() => dismissNotification(n.id)} />
       ))}
@@ -60,7 +59,7 @@ function Toast({
     <div
       className={cn(
         "pointer-events-auto flex items-start gap-3 px-3.5 py-3 rounded-lg border",
-        "animate-toast-in text-sm font-normal leading-snug",
+        "animate-slide-in-right text-sm font-normal leading-snug",
         STYLES[notification.type]
       )}
       style={{ boxShadow: "var(--shadow-md)" }}

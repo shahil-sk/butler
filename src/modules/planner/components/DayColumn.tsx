@@ -9,7 +9,8 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { X, GripVertical, Pencil, CheckCircle2, Circle, Play } from "lucide-react";
 import { cn, toISODate } from "@/shared/utils";
-import { usePlannerStore, type TimeBlock, snapMinutes, clampTime } from "../store";
+import { usePlannerStore, snapMinutes, clampTime } from "../store";
+import type { TimeBlock } from "@/shared/types";
 import { useTaskStore } from "@/modules/tasks/store";
 import { useProjectStore } from "@/modules/projects/store";
 import { useCalendarStore } from "@/modules/calendar/store";
@@ -164,17 +165,14 @@ function BlockCard({
 
   const commitTitle = () => {
     setEditing(false);
-    if (title.trim() && title !== block.title) void updateBlock(block.id, { title: title.trim() });
+    if (title && title.trim() && title !== block.title) void updateBlock(block.id, { title: title.trim() });
   };
 
   // FIXED: Complete block + sync to task
   const handleComplete = async () => {
     await completeBlock(block.id);
     if (block.taskId) {
-      bus.emit("task:updated", {
-        task: { id: block.taskId } as never,
-        changed: { status: "done" },
-      });
+      await useTaskStore.getState().completeTask(block.taskId);
     }
   };
 
@@ -242,7 +240,26 @@ function BlockCard({
           {!compact && height > 44 && (
             <p className="text-[10px] text-muted-foreground/60 tabular-nums">
               {block.startTime}–{block.endTime}
-              {task && <span className="ml-1 opacity-50">· {task.estimateMinutes ?? 0}m</span>}
+              {(() => {
+                const est = task?.estimateMinutes || duration;
+                const act = block.actualDuration || task?.actualMinutes;
+                if (!est && !act) return null;
+                
+                return (
+                  <span className="ml-1 opacity-70">
+                    · {est}m est
+                    {act ? (
+                      <span className={cn(
+                        "ml-1",
+                        act > est && "text-amber-500/80 dark:text-amber-400/80", // subtle over-run
+                        act < est && "text-emerald-500/80 dark:text-emerald-400/80" // subtle under-run
+                      )}>
+                        / {act}m act
+                      </span>
+                    ) : ""}
+                  </span>
+                );
+              })()}
             </p>
           )}
         </div>
@@ -253,7 +270,7 @@ function BlockCard({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                bus.emit("focus:start-requested", { taskId: block.taskId });
+                bus.emit("focus:start-requested", { taskId: block.taskId, timeBlockId: block.id, startImmediately: true });
               }}
               className="p-0.5 rounded text-muted-foreground hover:text-primary transition-fast"
               title="Start Focus Session"

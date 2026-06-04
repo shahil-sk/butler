@@ -10,14 +10,25 @@ import { bus } from "@/kernel/event-bus";
 import { getNextRecurrenceDate, today } from "@/shared/utils";
 import { useTaskStore } from "@/modules/tasks/store";
 import { useProjectStore } from "@/modules/projects/store";
+import { useGoalsStore } from "@/modules/goals/store";
 import { useNoteStore } from "@/modules/notes/store";
 import { useCalendarStore } from "@/modules/calendar/store";
 import { useJournalStore } from "@/modules/journal/store";
 import { useFocusStore } from "@/modules/focus/store";
 import { useTimeStore } from "@/modules/time-tracking/store";
 import { usePlannerStore } from "@/modules/planner/store";
+import { useDatabaseStore } from "@/modules/database/store";
 import { useShellStore } from "@/shell/store";
 import { useFocusEventListeners } from "@/modules/focus/events";
+import { setupSearchEventListeners }   from "@/modules/search/events";
+import { setupProjectEventListeners }  from "@/modules/projects/events";
+import { setupPlannerEventListeners }  from "@/modules/planner/events";
+import { setupHabitsEventListeners }   from "@/modules/habits/events";
+import { useHabitsStore } from "@/modules/habits/store";
+import { setupGoalsEventListeners }    from "@/modules/goals/events";
+import { setupAIEventListeners }       from "@/modules/ai/events";
+import { setupResearchEventListeners } from "@/modules/research/events";
+import { useResearchStore } from "@/modules/research/store";
 
 export function IntegrationLayer() {
   useFocusEventListeners();
@@ -25,10 +36,70 @@ export function IntegrationLayer() {
   useEffect(() => {
     const unsubs: Array<() => void> = [];
     const notify = useShellStore.getState().notify;
+    unsubs.push(setupSearchEventListeners());
+    unsubs.push(setupProjectEventListeners());
+    unsubs.push(setupPlannerEventListeners());
+    unsubs.push(setupHabitsEventListeners());
+    unsubs.push(setupGoalsEventListeners());
+    unsubs.push(setupAIEventListeners());
+    unsubs.push(setupResearchEventListeners());
 
-    // Standardise ui:notification globally
-    unsubs.push(bus.on("ui:notification", ({ type, message, durationMs }) => {
-      notify({ type, message, durationMs: durationMs ?? 3000 });
+
+
+    // =========================================================
+    // PROJECTS ↔ CALENDAR (Milestones)
+    // =========================================================
+
+    unsubs.push(bus.on("project:milestone-created" as any, ({ project, milestone }: any) => {
+      const calendarStore = useCalendarStore.getState();
+      void calendarStore.createEvent({
+        title: `Milestone: ${milestone.title}`,
+        startAt: `${milestone.dueDate}T09:00:00`,
+        endAt: `${milestone.dueDate}T10:00:00`,
+        isAllDay: true,
+        calendarId: "projects",
+        externalId: `milestone:${project.id}:${milestone.id}`,
+        projectId: project.id,
+        color: project.color,
+      });
+    }));
+
+    unsubs.push(bus.on("project:milestone-updated" as any, ({ project, milestone }: any) => {
+      const calendarStore = useCalendarStore.getState();
+      const event = calendarStore.events.find(e => e.externalId === `milestone:${project.id}:${milestone.id}`);
+      if (event) {
+        if (event.startDatetime?.startsWith(milestone.dueDate)) return; // No change
+        void calendarStore.updateEvent(event.id, {
+          title: `Milestone: ${milestone.title}`,
+          startAt: `${milestone.dueDate}T09:00:00`,
+          endAt: `${milestone.dueDate}T10:00:00`,
+        });
+      }
+    }));
+
+    unsubs.push(bus.on("project:milestone-deleted" as any, ({ project, milestone }: any) => {
+      const calendarStore = useCalendarStore.getState();
+      const event = calendarStore.events.find(e => e.externalId === `milestone:${project.id}:${milestone.id}`);
+      if (event) {
+        void calendarStore.deleteEvent(event.id);
+      }
+    }));
+
+    unsubs.push(bus.on("calendar:event-updated", ({ event }) => {
+      if (event.externalId?.startsWith("milestone:")) {
+        const [, projectId, milestoneId] = event.externalId.split(":");
+        const projectStore = useProjectStore.getState();
+        const project = projectStore.projects.find(p => p.id === projectId);
+        if (project) {
+          const milestone = project.milestones.find(m => m.id === milestoneId);
+          if (milestone) {
+            const newDate = event.startDatetime?.slice(0, 10) || event.startAt?.slice(0, 10);
+            if (newDate && milestone.dueDate !== newDate) {
+              void projectStore.updateMilestone(projectId, milestoneId, { dueDate: newDate });
+            }
+          }
+        }
+      }
     }));
 
     // =========================================================
@@ -135,13 +206,30 @@ export function IntegrationLayer() {
       const allTasks = useTaskStore.getState().tasks;
       const dependents = allTasks.filter((t) => t.dependencies?.includes(taskId));
       dependents.forEach((dep) => {
-        const allBlockersDone = dep.dependencies.every((blockerId) => {
-          if (blockerId === taskId) return true;
-          const t = useTaskStore.getState().getTaskById(blockerId);
-          return t?.status === "done";
+        const stillBlocked = dep.dependencies?.some((dId) => {
+          const dt = allTasks.find((x) => x.id === dId);
+          return dt && dt.status !== "done";
         });
-        if (allBlockersDone) {
+        if (!stillBlocked && dep.status !== "done") {
+          notify({ type: "info", message: `Task unblocked: "${dep.title}"`, durationMs: 4000 });
           bus.emit("task:unblocked", { taskId: dep.id });
+        }
+      });
+
+      // ⑧ Database sync (Feature spec row to Task)
+      const dbStore = useDatabaseStore.getState();
+      Object.entries(dbStore.cells).forEach(([tableId, rowMap]) => {
+        const cols = dbStore.columns[tableId] || [];
+        const taskCol = cols.find(c => c.name.toLowerCase().includes("task") || c.type === "relation");
+        const statusCol = cols.find(c => c.name.toLowerCase() === "status");
+        
+        if (taskCol && statusCol) {
+          Object.entries(rowMap).forEach(([rowId, cellMap]) => {
+            const taskVal = String(cellMap[taskCol.id] || "");
+            if (taskVal === taskId || taskVal.includes(taskId) || (task && task.title && taskVal.includes(task.title))) {
+              void dbStore.setCellValue(tableId, rowId, statusCol.id, "Done");
+            }
+          });
         }
       });
     }));
@@ -466,9 +554,51 @@ export function IntegrationLayer() {
         .filter(s => s.type === "focus" && s.startedAt && s.startedAt >= entry.date && s.startedAt < weekEndStr)
         .reduce((sum, s) => sum + (s.actualMinutes ?? 0), 0) / 60;
         
+      const habitsStore = useHabitsStore.getState();
+      const habits = habitsStore.habits.filter(h => !h.archivedAt);
+      const logs = habitsStore.logs.filter(l => l.date >= entry.date && l.date < weekEndStr);
+      
+      let tableHtml = "<table><tr><th>Habit</th><th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th></tr>";
+      habits.forEach(h => {
+        tableHtml += `<tr><td>${h.name}</td>`;
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(weekStart);
+          d.setDate(d.getDate() + i);
+          const dStr = d.toISOString().slice(0, 10);
+          const log = logs.find(l => l.habitId === h.id && l.date === dStr);
+          tableHtml += `<td>${log?.status === "done" ? "✅" : log?.status === "skipped" ? "⏭️" : "❌"}</td>`;
+        }
+        tableHtml += "</tr>";
+      });
+      tableHtml += "</table>";
+
+      let parsedContent;
+      try {
+        parsedContent = JSON.parse(entry.content || "{}");
+      } catch {
+        parsedContent = { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: entry.content || "" }] }] };
+      }
+      if (!parsedContent.content) parsedContent.content = [];
+      
+      parsedContent.content.push({
+        type: "heading",
+        attrs: { level: 2 },
+        content: [{ type: "text", text: "Habit Completion for the Week" }]
+      });
+      parsedContent.content.push({
+        type: "paragraph",
+        content: [{ type: "text", text: "Review your habit consistency over the past 7 days:" }]
+      });
+      parsedContent.content.push({
+        type: "html",
+        content: [{ type: "text", text: tableHtml }]
+      });
+
+      void useJournalStore.getState().updateEntry(entry.id, { content: JSON.stringify(parsedContent) });
+
       notify({
         type: "info",
-        message: `Weekly review populated — ${focusHours.toFixed(1)}h focused, ${completedThisWeek.length} tasks done`,
+        message: `Weekly review populated — ${focusHours.toFixed(1)}h focused, ${completedThisWeek.length} tasks done, habits table added.`,
         durationMs: 5000,
       });
     }));
@@ -580,7 +710,8 @@ export function IntegrationLayer() {
       }
 
       const startAt = session.startedAt ?? new Date().toISOString();
-      const endAt = new Date(new Date(startAt).getTime() + session.plannedMinutes * 60 * 1000).toISOString();
+      const duration = session.plannedMinutes ?? session.plannedDuration ?? 25;
+      const endAt = new Date(new Date(startAt).getTime() + duration * 60 * 1000).toISOString();
       const title = session.taskId
         ? `Focus: ${useTaskStore.getState().getTaskById(session.taskId)?.title ?? "Session"}`
         : "Focus Session";
@@ -602,7 +733,7 @@ export function IntegrationLayer() {
       if (!task) return;
       const mins = session.actualMinutes ?? session.plannedMinutes;
       void useTaskStore.getState().updateTask(session.taskId, {
-        actualMinutes: (task.actualMinutes ?? 0) + mins,
+        actualMinutes: (task.actualMinutes ?? 0) + (mins ?? 0),
       });
     }));
 
@@ -852,6 +983,10 @@ export function IntegrationLayer() {
           bus.emit("project:open", { projectId: result.id });
           bus.emit("navigate:to", { path: "/projects" });
           break;
+        case "goal":
+          bus.emit("goal:open", { goalId: result.id });
+          bus.emit("navigate:to", { path: "/goals" });
+          break;
         case "event":
           bus.emit("navigate:to", { path: "/calendar" });
           break;
@@ -860,6 +995,9 @@ export function IntegrationLayer() {
           break;
         case "database_row":
           bus.emit("navigate:to", { path: "/database" });
+          break;
+        case "focus_session":
+          bus.emit("navigate:to", { path: "/focus" });
           break;
       }
     }));
@@ -874,6 +1012,14 @@ export function IntegrationLayer() {
 
     unsubs.push(bus.on("project:created", ({ project }) => {
       notify({ type: "success", message: `Project "${project.name}" created`, durationMs: 2000 });
+    }));
+
+    unsubs.push(bus.on("goal:created", ({ goal }) => {
+      notify({ type: "success", message: `Goal "${goal.title}" created`, durationMs: 2000 });
+    }));
+
+    unsubs.push(bus.on("goal:open", ({ goalId }) => {
+      useGoalsStore.getState().openGoal(goalId);
     }));
 
     unsubs.push(bus.on("note:created", ({ note }) => {
@@ -921,6 +1067,90 @@ export function IntegrationLayer() {
           durationMs: 5000,
         });
       }
+    }));
+
+    // =========================================================
+    // SEARCH ↔ SHELL NAVIGATION
+    // =========================================================
+    unsubs.push(bus.on("search:result-selected", ({ result }) => {
+      if (result.type === "task") {
+        bus.emit("navigate:to", { path: "/tasks" });
+        setTimeout(() => bus.emit("task:open", { taskId: result.id }), 50);
+      } else if (result.type === "note") {
+        bus.emit("navigate:to", { path: "/notes" });
+        setTimeout(() => bus.emit("note:open", { noteId: result.id }), 50);
+      } else if (result.type === "project") {
+        bus.emit("navigate:to", { path: "/projects" });
+        setTimeout(() => bus.emit("project:open", { projectId: result.id }), 50);
+      } else if (result.type === "source" || result.type === "research_document") {
+        bus.emit("navigate:to", { path: "/research" });
+        setTimeout(() => bus.emit("research:open-source", { sourceId: result.id }), 50);
+      } else if (result.type === "focus_session") {
+        bus.emit("navigate:to", { path: "/focus" });
+      }
+    }));
+
+    // =========================================================
+    // RESEARCH (Phase 5: External Knowledge)
+    // =========================================================
+
+    // 1. Highlight text in a PDF → a note block is created with the quote and source citation.
+    unsubs.push(bus.on("research:highlight-created", ({ highlight }) => {
+      if (highlight.linkedNoteId) return; // Already linked
+      
+      const source = useResearchStore.getState().sources.find(s => s.id === highlight.sourceId);
+      const title = source?.title || "PDF Document";
+      
+      const content = `> ${highlight.text}\n\n— *Source: [${title}](butler://research/${highlight.sourceId})*${highlight.pageNumber ? ` (Page ${highlight.pageNumber})` : ""}`;
+      
+      useNoteStore.getState().createNote({
+        title: `Highlight from ${title}`,
+        noteType: "atomic",
+        content: JSON.stringify({
+          type: "doc",
+          content: [
+            { type: "paragraph", content: [{ type: "text", text: content }] }
+          ]
+        }),
+      }).then(note => {
+        // Bi-directional link
+        useResearchStore.getState().updateHighlight(highlight.id, { linkedNoteId: note.id });
+        notify({ type: "success", message: "Highlight saved to notes graph", durationMs: 2500 });
+      });
+    }));
+
+    // 5. Collect all highlights from a PDF into a note
+    unsubs.push(bus.on("research:collect-highlights", ({ sourceId }) => {
+      const store = useResearchStore.getState();
+      const source = store.sources.find(s => s.id === sourceId);
+      if (!source) return;
+
+      const highlights = store.highlights.filter(h => h.sourceId === sourceId);
+      if (highlights.length === 0) return;
+
+      const title = `Highlights: ${source.title}`;
+      let content = `## Highlights from [${source.title}](butler://research/${source.id})\n\n`;
+
+      highlights.forEach(h => {
+        content += `> ${h.text}\n`;
+        if (h.note) content += `> *${h.note}*\n`;
+        content += `> — ${h.pageNumber ? `Page ${h.pageNumber}` : "Passage"}\n\n`;
+      });
+
+      useNoteStore.getState().createNote({
+        title,
+        noteType: "note",
+        content: JSON.stringify({
+          type: "doc",
+          content: [
+            { type: "paragraph", content: [{ type: "text", text: content }] }
+          ]
+        })
+      }).then(note => {
+        notify({ type: "success", message: "Highlights collected into a new Note", durationMs: 3000 });
+        bus.emit("navigate:to", { path: "/notes" });
+        setTimeout(() => bus.emit("note:open", { noteId: note.id }), 50);
+      });
     }));
 
     return () => unsubs.forEach((u) => u());

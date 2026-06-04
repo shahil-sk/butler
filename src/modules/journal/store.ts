@@ -1,8 +1,3 @@
-// ============================================================
-// JOURNAL MODULE — STORE
-// No cross-module store writes. Emit bus events instead.
-// ============================================================
-
 import { create } from "zustand";
 import { db } from "@/kernel/db";
 import { bus } from "@/kernel/event-bus";
@@ -11,56 +6,92 @@ import type { JournalEntry, ISODate, ID } from "@/shared/types";
 
 // ── DB helpers ───────────────────────────────────────────────
 
-function rowToEntry(row: Record<string, unknown>): JournalEntry {
+function rowToEntry(r: Record<string, unknown>): JournalEntry {
   return {
-    id:                row.id as string,
-    date:              row.date as string,
-    type:              row.type as JournalEntry["type"],
-    content:           row.content as string,
-    mood:              row.mood != null ? (row.mood as 1 | 2 | 3 | 4 | 5) : undefined,
-    linkedTaskIds:     JSON.parse(row.linked_task_ids as string),
-    linkedProjectIds:  JSON.parse(row.linked_project_ids as string),
-    tags:              JSON.parse(row.tags as string),
-    createdAt:         row.created_at as string,
-    updatedAt:         row.updated_at as string,
+    id:                r.id as string,
+    date:              r.date as string,
+    noteId:            r.note_id as string,
+    status:            (r.status as JournalEntry["status"]) || "draft",
+    moodMorning:       (r.mood_morning as number) || undefined,
+    moodEvening:       (r.mood_evening as number) || undefined,
+    energyMorning:     (r.energy_morning as number) || undefined,
+    energyEvening:     (r.energy_evening as number) || undefined,
+    gratitude:         JSON.parse((r.gratitude as string) || "[]"),
+    wins:              JSON.parse((r.wins as string) || "[]"),
+    challenges:        JSON.parse((r.challenges as string) || "[]"),
+    learnings:         JSON.parse((r.learnings as string) || "[]"),
+    morningIntention:  (r.morning_intention as string) || undefined,
+    eveningReflection: (r.evening_reflection as string) || undefined,
+    tasksCompleted:    (r.tasks_completed as number) || 0,
+    tasksDeferred:     (r.tasks_deferred as number) || 0,
+    focusMinutes:      (r.focus_minutes as number) || 0,
+    habitSummary:      r.habit_summary ? JSON.parse(r.habit_summary as string) : undefined,
+    lifeAreaRatings:   r.life_area_ratings ? JSON.parse(r.life_area_ratings as string) : undefined,
+    customPrompts:     r.custom_prompts ? JSON.parse(r.custom_prompts as string) : undefined,
+    wordCount:         (r.word_count as number) || 0,
+    writeStreak:       (r.write_streak as number) || 0,
+    
+    // Legacy mapping
+    type:              (r.type as JournalEntry["type"]) || "daily",
+    content:           (r.content as string) || "{}",
+    mood:              (r.mood as number) || undefined,
+    linkedTaskIds:     JSON.parse((r.linked_task_ids as string) || "[]"),
+    linkedProjectIds:  JSON.parse((r.linked_project_ids as string) || "[]"),
+    tags:              JSON.parse((r.tags as string) || "[]"),
+    
+    createdAt:         r.created_at as string,
+    completedAt:       (r.completed_at as string) || undefined,
+    updatedAt:         r.updated_at as string,
   };
 }
 
 const INSERT_SQL = `
   INSERT INTO journal_entries
-    (id, date, type, content, mood, linked_task_ids, linked_project_ids, tags, created_at, updated_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (id, date, note_id, status, mood_morning, mood_evening, energy_morning, energy_evening,
+     gratitude, wins, challenges, learnings, morning_intention, evening_reflection,
+     tasks_completed, tasks_deferred, focus_minutes, habit_summary, life_area_ratings,
+     custom_prompts, word_count, write_streak, created_at, completed_at, updated_at,
+     type, content, mood, linked_task_ids, linked_project_ids, tags)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 function insertParams(e: JournalEntry): unknown[] {
   return [
-    e.id,
-    e.date,
-    e.type,
-    e.content,
-    e.mood ?? null,
-    JSON.stringify(e.linkedTaskIds),
-    JSON.stringify(e.linkedProjectIds),
-    JSON.stringify(e.tags),
-    e.createdAt,
-    e.updatedAt,
+    e.id, e.date, e.noteId, e.status, e.moodMorning ?? null, e.moodEvening ?? null,
+    e.energyMorning ?? null, e.energyEvening ?? null,
+    JSON.stringify(e.gratitude), JSON.stringify(e.wins), JSON.stringify(e.challenges), JSON.stringify(e.learnings),
+    e.morningIntention ?? null, e.eveningReflection ?? null,
+    e.tasksCompleted, e.tasksDeferred, e.focusMinutes,
+    e.habitSummary ? JSON.stringify(e.habitSummary) : null,
+    e.lifeAreaRatings ? JSON.stringify(e.lifeAreaRatings) : null,
+    e.customPrompts ? JSON.stringify(e.customPrompts) : null,
+    e.wordCount, e.writeStreak, e.createdAt, e.completedAt ?? null, e.updatedAt,
+    e.type ?? "daily", e.content ?? "{}", e.mood ?? null, 
+    JSON.stringify(e.linkedTaskIds ?? []), JSON.stringify(e.linkedProjectIds ?? []), JSON.stringify(e.tags ?? []),
   ];
 }
 
 const UPDATE_SQL = `
   UPDATE journal_entries
-  SET date=?, type=?, content=?, mood=?, linked_task_ids=?, linked_project_ids=?, tags=?, updated_at=?
+  SET date=?, note_id=?, status=?, mood_morning=?, mood_evening=?, energy_morning=?, energy_evening=?,
+      gratitude=?, wins=?, challenges=?, learnings=?, morning_intention=?, evening_reflection=?,
+      tasks_completed=?, tasks_deferred=?, focus_minutes=?, habit_summary=?, life_area_ratings=?,
+      custom_prompts=?, word_count=?, write_streak=?, completed_at=?, updated_at=?,
+      type=?, content=?, mood=?, linked_task_ids=?, linked_project_ids=?, tags=?
   WHERE id=?
 `;
 function updateParams(e: JournalEntry): unknown[] {
   return [
-    e.date,
-    e.type,
-    e.content,
-    e.mood ?? null,
-    JSON.stringify(e.linkedTaskIds),
-    JSON.stringify(e.linkedProjectIds),
-    JSON.stringify(e.tags),
-    e.updatedAt,
+    e.date, e.noteId, e.status, e.moodMorning ?? null, e.moodEvening ?? null,
+    e.energyMorning ?? null, e.energyEvening ?? null,
+    JSON.stringify(e.gratitude), JSON.stringify(e.wins), JSON.stringify(e.challenges), JSON.stringify(e.learnings),
+    e.morningIntention ?? null, e.eveningReflection ?? null,
+    e.tasksCompleted, e.tasksDeferred, e.focusMinutes,
+    e.habitSummary ? JSON.stringify(e.habitSummary) : null,
+    e.lifeAreaRatings ? JSON.stringify(e.lifeAreaRatings) : null,
+    e.customPrompts ? JSON.stringify(e.customPrompts) : null,
+    e.wordCount, e.writeStreak, e.completedAt ?? null, e.updatedAt,
+    e.type ?? "daily", e.content ?? "{}", e.mood ?? null, 
+    JSON.stringify(e.linkedTaskIds ?? []), JSON.stringify(e.linkedProjectIds ?? []), JSON.stringify(e.tags ?? []),
     e.id,                        // WHERE last
   ];
 }
@@ -75,13 +106,12 @@ interface JournalState {
 
   // Actions
   loadEntries: () => Promise<void>;
-  getOrCreateDaily: (date?: ISODate) => Promise<JournalEntry>;
-  createEntry: (partial: Partial<JournalEntry> & { type: JournalEntry["type"]; date: ISODate }) => Promise<JournalEntry>;
+  getOrCreateDaily: (date?: ISODate, noteId?: ID) => Promise<JournalEntry>;
+  createEntry: (partial: Partial<JournalEntry> & { date: ISODate; noteId?: ID }) => Promise<JournalEntry>;
   updateEntry: (id: ID, changes: Partial<JournalEntry>) => Promise<void>;
   deleteEntry: (id: ID) => Promise<void>;
   setActiveEntry: (id: ID | null) => void;
   linkTask: (entryId: ID, taskId: ID) => Promise<void>;
-  unlinkTask: (entryId: ID, taskId: ID) => Promise<void>;
 }
 
 // ── Store ────────────────────────────────────────────────────
@@ -104,11 +134,9 @@ export const useJournalStore = create<JournalState>((set, get) => ({
     }
   },
 
-  getOrCreateDaily: async (date = today()) => {
+  getOrCreateDaily: async (date = today(), noteId = "legacy") => {
     // Check in-memory first
-    const existing = get().entries.find(
-      (e) => e.date === date && e.type === "daily"
-    );
+    const existing = get().entries.find((e) => e.date === date);
     if (existing) {
       set({ activeEntryId: existing.id });
       return existing;
@@ -116,7 +144,7 @@ export const useJournalStore = create<JournalState>((set, get) => ({
 
     // Check DB (may have been created in a prior session)
     const rows = await db.select<Record<string, unknown>>(
-      "SELECT * FROM journal_entries WHERE date=? AND type='daily' LIMIT 1",
+      "SELECT * FROM journal_entries WHERE date=? LIMIT 1",
       [date]
     );
     if (rows.length > 0) {
@@ -129,52 +157,52 @@ export const useJournalStore = create<JournalState>((set, get) => ({
     }
 
     // Create new
-    return get().createEntry({ type: "daily", date });
+    return get().createEntry({ date, noteId });
   },
 
   createEntry: async (partial) => {
     const entry: JournalEntry = {
       id:               generateId(),
       date:             partial.date,
-      type:             partial.type,
-      content:          partial.content ?? "{}",
-      mood:             partial.mood,
-      linkedTaskIds:    partial.linkedTaskIds ?? [],
-      linkedProjectIds: partial.linkedProjectIds ?? [],
-      tags:             partial.tags ?? [],
+      noteId:           partial.noteId || "legacy",
+      status:           "draft",
+      moodMorning:      partial.moodMorning,
+      moodEvening:      partial.moodEvening,
+      energyMorning:    partial.energyMorning,
+      energyEvening:    partial.energyEvening,
+      gratitude:        partial.gratitude ?? [],
+      wins:             partial.wins ?? [],
+      challenges:       partial.challenges ?? [],
+      learnings:        partial.learnings ?? [],
+      morningIntention: partial.morningIntention,
+      eveningReflection:partial.eveningReflection,
+      tasksCompleted:   partial.tasksCompleted ?? 0,
+      tasksDeferred:    partial.tasksDeferred ?? 0,
+      focusMinutes:     partial.focusMinutes ?? 0,
+      habitSummary:     partial.habitSummary,
+      lifeAreaRatings:  partial.lifeAreaRatings,
+      customPrompts:    partial.customPrompts,
+      wordCount:        partial.wordCount ?? 0,
+      writeStreak:      partial.writeStreak ?? 0,
       createdAt:        now(),
       updatedAt:        now(),
+      
+      type:             partial.type || "daily",
+      content:          partial.content || "{}",
+      mood:             partial.mood,
+      linkedTaskIds:    partial.linkedTaskIds || [],
+      linkedProjectIds: partial.linkedProjectIds || [],
+      tags:             partial.tags || [],
     };
-
 
     try {
       await db.execute(INSERT_SQL, insertParams(entry));
       set((s) => ({ entries: [entry, ...s.entries], activeEntryId: entry.id }));
       
       bus.emit("journal:entry-created", { entry });
-      bus.emit("ui:notification", {
-        id: generateId(),
-        type: "success",
-        message: "Journal entry created",
-        durationMs: 2000,
-      });
       
       return entry;
     } catch (err) {
-      if (String(err).includes("UNIQUE constraint failed")) {
-        const rows = await db.select<Record<string, unknown>>(
-          "SELECT * FROM journal_entries WHERE date=? AND type=?",
-          [entry.date, entry.type]
-        );
-        if (rows.length > 0) {
-          const existing = rowToEntry(rows[0]);
-          set((s) => ({
-            entries: [existing, ...s.entries.filter((e) => e.id !== existing.id)],
-            activeEntryId: existing.id,
-          }));
-          return existing;
-        }
-      }
       throw err;
     }
   },
@@ -199,24 +227,18 @@ export const useJournalStore = create<JournalState>((set, get) => ({
       entries: s.entries.filter((e) => e.id !== id),
       activeEntryId: s.activeEntryId === id ? null : s.activeEntryId,
     }));
-    bus.emit("search:index-invalidated", { entityType: "journal", id });
+    bus.emit("journal:entry-deleted", { entryId: id });
   },
 
-  setActiveEntry: (id) => set({ activeEntryId: id }),
+  setActiveEntry: (id) => {
+    set({ activeEntryId: id });
+  },
 
   linkTask: async (entryId, taskId) => {
     const entry = get().entries.find((e) => e.id === entryId);
-    if (!entry || entry.linkedTaskIds.includes(taskId)) return;
-    await get().updateEntry(entryId, {
-      linkedTaskIds: [...entry.linkedTaskIds, taskId],
-    });
-  },
-
-  unlinkTask: async (entryId, taskId) => {
-    const entry = get().entries.find((e) => e.id === entryId);
     if (!entry) return;
-    await get().updateEntry(entryId, {
-      linkedTaskIds: entry.linkedTaskIds.filter((id) => id !== taskId),
-    });
+    if (entry.linkedTaskIds?.includes(taskId)) return;
+    const linkedTaskIds = [...(entry.linkedTaskIds || []), taskId];
+    await get().updateEntry(entryId, { linkedTaskIds });
   },
 }));

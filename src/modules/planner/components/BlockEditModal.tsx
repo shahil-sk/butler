@@ -13,11 +13,14 @@ import { useTaskStore } from "@/modules/tasks/store";
 import { bus } from "@/kernel/event-bus";
 
 const CATEGORIES = [
-  { id: "focus",    label: "Focus",    color: "#3b82f6" },
-  { id: "meeting",  label: "Meeting",  color: "#8b5cf6" },
-  { id: "break",    label: "Break",    color: "#6b7280" },
-  { id: "admin",    label: "Admin",    color: "#f59e0b" },
-  { id: "personal", label: "Personal", color: "#10b981" },
+  { id: "deep_work",    label: "Deep Work",    color: "#3b82f6" },
+  { id: "shallow_work", label: "Shallow Work", color: "#0ea5e9" },
+  { id: "meeting",      label: "Meeting",      color: "#8b5cf6" },
+  { id: "admin",        label: "Admin",        color: "#f59e0b" },
+  { id: "break",        label: "Break",        color: "#6b7280" },
+  { id: "personal",     label: "Personal",     color: "#10b981" },
+  { id: "buffer",       label: "Buffer",       color: "#84cc16" },
+  { id: "blocked",      label: "Blocked",      color: "#ef4444" },
 ] as const;
 
 type BlockCategory = typeof CATEGORIES[number]["id"];
@@ -48,7 +51,7 @@ export function BlockEditModal({ blockId, onClose }: { blockId: string; onClose:
   const [isBreak,   setIsBreak]   = useState(block?.isBreak   ?? false);
   const [notes,     setNotes]     = useState(block?.notes     ?? "");
   const [taskId,    setTaskId]    = useState(block?.taskId    ?? "");
-  const [category,  setCategory]  = useState<BlockCategory | "">("focus");
+  const [category,  setCategory]  = useState<BlockCategory | "">(block?.category as BlockCategory ?? "deep_work");
 
   if (!block) return null;
 
@@ -78,7 +81,8 @@ export function BlockEditModal({ blockId, onClose }: { blockId: string; onClose:
     const nextTaskId = taskId || undefined;
     await updateBlock(block.id, {
       title:   title.trim() || block.title,
-      startTime, endTime, color, isBreak,
+      startTime, endTime, color, isBreak, 
+      category: category || undefined,
       notes:   notes || undefined,
       taskId:  nextTaskId,
     });
@@ -127,13 +131,13 @@ export function BlockEditModal({ blockId, onClose }: { blockId: string; onClose:
           {/* Category */}
           <div className="space-y-2">
             <label className="text-sm font-semibold text-foreground">Category</label>
-            <div className="grid grid-cols-5 gap-2">
+            <div className="flex flex-wrap gap-2">
               {CATEGORIES.map((cat) => (
                 <button
                   key={cat.id}
                   onClick={() => onCategoryChange(cat.id)}
                   className={cn(
-                    "px-2 py-2 rounded-lg text-xs font-medium transition-all border-2",
+                    "px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border-2",
                     category === cat.id
                       ? "border-transparent text-white"
                       : "border-border text-muted-foreground hover:text-foreground bg-background hover:border-primary/30"

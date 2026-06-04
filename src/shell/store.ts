@@ -46,6 +46,7 @@ export interface ShellState {
   commandPaletteQuery: string;
   globalSearchOpen: boolean;
   globalSearchQuery: string;
+  globalSearchMode: "navigate" | "link";
   notifications: Notification[];
   settings: AppSettings;
   rightPanelOpen: boolean;
@@ -67,10 +68,10 @@ export interface ShellActions {
   openCommandPalette: (query?: string) => void;
   closeCommandPalette: () => void;
   setCommandPaletteQuery: (q: string) => void;
-  openGlobalSearch: (query?: string) => void;
+  openGlobalSearch: (query?: string, mode?: "navigate" | "link") => void;
   closeGlobalSearch: () => void;
   setGlobalSearchQuery: (q: string) => void;
-  notify: (n: Omit<Notification, "id" | "createdAt">) => void;
+  notify: (n: Omit<Notification, "id" | "createdAt"> & { id?: ID }) => void;
   dismissNotification: (id: ID) => void;
   openRightPanel: (content: { type: string; props: Record<string, unknown> }) => void;
   closeRightPanel: () => void;
@@ -112,6 +113,7 @@ export const useShellStore = create<ShellState & ShellActions>()(
       commandPaletteQuery: "",
       globalSearchOpen: false,
       globalSearchQuery: "",
+      globalSearchMode: "navigate",
       notifications: [],
       settings: DEFAULT_SETTINGS,
       rightPanelOpen: false,
@@ -193,15 +195,20 @@ export const useShellStore = create<ShellState & ShellActions>()(
       closeCommandPalette: () => set({ commandPaletteOpen: false, commandPaletteQuery: "" }),
       setCommandPaletteQuery: (q) => set({ commandPaletteQuery: q }),
 
-      openGlobalSearch: (query = "") => set({ globalSearchOpen: true, globalSearchQuery: query }),
-      closeGlobalSearch: () => set({ globalSearchOpen: false, globalSearchQuery: "" }),
+      openGlobalSearch: (query = "", mode = "navigate") => set({ globalSearchOpen: true, globalSearchQuery: query, globalSearchMode: mode }),
+      closeGlobalSearch: () => set({ globalSearchOpen: false, globalSearchQuery: "", globalSearchMode: "navigate" }),
       setGlobalSearchQuery: (q) => set({ globalSearchQuery: q }),
 
       notify: (n) => {
-        const notification: Notification = { ...n, id: generateId(), createdAt: now() };
-        set((s) => ({ notifications: [...s.notifications, notification] }));
-        if (n.durationMs > 0) {
-          setTimeout(() => get().dismissNotification(notification.id), n.durationMs);
+        const id = n.id || generateId();
+        const durationMs = n.durationMs ?? 4000;
+        const notification: Notification = { ...n, durationMs, id, createdAt: now() };
+        set((s) => {
+          const filtered = s.notifications.filter(x => x.id !== id);
+          return { notifications: [...filtered, notification] };
+        });
+        if (durationMs > 0) {
+          setTimeout(() => get().dismissNotification(id), durationMs);
         }
       },
 

@@ -16,13 +16,17 @@
 
 import { create } from "zustand";
 import { bus } from "@/kernel/event-bus";
-import type { FocusSession } from "@/shared/types";
-import { now, today } from "@/shared/utils";
+import type { FocusSession, SessionPause, FocusConfig } from "@/shared/types";
+import { now, today, generateId } from "@/shared/utils";
 import {
   dbLoadSessions,
   dbInsertSession,
   dbUpdateSession,
   newSession,
+  dbLoadFocusConfig,
+  dbSaveFocusConfig,
+  dbInsertPause,
+  dbUpdatePause,
 } from "./db";
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -104,15 +108,17 @@ interface FocusStore {
   completedFocusCount: number; // resets after long break
   isLoaded:            boolean;
   stats:               FocusStats;
+  config:              FocusConfig | null;
   pendingGoal:         string;  // intention typed before start
   lastCompletedSession: FocusSession | null; // for mood rating UI
   _tickInterval:       ReturnType<typeof setInterval> | null;
 
   // Actions
   load:                () => Promise<void>;
-  startFocus:          (opts?: { taskId?: string; projectId?: string; config?: Partial<TimerConfig> }) => Promise<void>;
-  pause:               () => void;
-  resume:              () => void;
+  saveConfig:          (config: FocusConfig) => Promise<void>;
+  startFocus:          (opts?: { taskId?: string; projectId?: string; timeBlockId?: string; config?: Partial<TimerConfig> }) => Promise<void>;
+  pause:               (reason?: "break" | "distraction" | "interruption" | "emergency") => Promise<void>;
+  resume:              () => Promise<void>;
   cancel:              () => Promise<void>;
   startBreak:          (type: "short_break" | "long_break", minutes: number) => void;
   skipBreak:           () => void;
@@ -121,6 +127,7 @@ interface FocusStore {
   setGoal:             (goal: string) => void;
   setSessionNotes:     (notes: string) => void;
   setSessionMood:      (sessionId: string, mood: 1|2|3|4|5) => Promise<void>;
+  setSessionReview:    (sessionId: string, flowScore: number, accomplishment: string) => Promise<void>;
   incrementInterrupt:  () => void;
   clearLastCompleted:  () => void;
 
@@ -139,6 +146,7 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
   secondsLeft:          0,
   completedFocusCount:  0,
   isLoaded:             false,
+  config:               null,
   stats:                { todayMinutes: 0, todaySessions: 0, weekMinutes: 0, currentStreak: 0, totalMinutes: 0, totalSessions: 0 },
   pendingGoal:          "",
   lastCompletedSession: null,
@@ -148,18 +156,27 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
 
   load: async () => {
     if (get().isLoaded) return;
-    const sessions = await dbLoadSessions();
-    set({ sessions, isLoaded: true, stats: computeStats(sessions) });
+    const [sessions, config] = await Promise.all([
+      dbLoadSessions(),
+      dbLoadFocusConfig()
+    ]);
+    set({ sessions, config, isLoaded: true, stats: computeStats(sessions) });
+  },
+  
+  saveConfig: async (config) => {
+    await dbSaveFocusConfig(config);
+    set({ config });
   },
 
   // ── startFocus ───────────────────────────────────────────────────────────────
 
-  startFocus: async ({ taskId, projectId, config = {} } = {}) => {
+  startFocus: async ({ taskId, projectId, timeBlockId, config = {} } = {}) => {
     if (get().activeSession) await get().cancel();
 
     const cfg = { ...DEFAULT_CONFIG, ...config };
     const session = newSession({
       taskId,
+      timeBlockId,
       projectId,
       type:           "focus",
       plannedMinutes: cfg.focusMinutes,
@@ -187,16 +204,30 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
 
   // ── pause ─────────────────────────────────────────────────────────────────────
 
-  pause: () => {
+  pause: async (reason?: "break" | "distraction" | "interruption" | "emergency") => {
     const { activeSession } = get();
-    if (!activeSession || activeSession.state !== "focusing") return;
+    if (!activeSession || (activeSession.state !== "focusing" && activeSession.status !== "active")) return;
     get()._clearTimer();
-    const updated = {
+    
+    const pauseRecord: SessionPause = {
+      id: generateId(),
+      sessionId: activeSession.id,
+      pausedAt: now(),
+      reason
+    };
+    
+    const updated: FocusSession = {
       ...activeSession,
-      state:          "paused" as const,
+      status: "paused",
+      state: "paused" as const,
+      pauses: [...(activeSession.pauses || []), pauseRecord],
+      interruptionCount: (activeSession.interruptionCount || 0) + 1,
       interruptCount: (activeSession.interruptCount ?? 0) + 1,
     };
-    void dbUpdateSession(updated);
+    
+    await dbInsertPause(pauseRecord);
+    await dbUpdateSession(updated);
+    
     set({ activeSession: updated });
     _patchList(set, updated);
     bus.emit("focus:session-paused", { sessionId: updated.id });
@@ -204,11 +235,25 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
 
   // ── resume ───────────────────────────────────────────────────────────────────
 
-  resume: () => {
+  resume: async () => {
     const { activeSession } = get();
-    if (!activeSession || activeSession.state !== "paused") return;
-    const updated = { ...activeSession, state: "focusing" as const };
-    void dbUpdateSession(updated);
+    if (!activeSession || (activeSession.state !== "paused" && activeSession.status !== "paused")) return;
+    
+    const pauses = [...(activeSession.pauses || [])];
+    const lastPause = pauses.length > 0 ? pauses[pauses.length - 1] : null;
+    if (lastPause && !lastPause.resumedAt) {
+      lastPause.resumedAt = now();
+      await dbUpdatePause(lastPause);
+    }
+    
+    const updated: FocusSession = { 
+      ...activeSession, 
+      status: "active",
+      state: "focusing" as const,
+      pauses 
+    };
+    
+    await dbUpdateSession(updated);
     const interval = setInterval(() => get()._tick(), 1000);
     set({ activeSession: updated, _tickInterval: interval });
     _patchList(set, updated);
@@ -221,12 +266,21 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     const { activeSession, secondsLeft } = get();
     if (!activeSession) return;
     get()._clearTimer();
-    const elapsed   = (activeSession.plannedMinutes * 60) - secondsLeft;
+    const duration = activeSession.plannedMinutes ?? activeSession.plannedDuration ?? 25;
+    const elapsed   = (duration * 60) - secondsLeft;
+    const workDurationMins = Math.max(0, Math.round(elapsed / 60));
+    const startMs = new Date(activeSession.startedAt).getTime();
+    const actualDurationMins = Math.max(0, Math.round((Date.now() - startMs) / 60000));
+
     const updated: FocusSession = {
       ...activeSession,
+      status:        "abandoned",
       state:         "idle",
+      endedAt:       now(),
       completedAt:   now(),
-      actualMinutes: Math.max(0, Math.round(elapsed / 60)),
+      actualDuration: actualDurationMins,
+      actualMinutes: actualDurationMins,
+      workDuration:  workDurationMins,
     };
     await dbUpdateSession(updated);
     set((s) => ({
@@ -248,6 +302,8 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
       taskId:         activeSession?.taskId,
       projectId:      activeSession?.projectId,
       type,
+      status:         "active",
+      plannedDuration: minutes,
       plannedMinutes: minutes,
       state:          "break",
       startedAt:      now(),
@@ -273,9 +329,13 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     get()._clearTimer();
     const updated: FocusSession = {
       ...activeSession,
+      status:        "abandoned",
       state:         "idle",
+      endedAt:       now(),
       completedAt:   now(),
+      actualDuration: 0,
       actualMinutes: 0,
+      workDuration:  0,
     };
     void dbUpdateSession(updated);
     set((s) => ({
@@ -303,12 +363,23 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     _patchList(set, updated);
   },
 
-  // ── setSessionMood ────────────────────────────────────────────────────────────
+  // ── setSessionMood & setSessionReview ────────────────────────────────────────
 
   setSessionMood: async (sessionId, mood) => {
     const session = get().sessions.find((s) => s.id === sessionId);
     if (!session) return;
     const updated = { ...session, mood };
+    await dbUpdateSession(updated);
+    set((s) => ({
+      sessions:             s.sessions.map((x) => (x.id === sessionId ? updated : x)),
+      lastCompletedSession: s.lastCompletedSession?.id === sessionId ? updated : s.lastCompletedSession,
+    }));
+  },
+
+  setSessionReview: async (sessionId, flowScore, accomplishment) => {
+    const session = get().sessions.find((s) => s.id === sessionId);
+    if (!session) return;
+    const updated = { ...session, flowScore, accomplishment };
     await dbUpdateSession(updated);
     set((s) => ({
       sessions:             s.sessions.map((x) => (x.id === sessionId ? updated : x)),
@@ -363,13 +434,17 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
 
     const updated: FocusSession = {
       ...activeSession,
+      status:        "completed",
       state:         "idle",
+      endedAt:       now(),
       completedAt:   now(),
+      actualDuration: activeSession.plannedDuration,
       actualMinutes: activeSession.plannedMinutes,
+      workDuration:  activeSession.plannedDuration,
     };
     await dbUpdateSession(updated);
 
-    const isFocusSession = activeSession.type === "focus";
+    const isFocusSession = activeSession.type === "focus" || activeSession.type === "pomodoro" || activeSession.type === "deep_work";
     const newCount       = isFocusSession ? completedFocusCount + 1 : completedFocusCount;
 
     set((s) => ({
@@ -394,6 +469,25 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     if (!activeSession) return;
     const next = secondsLeft - 1;
     bus.emit("focus:tick", { sessionId: activeSession.id, remainingSeconds: next });
+    
+    // Auto-idle detection (every 10 seconds)
+    if (next > 0 && next % 10 === 0 && activeSession.status === "active") {
+      import("@tauri-apps/api/core").then(({ invoke }) => {
+        invoke("get_idle_time").then((idleSeconds) => {
+          // If idle for more than 5 minutes (300 seconds), auto-pause
+          if (typeof idleSeconds === "number" && idleSeconds >= 300) {
+            void get().pause("distraction");
+            bus.emit("ui:notification", {
+              id: "idle-pause",
+              type: "warning",
+              message: "Session auto-paused due to inactivity",
+              durationMs: 5000,
+            });
+          }
+        }).catch(() => {});
+      }).catch(() => {});
+    }
+
     if (next <= 0) {
       void get()._completeActive();
       return;

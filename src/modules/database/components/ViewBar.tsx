@@ -8,8 +8,10 @@ interface Props {
 }
 
 const VIEW_ICONS: Record<DatabaseViewType, string> = {
-  grid:   "⊞",
-  kanban: "⠿",
+  grid:     "⊞",
+  kanban:   "⠿",
+  calendar: "📅",
+  gallery:  "🖼️"
 };
 
 export function ViewBar({ tableId }: Props) {
@@ -22,7 +24,7 @@ export function ViewBar({ tableId }: Props) {
 
   const handleAdd = async () => {
     if (!newName.trim()) return;
-    const id = await addView({ tableId, name: newName.trim(), type: newType, position: views.length });
+    const id = await addView({ tableId, name: newName.trim(), type: newType, config: {}, position: views.length });
     setActiveView(id);
     setAdding(false);
     setNewName("");

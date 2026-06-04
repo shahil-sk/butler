@@ -60,4 +60,54 @@ export const CALENDAR_MIGRATIONS: Migration[] = [
     `,
     down: `SELECT 1;`,
   },
+  {
+    version: 52,
+    module: "calendar",
+    up: `
+      ALTER TABLE calendars ADD COLUMN ical_url TEXT;
+      ALTER TABLE calendars ADD COLUMN sync_token TEXT;
+      ALTER TABLE calendars ADD COLUMN last_synced_at TEXT;
+
+      ALTER TABLE calendar_events ADD COLUMN status TEXT;
+      ALTER TABLE calendar_events ADD COLUMN visibility TEXT;
+      ALTER TABLE calendar_events ADD COLUMN timezone TEXT NOT NULL DEFAULT 'UTC';
+      ALTER TABLE calendar_events ADD COLUMN location TEXT;
+      ALTER TABLE calendar_events ADD COLUMN location_lat REAL;
+      ALTER TABLE calendar_events ADD COLUMN location_lng REAL;
+      ALTER TABLE calendar_events ADD COLUMN meeting_url TEXT;
+      ALTER TABLE calendar_events ADD COLUMN meeting_password TEXT;
+      ALTER TABLE calendar_events ADD COLUMN recurrence_parent TEXT;
+      ALTER TABLE calendar_events ADD COLUMN external_id TEXT;
+      ALTER TABLE calendar_events ADD COLUMN external_source TEXT;
+      ALTER TABLE calendar_events ADD COLUMN category TEXT;
+      ALTER TABLE calendar_events ADD COLUMN task_id TEXT;
+      ALTER TABLE calendar_events ADD COLUMN project_id TEXT;
+      ALTER TABLE calendar_events ADD COLUMN goal_id TEXT;
+      ALTER TABLE calendar_events ADD COLUMN created_by TEXT;
+      ALTER TABLE calendar_events ADD COLUMN attachments TEXT;
+
+      CREATE TABLE IF NOT EXISTS event_attendees (
+        id TEXT PRIMARY KEY,
+        event_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        email TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'invited',
+        is_organizer INTEGER NOT NULL DEFAULT 0,
+        is_self INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY (event_id) REFERENCES calendar_events(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS event_reminders (
+        id TEXT PRIMARY KEY,
+        event_id TEXT NOT NULL,
+        method TEXT NOT NULL DEFAULT 'notification',
+        minutes INTEGER NOT NULL,
+        FOREIGN KEY (event_id) REFERENCES calendar_events(id) ON DELETE CASCADE
+      );
+    `,
+    down: `
+      DROP TABLE IF EXISTS event_attendees;
+      DROP TABLE IF EXISTS event_reminders;
+    `
+  }
 ];

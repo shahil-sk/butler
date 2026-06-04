@@ -11,6 +11,7 @@ import {
 } from "date-fns";
 import { cn, toISODate } from "@/shared/utils";
 import { useCalendarStore } from "./store";
+import { useTaskStore } from "@/modules/tasks/store";
 
 const HOURS  = Array.from({ length: 24 }, (_, i) => i);
 const CELL_H = 56;
@@ -24,7 +25,7 @@ function durationH(startAt: string, endAt: string): number {
 }
 
 export function WeekView() {
-  const { activeDate, getEventsInRange, openEventForm, calendars } = useCalendarStore();
+  const { activeDate, getEventsInRange, openEventForm, calendars, openContextMenu, updateEvent } = useCalendarStore();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const anchor    = parseISO(activeDate);
@@ -47,6 +48,50 @@ export function WeekView() {
   const now    = new Date();
   const nowY   = (now.getHours() + now.getMinutes() / 60) * CELL_H;
 
+  const handleContextMenu = (e: React.MouseEvent, evt: any) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openContextMenu(e.clientX, e.clientY, evt);
+  };
+
+  const handleDrop = (e: React.DragEvent, ds: string, h?: number) => {
+    e.preventDefault();
+    const evtId = e.dataTransfer.getData("text/plain");
+    if (!evtId) return;
+
+    if (evtId.startsWith("task:")) {
+      const taskId = evtId.replace("task:", "");
+      useTaskStore.getState().updateTask(taskId, { dueDate: ds });
+    } else {
+      const evt = useCalendarStore.getState().events.find(x => x.id === evtId);
+      if (evt) {
+        const timeStart = evt.startAt.slice(11);
+        const timeEnd = evt.endAt.slice(11);
+        if (h !== undefined) {
+          const startHH = String(h).padStart(2, "0");
+          const duration = durationH(evt.startAt, evt.endAt);
+          const endH = Math.floor(h + duration);
+          const endM = Math.round((h + duration - endH) * 60);
+          const endHH = String(endH).padStart(2, "0");
+          const endMM = String(endM).padStart(2, "0");
+          updateEvent(evt.id, {
+            startAt: `${ds}T${startHH}:00:00`,
+            endAt: `${ds}T${endHH}:${endMM}:00`,
+            startDatetime: `${ds}T${startHH}:00:00`,
+            endDatetime: `${ds}T${endHH}:${endMM}:00`,
+          });
+        } else {
+          updateEvent(evt.id, {
+            startAt: `${ds}T${timeStart}`,
+            endAt: `${ds}T${timeEnd}`,
+            startDatetime: `${ds}T${timeStart}`,
+            endDatetime: `${ds}T${timeEnd}`,
+          });
+        }
+      }
+    }
+  };
+
   return (
     <div className="flex flex-col flex-1 overflow-hidden border-t border-border">
       {/* All-day row */}
@@ -65,8 +110,14 @@ export function WeekView() {
                 return (
                   <div
                     key={e.id}
+                    draggable
+                    onDragStart={(ev) => {
+                      ev.stopPropagation();
+                      ev.dataTransfer.setData("text/plain", e.id);
+                    }}
                     onClick={() => openEventForm(e, e.id)}
-                    className="text-[10px] px-1 rounded truncate cursor-pointer"
+                    onContextMenu={(ev) => handleContextMenu(ev, e)}
+                    className={cn("text-[10px] px-1 rounded truncate cursor-pointer", e.status === "completed" && "line-through opacity-60")}
                     style={{ backgroundColor: `${color}25`, color }}
                   >
                     {e.title}
@@ -102,6 +153,8 @@ export function WeekView() {
               return (
                 <div
                   key={ds}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => handleDrop(e, ds)}
                   className={cn(
                     "flex-1 relative border-r border-border/40",
                     isToday && "bg-primary/[0.02]"
@@ -137,7 +190,13 @@ export function WeekView() {
                     return (
                       <div
                         key={evt.id}
+                        draggable
+                        onDragStart={(e) => {
+                          e.stopPropagation();
+                          e.dataTransfer.setData("text/plain", evt.id);
+                        }}
                         onClick={(e) => { e.stopPropagation(); openEventForm(evt, evt.id); }}
+                        onContextMenu={(e) => handleContextMenu(e, evt)}
                         className="absolute left-0.5 right-0.5 rounded overflow-hidden cursor-pointer z-10 px-1 py-0.5 transition-fast hover:brightness-95"
                         style={{
                           top,
@@ -147,7 +206,7 @@ export function WeekView() {
                           color,
                         }}
                       >
-                        <p className="text-[10px] font-medium leading-tight truncate">{evt.title}</p>
+                        <p className={cn("text-[10px] font-medium leading-tight truncate", evt.status === "completed" && "line-through opacity-60")}>{evt.title}</p>
                         {height > 30 && (
                           <p className="text-[9px] opacity-70 tabular-nums">
                             {evt.startAt.slice(11, 16)}&ndash;{evt.endAt.slice(11, 16)}

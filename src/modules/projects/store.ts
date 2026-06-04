@@ -23,9 +23,32 @@ function rowToProject(r: Record<string, unknown>): Project {
     dueDate:      (r.due_date as string | null) ?? undefined,
     milestones:   JSON.parse((r.milestones as string) || "[]"),
     linkedNoteIds:JSON.parse((r.linked_note_ids as string) || "[]"),
+    attachments:  JSON.parse((r.attachments as string) || "[]"),
     order:        r.sort_order as number,
     createdAt:    r.created_at as string,
     updatedAt:    r.updated_at as string,
+    health:       (r.health as any) ?? undefined,
+    priority:     (r.priority as any) ?? "none",
+    visibility:   (r.visibility as any) ?? "private",
+    goalId:       (r.goal_id as string) ?? undefined,
+    parentProjectId: (r.parent_project_id as string) ?? undefined,
+    targetDate:   (r.target_date as string) ?? undefined,
+    hardDeadline: (r.hard_deadline as string) ?? undefined,
+    completedAt:  (r.completed_at as string) ?? undefined,
+    ownerId:      (r.owner_id as string) ?? "",
+    coverImageUrl: (r.cover_image_url as string) ?? undefined,
+    budgetHours:  (r.budget_hours as number) ?? undefined,
+    budgetCost:   (r.budget_cost as number) ?? undefined,
+    currency:     (r.currency as string) ?? undefined,
+    tags:         JSON.parse((r.tags as string) || "[]"),
+    labels:       JSON.parse((r.labels as string) || "[]"),
+    customFields: JSON.parse((r.custom_fields as string) || "{}"),
+    progressMode: (r.progress_mode as any) ?? "manual",
+    progressPercent: (r.progress_percent as number) ?? 0,
+    templateId:   (r.template_id as string) ?? undefined,
+    isTemplate:   Boolean(r.is_template),
+    createdBy:    (r.created_by as string) ?? "",
+    archivedAt:   (r.archived_at as string) ?? undefined,
   };
 }
 
@@ -34,16 +57,26 @@ function rowToProject(r: Record<string, unknown>): Project {
 const INSERT_SQL = `
   INSERT INTO projects (
     id, name, description, status, color, icon,
-    start_date, due_date, milestones, linked_note_ids,
-    sort_order, created_at, updated_at
-  ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+    start_date, due_date, milestones, linked_note_ids, attachments,
+    sort_order, created_at, updated_at,
+    health, priority, visibility, goal_id, parent_project_id,
+    target_date, hard_deadline, completed_at, owner_id,
+    cover_image_url, budget_hours, budget_cost, currency,
+    tags, labels, custom_fields, progress_mode, progress_percent,
+    template_id, is_template, created_by, archived_at
+  ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 `;
 
 const UPDATE_SQL = `
   UPDATE projects SET
     name=?, description=?, status=?, color=?, icon=?,
-    start_date=?, due_date=?, milestones=?, linked_note_ids=?,
-    sort_order=?, updated_at=?
+    start_date=?, due_date=?, milestones=?, linked_note_ids=?, attachments=?,
+    sort_order=?, updated_at=?,
+    health=?, priority=?, visibility=?, goal_id=?, parent_project_id=?,
+    target_date=?, hard_deadline=?, completed_at=?, owner_id=?,
+    cover_image_url=?, budget_hours=?, budget_cost=?, currency=?,
+    tags=?, labels=?, custom_fields=?, progress_mode=?, progress_percent=?,
+    template_id=?, is_template=?, created_by=?, archived_at=?
   WHERE id=?
 `;
 
@@ -51,18 +84,29 @@ function insertParams(p: Project): unknown[] {
   return [
     p.id, p.name, p.description ?? null, p.status, p.color, p.icon ?? null,
     p.startDate ?? null, p.dueDate ?? null,
-    JSON.stringify(p.milestones), JSON.stringify(p.linkedNoteIds),
+    JSON.stringify(p.milestones), JSON.stringify(p.linkedNoteIds), JSON.stringify(p.attachments || []),
     p.order, p.createdAt, p.updatedAt,
+    p.health ?? null, p.priority, p.visibility, p.goalId ?? null, p.parentProjectId ?? null,
+    p.targetDate ?? null, p.hardDeadline ?? null, p.completedAt ?? null, p.ownerId,
+    p.coverImageUrl ?? null, p.budgetHours ?? null, p.budgetCost ?? null, p.currency ?? null,
+    JSON.stringify(p.tags), JSON.stringify(p.labels), JSON.stringify(p.customFields),
+    p.progressMode, p.progressPercent, p.templateId ?? null, p.isTemplate ? 1 : 0,
+    p.createdBy, p.archivedAt ?? null
   ];
 }
 
 function updateParams(p: Project): unknown[] {
-  // 11 SET fields + 1 WHERE = 12 params
   return [
     p.name, p.description ?? null, p.status, p.color, p.icon ?? null,
     p.startDate ?? null, p.dueDate ?? null,
-    JSON.stringify(p.milestones), JSON.stringify(p.linkedNoteIds),
+    JSON.stringify(p.milestones), JSON.stringify(p.linkedNoteIds), JSON.stringify(p.attachments || []),
     p.order, p.updatedAt,
+    p.health ?? null, p.priority, p.visibility, p.goalId ?? null, p.parentProjectId ?? null,
+    p.targetDate ?? null, p.hardDeadline ?? null, p.completedAt ?? null, p.ownerId,
+    p.coverImageUrl ?? null, p.budgetHours ?? null, p.budgetCost ?? null, p.currency ?? null,
+    JSON.stringify(p.tags), JSON.stringify(p.labels), JSON.stringify(p.customFields),
+    p.progressMode, p.progressPercent, p.templateId ?? null, p.isTemplate ? 1 : 0,
+    p.createdBy, p.archivedAt ?? null,
     p.id, // WHERE
   ];
 }
@@ -116,19 +160,42 @@ export const useProjectStore = create<ProjectState & ProjectActions>()((set, get
 
   createProject: async (input) => {
     const project: Project = {
-      id:           generateId(),
-      name:         input.name?.trim() || "Untitled project",
-      description:  input.description,
-      status:       input.status   ?? "active",
-      color:        input.color    ?? "#3b82f6",
-      icon:         input.icon,
-      startDate:    input.startDate,
-      dueDate:      input.dueDate,
-      milestones:   input.milestones    ?? [],
-      linkedNoteIds:input.linkedNoteIds ?? [],
+      id: generateId(),
+      name: input.name || "Untitled Project",
+      description: input.description,
+      status: input.status || "active",
+      color: input.color || "#3b82f6",
+      icon: input.icon,
+      startDate: input.startDate,
+      dueDate: input.dueDate,
+      milestones: input.milestones || [],
+      linkedNoteIds: input.linkedNoteIds || [],
+      attachments: input.attachments || [],
       order:        Date.now(),
       createdAt:    now(),
       updatedAt:    now(),
+      health:       input.health,
+      priority:     input.priority ?? "none",
+      visibility:   input.visibility ?? "private",
+      goalId:       input.goalId,
+      parentProjectId: input.parentProjectId,
+      targetDate:   input.targetDate,
+      hardDeadline: input.hardDeadline,
+      completedAt:  input.completedAt,
+      ownerId:      input.ownerId ?? "",
+      coverImageUrl: input.coverImageUrl,
+      budgetHours:  input.budgetHours,
+      budgetCost:   input.budgetCost,
+      currency:     input.currency,
+      tags:         input.tags ?? [],
+      labels:       input.labels ?? [],
+      customFields: input.customFields ?? {},
+      progressMode: input.progressMode ?? "manual",
+      progressPercent: input.progressPercent ?? 0,
+      templateId:   input.templateId,
+      isTemplate:   input.isTemplate ?? false,
+      createdBy:    input.createdBy ?? "",
+      archivedAt:   input.archivedAt,
     };
 
     try {
@@ -177,18 +244,23 @@ export const useProjectStore = create<ProjectState & ProjectActions>()((set, get
     const project = get().projects.find((p) => p.id === projectId);
     if (!project) return;
     const milestone: Milestone = {
-      id: generateId(), projectId, title, dueDate,
-      completedAt: undefined, linkedTaskIds: [],
+      id: generateId(), projectId, title, dueDate: dueDate || "",
+      status: "pending", tasks: [], dependsOn: [], linkedTaskIds: [],
+      createdAt: now()
     };
     await get().updateProject(projectId, { milestones: [...project.milestones, milestone] });
+    bus.emit("project:milestone-created" as any, { project, milestone });
   },
 
   updateMilestone: async (projectId, milestoneId, patch) => {
     const project = get().projects.find((p) => p.id === projectId);
     if (!project) return;
-    await get().updateProject(projectId, {
-      milestones: project.milestones.map((m) => m.id === milestoneId ? { ...m, ...patch } : m),
-    });
+    const nextMilestones = project.milestones.map((m) => m.id === milestoneId ? { ...m, ...patch } : m);
+    await get().updateProject(projectId, { milestones: nextMilestones });
+    const updated = nextMilestones.find(m => m.id === milestoneId);
+    if (updated) {
+      bus.emit("project:milestone-updated" as any, { project, milestone: updated });
+    }
   },
 
   completeMilestone: async (projectId, milestoneId) =>
@@ -197,9 +269,13 @@ export const useProjectStore = create<ProjectState & ProjectActions>()((set, get
   deleteMilestone: async (projectId, milestoneId) => {
     const project = get().projects.find((p) => p.id === projectId);
     if (!project) return;
+    const milestone = project.milestones.find((m) => m.id === milestoneId);
     await get().updateProject(projectId, {
       milestones: project.milestones.filter((m) => m.id !== milestoneId),
     });
+    if (milestone) {
+      bus.emit("project:milestone-deleted" as any, { project, milestone });
+    }
   },
 
   // ── UI ────────────────────────────────────────────────────

@@ -107,25 +107,25 @@ function Toolbar({ editor }: { editor: Editor }) {
     const url  = window.prompt("Enter URL", prev ?? "https://");
     if (url === null) return;
     if (url === "") {
-      editor.chain().focus().unsetLink().run();
+      ((editor.chain().focus() as any)).unsetLink().run();
       return;
     }
-    editor.chain().focus().setLink({ href: url }).run();
+    ((editor.chain().focus() as any)).setLink({ href: url }).run();
   };
 
   return (
     <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-border bg-background shrink-0 flex-wrap">
       {/* Headings */}
       <ToolbarBtn title="Heading 1 (# text)" active={editor.isActive("heading", { level: 1 })}
-        onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}>
+        onClick={() => ((editor.chain().focus() as any)).toggleHeading({ level: 1 }).run()}>
         <Heading1 size={13} />
       </ToolbarBtn>
       <ToolbarBtn title="Heading 2 (## text)" active={editor.isActive("heading", { level: 2 })}
-        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>
+        onClick={() => ((editor.chain().focus() as any)).toggleHeading({ level: 2 }).run()}>
         <Heading2 size={13} />
       </ToolbarBtn>
       <ToolbarBtn title="Heading 3 (### text)" active={editor.isActive("heading", { level: 3 })}
-        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>
+        onClick={() => ((editor.chain().focus() as any)).toggleHeading({ level: 3 }).run()}>
         <Heading3 size={13} />
       </ToolbarBtn>
 
@@ -133,23 +133,23 @@ function Toolbar({ editor }: { editor: Editor }) {
 
       {/* Inline marks */}
       <ToolbarBtn title="Bold (** text **)" active={editor.isActive("bold")}
-        onClick={() => editor.chain().focus().toggleBold().run()}>
+        onClick={() => ((editor.chain().focus() as any)).toggleBold().run()}>
         <Bold size={13} />
       </ToolbarBtn>
       <ToolbarBtn title="Italic (* text *)" active={editor.isActive("italic")}
-        onClick={() => editor.chain().focus().toggleItalic().run()}>
+        onClick={() => ((editor.chain().focus() as any)).toggleItalic().run()}>
         <Italic size={13} />
       </ToolbarBtn>
       <ToolbarBtn title="Strikethrough (~~ text ~~)" active={editor.isActive("strike")}
-        onClick={() => editor.chain().focus().toggleStrike().run()}>
+        onClick={() => ((editor.chain().focus() as any)).toggleStrike().run()}>
         <Strikethrough size={13} />
       </ToolbarBtn>
       <ToolbarBtn title="Highlight" active={editor.isActive("highlight")}
-        onClick={() => editor.chain().focus().toggleHighlight().run()}>
+        onClick={() => ((editor.chain().focus() as any)).toggleHighlight().run()}>
         <Highlighter size={13} />
       </ToolbarBtn>
       <ToolbarBtn title="Inline code (` code `)" active={editor.isActive("code")}
-        onClick={() => editor.chain().focus().toggleCode().run()}>
+        onClick={() => ((editor.chain().focus() as any)).toggleCode().run()}>
         <Code size={13} />
       </ToolbarBtn>
       <ToolbarBtn title="Link" active={editor.isActive("link")}
@@ -161,15 +161,15 @@ function Toolbar({ editor }: { editor: Editor }) {
 
       {/* Lists */}
       <ToolbarBtn title="Bullet list (- item)" active={editor.isActive("bulletList")}
-        onClick={() => editor.chain().focus().toggleBulletList().run()}>
+        onClick={() => ((editor.chain().focus() as any)).toggleBulletList().run()}>
         <List size={13} />
       </ToolbarBtn>
       <ToolbarBtn title="Numbered list (1. item)" active={editor.isActive("orderedList")}
-        onClick={() => editor.chain().focus().toggleOrderedList().run()}>
+        onClick={() => ((editor.chain().focus() as any)).toggleOrderedList().run()}>
         <ListOrdered size={13} />
       </ToolbarBtn>
       <ToolbarBtn title="Task list (- [ ] item)" active={editor.isActive("taskList")}
-        onClick={() => editor.chain().focus().toggleTaskList().run()}>
+        onClick={() => ((editor.chain().focus() as any)).toggleTaskList().run()}>
         <CheckSquare size={13} />
       </ToolbarBtn>
 
@@ -177,15 +177,15 @@ function Toolbar({ editor }: { editor: Editor }) {
 
       {/* Block types */}
       <ToolbarBtn title="Blockquote (> text)" active={editor.isActive("blockquote")}
-        onClick={() => editor.chain().focus().toggleBlockquote().run()}>
+        onClick={() => ((editor.chain().focus() as any)).toggleBlockquote().run()}>
         <Quote size={13} />
       </ToolbarBtn>
       <ToolbarBtn title="Code block (``` lang)" active={editor.isActive("codeBlock")}
-        onClick={() => editor.chain().focus().toggleCodeBlock().run()}>
+        onClick={() => ((editor.chain().focus() as any)).toggleCodeBlock().run()}>
         <Code2 size={13} />
       </ToolbarBtn>
       <ToolbarBtn title="Horizontal rule (---)"
-        onClick={() => editor.chain().focus().setHorizontalRule().run()}>
+        onClick={() => ((editor.chain().focus() as any)).setHorizontalRule().run()}>
         <Minus size={13} />
       </ToolbarBtn>
 
@@ -193,11 +193,11 @@ function Toolbar({ editor }: { editor: Editor }) {
 
       {/* History */}
       <ToolbarBtn title="Undo (Ctrl+Z)" disabled={!editor.can().undo()}
-        onClick={() => editor.chain().focus().undo().run()}>
+        onClick={() => ((editor.chain().focus() as any)).undo().run()}>
         <Undo2 size={13} />
       </ToolbarBtn>
       <ToolbarBtn title="Redo (Ctrl+Shift+Z)" disabled={!editor.can().redo()}
-        onClick={() => editor.chain().focus().redo().run()}>
+        onClick={() => ((editor.chain().focus() as any)).redo().run()}>
         <Redo2 size={13} />
       </ToolbarBtn>
 
@@ -292,11 +292,11 @@ export function RichEditor({
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({
+      (StarterKit.configure({
         heading:   { levels: [1, 2, 3] },
         // Disable built-in codeBlock — replaced by CodeBlockLowlight
         codeBlock: false,
-      }),
+      }) as any),
       CodeBlockLowlight.configure({
         lowlight,
         defaultLanguage: "plaintext",

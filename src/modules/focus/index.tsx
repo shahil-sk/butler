@@ -32,6 +32,8 @@ import { EmptyState, ProjectDot } from "@/shared/ui";
 import { cn, today } from "@/shared/utils";
 import type { FocusSession, TimeEntry, Task } from "@/shared/types";
 
+import { SessionStatsView } from "./components/SessionStatsView";
+
 registry.register(focusManifest);
 registry.register(TIME_MANIFEST);
 
@@ -108,11 +110,12 @@ function useFocusSound() {
 // SEGMENT CONTROL
 // ─────────────────────────────────────────────────────────────
 
-type Tab = "focus" | "tracker" | "reports";
+type Tab = "focus" | "tracker" | "reports" | "analytics";
 const TABS: { id: Tab; label: string; Icon: any }[] = [
-  { id: "focus",   label: "Focus",   Icon: Target },
-  { id: "tracker", label: "Tracker", Icon: Clock },
-  { id: "reports", label: "Reports", Icon: BarChart2 },
+  { id: "focus",     label: "Focus",     Icon: Target },
+  { id: "tracker",   label: "Tracker",   Icon: Clock },
+  { id: "reports",   label: "Reports",   Icon: BarChart2 },
+  { id: "analytics", label: "Analytics", Icon: TrendingUp },
 ];
 
 function SegmentControl({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
@@ -550,7 +553,8 @@ function FocusTab() {
   const isFocusing = state === "focusing";
   const isPaused   = state === "paused";
   const isBreak    = state === "break";
-  const totalSecs  = active ? active.plannedMinutes * 60 : focusMins * 60;
+  const activeDuration = active?.plannedMinutes ?? active?.plannedDuration ?? focusMins;
+  const totalSecs = active ? activeDuration * 60 : focusMins * 60;
   const dispSecs   = isIdle ? focusMins * 60 : secsLeft;
 
   const showBreakOffer = !!lastDone && lastDone.type === "focus" && isIdle;
@@ -708,7 +712,7 @@ function FocusTab() {
               />
             </div>
             <div className="flex gap-2 w-full">
-              <button onClick={pause}
+              <button onClick={() => pause()}
                 className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border border-border hover:bg-muted transition-colors text-sm font-medium">
                 <Pause size={13} /> Pause
                 <kbd className="ml-1 text-[10px] text-muted-foreground/50 font-mono">Space</kbd>
@@ -1109,6 +1113,7 @@ function TrackerTab() {
           onEdit={(id) => { setEditingId(id); setShowForm(false); }}
           onDelete={(id) => void deleteEntry(id)}
           onResume={() => {/* already running */}}
+          onCopy={() => {}}
         />
       )}
 
@@ -1161,6 +1166,7 @@ function TrackerTab() {
                     taskId:      entry.taskId,
                     projectId:   entry.projectId,
                   })}
+                  onCopy={() => {}}
                 />
               ))}
             </div>
@@ -1292,9 +1298,10 @@ export default function FocusModule() {
 
       {/* Tab content */}
       <div className="flex-1 overflow-hidden bg-background">
-        {tab === "focus"   && <FocusTab />}
-        {tab === "tracker" && <TrackerTab />}
-        {tab === "reports" && <ReportsTab />}
+        {tab === "focus"     && <FocusTab />}
+        {tab === "tracker"   && <TrackerTab />}
+        {tab === "reports"   && <ReportsTab />}
+        {tab === "analytics" && <SessionStatsView />}
       </div>
     </div>
   );

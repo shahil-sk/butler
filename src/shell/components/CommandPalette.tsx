@@ -156,8 +156,23 @@ export function CommandPalette() {
 
           <Command.List className="max-h-[380px] overflow-y-auto p-1.5 space-y-0.5">
             <Command.Empty className="py-10 text-center text-sm text-muted-foreground">
-              No results found.
+              No exact matches found. 
             </Command.Empty>
+
+            {/* AI Natural Language Task Creation */}
+            {commandPaletteQuery.length > 2 && (
+              <Command.Group heading="AI Actions" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted-foreground/50">
+                <CommandItem
+                  key="ai-create-task"
+                  icon={<Zap size={13} className="text-purple-500" />}
+                  label={`Create task: "${commandPaletteQuery}"`}
+                  onSelect={() => {
+                    closeCommandPalette();
+                    bus.emit("ai:create-task", { query: commandPaletteQuery });
+                  }}
+                />
+              </Command.Group>
+            )}
 
             {/* Recent */}
             {recentPaths.length > 0 && (

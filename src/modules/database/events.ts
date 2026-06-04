@@ -11,8 +11,9 @@ export function setupDatabaseEventListeners(): Cleanup {
     bus.on("database:created", ({ database }) => {
       void useDatabaseStore.getState().addView({
         tableId:  database.id,
-        name:     "Default View",
+        name:     "All Items",
         type:     "grid",
+        config:   {},
         position: 0,
       });
     }),

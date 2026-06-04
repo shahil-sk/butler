@@ -58,6 +58,20 @@ export function setupTaskEventListeners(): () => void {
     })
   );
 
+  // ── Planner → Task: block unlinked from a task ────────────
+  unsubs.push(
+    bus.on("planner:block-unlinked-task", ({ previousTaskId }) => {
+      const store = useTaskStore.getState();
+      const task  = store.tasks.find((t) => t.id === previousTaskId);
+      if (!task) return;
+      store.updateTask(previousTaskId, { 
+        scheduledDate: undefined,
+        scheduledAt: undefined,
+        scheduledDuration: undefined
+      });
+    })
+  );
+
   // ── Project deleted → unlink tasks ────────────────────────
   unsubs.push(
     bus.on("project:deleted", ({ projectId }) => {
@@ -84,41 +98,7 @@ export function setupTaskEventListeners(): () => void {
     })
   );
 
-  // ── task:unblocked → planner: task available for scheduling ─
-  unsubs.push(
-    bus.on("task:unblocked", ({ taskId }) => {
-      const task = useTaskStore.getState().tasks.find((t) => t.id === taskId);
-      if (!task) return;
-      bus.emit("planner:task-unblocked", { task });
-      // Also notify the user
-      bus.emit("ui:notification", {
-        id:         `unblocked-${taskId}`,
-        type:       "info",
-        message:    `"${task.title}" is now unblocked`,
-        durationMs: 4000,
-      });
-    })
-  );
 
-  // ── task:schedule-in-planner → planner:create-block ───────
-  unsubs.push(
-    bus.on("task:schedule-in-planner", ({ task, date }) => {
-      const effectiveDate = date ?? task.dueDate ?? task.scheduledDate;
-      bus.emit("planner:create-block", {
-        title:          task.title,
-        date:           effectiveDate,
-        durationMinutes: task.estimateMinutes ?? 60,
-        linkedTaskId:   task.id,
-        color:          "#8b5cf6",
-      });
-      bus.emit("ui:notification", {
-        id:         `sched-${task.id}`,
-        type:       "success",
-        message:    `"${task.title}" sent to Planner`,
-        durationMs: 3000,
-      });
-    })
-  );
 
   // ── task:open → research: semantic search ─────────────────
   unsubs.push(

@@ -7,7 +7,7 @@
 import { useState, useRef, useEffect } from "react";
 import {
   Tag, Link2, MoreHorizontal, X, Trash2, Pin,
-  CheckCircle2, Circle, Calendar, Hash,
+  CheckCircle2, Circle, Calendar, Hash, Sparkles, BookOpen, Loader2
 } from "lucide-react";
 import { cn } from "@/shared/utils";
 import { useNoteStore } from "../store";
@@ -343,6 +343,55 @@ export function NoteToolbar({ note }: NoteToolbarProps) {
             onClick={() => void updateNote(note.id, { isPinned: !note.isPinned })}
           >
             <Pin size={13} style={{ fill: note.isPinned ? "currentColor" : "none" }} />
+          </TBtn>
+
+          {/* AI Extract */}
+          <TBtn
+            title="Extract tasks from this note"
+            onClick={() => bus.emit("ai:extract-tasks", { noteId: note.id, content: note.content })}
+          >
+            <Sparkles size={13} style={{ color: "hsl(var(--primary))" }} />
+          </TBtn>
+
+          {/* AI Summarise */}
+          <TBtn
+            title="Summarise this note"
+            onClick={async () => {
+              try {
+                bus.emit("ui:notification", { type: "info", message: "Generating summary..." });
+                const { AIService } = await import("@/modules/ai/service");
+                const textToSummarise = note.contentText || note.content;
+                const summary = await AIService.summariseText(textToSummarise);
+                if (summary) {
+                  let parsed;
+                  try {
+                    parsed = JSON.parse(note.content);
+                  } catch (e) {
+                    parsed = { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: note.content }] }] };
+                  }
+                  
+                  const summaryBlock = {
+                    type: "blockquote",
+                    content: [{
+                      type: "paragraph",
+                      content: [
+                        { type: "text", marks: [{ type: "bold" }], text: "AI Summary: " },
+                        { type: "text", text: summary }
+                      ]
+                    }]
+                  };
+                  
+                  parsed.content = [summaryBlock, ...(parsed.content || [])];
+                  await useNoteStore.getState().updateNote(note.id, { content: JSON.stringify(parsed) });
+                  bus.emit("ui:notification", { type: "success", message: "Summary generated and added to top of note" });
+                }
+              } catch (e) {
+                console.error(e);
+                bus.emit("ui:notification", { type: "error", message: "Failed to generate summary" });
+              }
+            }}
+          >
+            <BookOpen size={13} style={{ color: "hsl(var(--indigo-500))" }} />
           </TBtn>
 
           {/* Link picker */}

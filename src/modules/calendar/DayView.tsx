@@ -26,7 +26,7 @@ function durationH(s: string, e: string): number {
 }
 
 export function DayView() {
-  const { activeDate, getEventsForDay, openEventForm, calendars } = useCalendarStore();
+  const { activeDate, getEventsForDay, openEventForm, calendars, openContextMenu, updateEvent } = useCalendarStore();
   const tasks  = useTaskStore((s) => s.tasks);
   const notes  = useNoteStore((s) => s.notes);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -48,6 +48,50 @@ export function DayView() {
     scrollRef.current?.scrollTo({ top: CELL_H * 7, behavior: "instant" });
   }, [activeDate]);
 
+  const handleContextMenu = (e: React.MouseEvent, evt: any) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openContextMenu(e.clientX, e.clientY, evt);
+  };
+
+  const handleDrop = (e: React.DragEvent, ds: string, h?: number) => {
+    e.preventDefault();
+    const evtId = e.dataTransfer.getData("text/plain");
+    if (!evtId) return;
+
+    if (evtId.startsWith("task:")) {
+      const taskId = evtId.replace("task:", "");
+      useTaskStore.getState().updateTask(taskId, { dueDate: ds });
+    } else {
+      const evt = useCalendarStore.getState().events.find(x => x.id === evtId);
+      if (evt) {
+        const timeStart = evt.startAt.slice(11);
+        const timeEnd = evt.endAt.slice(11);
+        if (h !== undefined) {
+          const startHH = String(h).padStart(2, "0");
+          const duration = durationH(evt.startAt, evt.endAt);
+          const endH = Math.floor(h + duration);
+          const endM = Math.round((h + duration - endH) * 60);
+          const endHH = String(endH).padStart(2, "0");
+          const endMM = String(endM).padStart(2, "0");
+          updateEvent(evt.id, {
+            startAt: `${ds}T${startHH}:00:00`,
+            endAt: `${ds}T${endHH}:${endMM}:00`,
+            startDatetime: `${ds}T${startHH}:00:00`,
+            endDatetime: `${ds}T${endHH}:${endMM}:00`,
+          });
+        } else {
+          updateEvent(evt.id, {
+            startAt: `${ds}T${timeStart}`,
+            endAt: `${ds}T${timeEnd}`,
+            startDatetime: `${ds}T${timeStart}`,
+            endDatetime: `${ds}T${timeEnd}`,
+          });
+        }
+      }
+    }
+  };
+
   return (
     <div className="flex flex-1 overflow-hidden border-t border-border">
       {/* Timeline */}
@@ -61,8 +105,14 @@ export function DayView() {
               return (
                 <button
                   key={e.id}
+                  draggable
+                  onDragStart={(ev) => {
+                    ev.stopPropagation();
+                    ev.dataTransfer.setData("text/plain", e.id);
+                  }}
                   onClick={() => openEventForm(e, e.id)}
-                  className="text-[11px] px-2 py-0.5 rounded-full font-medium transition-fast hover:brightness-95"
+                  onContextMenu={(ev) => handleContextMenu(ev, e)}
+                  className={cn("text-[11px] px-2 py-0.5 rounded-full font-medium transition-fast hover:brightness-95", e.status === "completed" && "line-through opacity-60")}
                   style={{ backgroundColor: `${color}22`, color }}
                 >
                   {e.title}
@@ -84,7 +134,11 @@ export function DayView() {
               ))}
             </div>
 
-            <div className="flex-1 relative">
+            <div
+              className="flex-1 relative"
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => handleDrop(e, ds)}
+            >
               {HOURS.map((h) => (
                 <div
                   key={h}
@@ -115,7 +169,13 @@ export function DayView() {
                 return (
                   <div
                     key={evt.id}
+                    draggable
+                    onDragStart={(e) => {
+                      e.stopPropagation();
+                      e.dataTransfer.setData("text/plain", evt.id);
+                    }}
                     onClick={(e) => { e.stopPropagation(); openEventForm(evt, evt.id); }}
+                    onContextMenu={(e) => handleContextMenu(e, evt)}
                     className="absolute left-1 right-1 rounded-md overflow-hidden cursor-pointer z-10 px-2 py-1 transition-fast hover:brightness-95"
                     style={{
                       top,
@@ -125,7 +185,7 @@ export function DayView() {
                       color,
                     }}
                   >
-                    <p className="text-[11px] font-semibold leading-tight truncate">{evt.title}</p>
+                    <p className={cn("text-[11px] font-semibold leading-tight truncate", evt.status === "completed" && "line-through opacity-60")}>{evt.title}</p>
                     {height > 36 && (
                       <p className="text-[10px] opacity-70 tabular-nums mt-0.5">
                         {evt.startAt.slice(11,16)}&ndash;{evt.endAt.slice(11,16)}

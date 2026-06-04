@@ -8,13 +8,14 @@ import { useEffect, useState } from "react";
 import {
   ChevronLeft, ChevronRight, CalendarDays, LayoutGrid, Columns3,
   Clock, Coffee, Layers, BookTemplate, Plus, Save, Trash2, CheckSquare,
-  Percent,
+  Percent, Sparkles, Loader2
 } from "lucide-react";
 import { registry } from "@/kernel/router";
 import { usePlannerStore, type PlannerView } from "./store";
 import { useTaskStore } from "@/modules/tasks/store";
 import { useTimeStore } from "@/modules/time-tracking/store";
 import { useFocusStore } from "@/modules/focus/store";
+import { AIService } from "@/modules/ai/service";
 import { DayColumn } from "./components/DayColumn";
 import { TaskSidebar } from "./components/TaskSidebar";
 import { Button } from "@/components/Button";
@@ -67,34 +68,50 @@ function WeekUtilBar({ weekDates }: { weekDates: string[] }) {
     const plannedMins = dayBlocks.reduce(
       (acc, b) => acc + (toMin(b.endTime) - toMin(b.startTime)), 0
     );
+    const actualMins = dayBlocks.reduce(
+      (acc, b) => acc + (b.actualDuration ?? 0), 0
+    );
     const pct = Math.min(100, Math.round((plannedMins / WORK_HOURS) * 100));
+    const actPct = Math.min(100, Math.round((actualMins / WORK_HOURS) * 100));
     const isToday = date === toISODate(new Date());
-    return { date, pct, plannedMins, isToday };
+    return { date, pct, actPct, plannedMins, actualMins, isToday };
   });
 
   const totalMins = days.reduce((a, d) => a + d.plannedMins, 0);
+  const totalActMins = days.reduce((a, d) => a + d.actualMins, 0);
   const weekPct   = Math.min(100, Math.round((totalMins / (WORK_HOURS * 5)) * 100));
 
   return (
     <div className="flex items-center gap-3 px-6 py-2 border-b border-border/30 shrink-0">
-      <div className="flex items-center gap-1 text-[11px] text-muted-foreground/60">
+      <div className="flex items-center gap-1 text-[11px] text-muted-foreground/60" title="Week utilization (planned)">
         <Percent size={9} />
         <span className="font-medium tabular-nums">{weekPct}%</span>
         <span className="opacity-60">week</span>
       </div>
       <div className="flex flex-1 items-end gap-1" style={{ height: 20 }}>
-        {days.map(({ date, pct, isToday }) => (
-          <div key={date} className="flex-1 flex flex-col items-center gap-0.5">
-            <div className="w-full rounded-sm overflow-hidden bg-muted/50" style={{ height: 12 }}>
+        {days.map(({ date, pct, actPct, isToday }) => (
+          <div key={date} className="flex-1 flex flex-col items-center gap-0.5 relative group">
+            <div className="w-full rounded-sm overflow-hidden bg-muted/50 relative" style={{ height: 12 }}>
+              {/* Planned bar */}
               <div
                 className={cn(
-                  "h-full rounded-sm transition-all duration-500",
-                  pct >= 80 ? "bg-primary" :
-                  pct >= 50 ? "bg-primary/60" :
-                  "bg-primary/25"
+                  "absolute bottom-0 left-0 h-full rounded-sm transition-all duration-500",
+                  pct >= 80 ? "bg-primary/50" :
+                  pct >= 50 ? "bg-primary/30" :
+                  "bg-primary/20"
                 )}
                 style={{ width: `${pct}%` }}
               />
+              {/* Actual bar overlaid */}
+              {actPct > 0 && (
+                <div
+                  className={cn(
+                    "absolute bottom-0 left-0 h-1/2 rounded-sm transition-all duration-500",
+                    actPct > pct ? "bg-amber-500" : "bg-emerald-500"
+                  )}
+                  style={{ width: `${actPct}%`, top: '50%', transform: 'translateY(-50%)' }}
+                />
+              )}
             </div>
             <span className={cn(
               "text-[8px] tabular-nums",
@@ -105,9 +122,16 @@ function WeekUtilBar({ weekDates }: { weekDates: string[] }) {
           </div>
         ))}
       </div>
-      <span className="text-[11px] tabular-nums text-muted-foreground/50 font-medium shrink-0">
-        {fmtMins(totalMins)}
-      </span>
+      <div className="flex flex-col items-end">
+        <span className="text-[11px] tabular-nums text-muted-foreground/50 font-medium shrink-0 leading-none">
+          {fmtMins(totalMins)} plan
+        </span>
+        {totalActMins > 0 && (
+          <span className="text-[10px] tabular-nums text-muted-foreground/40 font-medium shrink-0 leading-none mt-0.5">
+            {fmtMins(totalActMins)} act
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -265,7 +289,91 @@ function CustomPlanModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ── Module root ───────────────────────────────────────────────
+// ── AI Plan Modal ────────────────────────────────────────────────
+function AIPlanModal({ onClose }: { onClose: () => void }) {
+  const { activeDate, createBlock, getBlocksForDate } = usePlannerStore();
+  const tasks = useTaskStore(s => s.tasks.filter(t => t.status !== "done" && t.status !== "archived"));
+  
+  const [loading, setLoading] = useState(false);
+  const [proposal, setProposal] = useState<{taskId: string; startTime: string; endTime: string}[] | null>(null);
+  
+  async function generatePlan() {
+    setLoading(true);
+    try {
+      const existingIds = getBlocksForDate(activeDate).map(b => b.taskId);
+      const unscheduled = tasks.filter(t => !existingIds.includes(t.id));
+      
+      const res = await AIService.proposeDayPlan({
+        date: activeDate,
+        tasks: unscheduled.map(t => ({
+          id: t.id, title: t.title, estimateMinutes: t.estimateMinutes || undefined, priority: t.priority
+        }))
+      });
+      setProposal(res);
+    } catch (e) {
+      console.error(e);
+    }
+    setLoading(false);
+  }
+
+  async function applyPlan() {
+    if (!proposal) return;
+    for (const b of proposal) {
+      const t = tasks.find(x => x.id === b.taskId);
+      if (t) {
+        await createBlock({
+          taskId: b.taskId, title: t.title, date: activeDate, startTime: b.startTime, endTime: b.endTime
+        });
+      }
+    }
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
+      <div className="relative w-full max-w-md mx-4 rounded-2xl bg-card border border-border flex flex-col p-5">
+        <h3 className="text-sm font-bold flex items-center gap-2 mb-2">
+          <Sparkles size={14} className="text-indigo-500" /> AI Day Planner
+        </h3>
+        <p className="text-xs text-muted-foreground mb-4">
+          AI can review your unscheduled tasks and propose a time-blocked schedule for {activeDate}.
+        </p>
+
+        {!proposal ? (
+          <button onClick={generatePlan} disabled={loading} className="w-full flex items-center justify-center px-4 py-2 bg-primary text-primary-foreground rounded-lg disabled:opacity-50 text-sm font-medium">
+            {loading ? <Loader2 size={14} className="animate-spin mr-2" /> : null}
+            {loading ? "Analyzing tasks..." : "Generate Proposal"}
+          </button>
+        ) : (
+          <div className="space-y-4">
+            <div className="max-h-[200px] overflow-y-auto space-y-2 border border-border/50 rounded-lg p-2 bg-muted/20">
+              {proposal.length === 0 ? (
+                <p className="text-xs text-center text-muted-foreground">No unscheduled tasks found.</p>
+              ) : (
+                proposal.map((p, i) => {
+                  const t = tasks.find(x => x.id === p.taskId);
+                  return (
+                    <div key={i} className="flex justify-between items-center text-xs p-2 bg-background border border-border rounded">
+                      <span className="truncate flex-1 font-medium">{t?.title || "Unknown Task"}</span>
+                      <span className="text-muted-foreground tabular-nums shrink-0 ml-3">{p.startTime} - {p.endTime}</span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={onClose} className="px-4 py-2 text-muted-foreground hover:bg-muted/50 rounded-lg text-sm font-medium">Cancel</button>
+              <button onClick={applyPlan} disabled={proposal.length === 0} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg disabled:opacity-50 text-sm font-medium">Apply Plan</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Main View ────────────────────────────────────────────────────
 export function PlannerModule() {
   const {
     activeDate, view, setView,
@@ -277,6 +385,7 @@ export function PlannerModule() {
   const tasks = useTaskStore((s) => s.tasks);
   const { loadTasks } = useTaskStore();
   const [showPlanModal, setShowPlanModal] = useState(false);
+  const [showAIModal, setShowAIModal] = useState(false);
 
   useEffect(() => { if (tasks.length === 0) void loadTasks(); }, []);
 
@@ -340,6 +449,9 @@ export function PlannerModule() {
           <div className="w-px h-4 bg-border/40" />
           <Button variant="secondary" size="sm" onClick={() => setShowPlanModal(true)} className="h-8 gap-1.5 text-[12px] font-semibold">
             <BookTemplate size={13} className="text-primary" /> Templates
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => setShowAIModal(true)} className="h-8 gap-1.5 text-[12px] font-semibold">
+            <Sparkles size={13} className="text-indigo-500" /> Plan my day
           </Button>
         </div>
       </div>
@@ -484,6 +596,7 @@ export function PlannerModule() {
       </div>
 
       {showPlanModal && <CustomPlanModal onClose={() => setShowPlanModal(false)} />}
+      {showAIModal && <AIPlanModal onClose={() => setShowAIModal(false)} />}
     </div>
   );
 }

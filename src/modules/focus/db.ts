@@ -7,7 +7,7 @@
 
 import type { Migration } from "@/kernel/db";
 import { db } from "@/kernel/db";
-import type { FocusSession } from "@/shared/types";
+import type { FocusSession, SessionPause, FocusConfig } from "@/shared/types";
 import { generateId, now } from "@/shared/utils";
 
 // ── Migrations ─────────────────────────────────────────────────
@@ -52,22 +52,106 @@ export const FOCUS_MIGRATIONS: Migration[] = [
       -- SQLite does not support DROP COLUMN before 3.35; handled by full table drop on rollback
     `,
   },
+  {
+    version: 72,
+    module: "focus",
+    up: `
+      DROP TABLE IF EXISTS focus_sessions;
+      
+      CREATE TABLE focus_sessions (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL,
+        status TEXT NOT NULL,
+        task_id TEXT,
+        time_block_id TEXT,
+        project_id TEXT,
+        planned_duration INTEGER NOT NULL,
+        actual_duration INTEGER,
+        work_duration INTEGER,
+        started_at TEXT NOT NULL,
+        ended_at TEXT,
+        interruption_count INTEGER NOT NULL DEFAULT 0,
+        idle_time_minutes INTEGER,
+        flow_score INTEGER,
+        notes TEXT,
+        accomplishment TEXT,
+        pomodoro_number INTEGER,
+        work_set_id TEXT,
+        tags TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL,
+        
+        planned_minutes INTEGER,
+        actual_minutes INTEGER,
+        state TEXT,
+        goal TEXT,
+        interrupt_count INTEGER,
+        mood INTEGER
+      );
+
+      CREATE TABLE session_pauses (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        paused_at TEXT NOT NULL,
+        resumed_at TEXT,
+        reason TEXT
+      );
+
+      CREATE TABLE pomodoro_work_sets (
+        id TEXT PRIMARY KEY,
+        sessions TEXT NOT NULL DEFAULT '[]',
+        work_sessions INTEGER NOT NULL DEFAULT 4,
+        short_break_min INTEGER NOT NULL DEFAULT 5,
+        long_break_min INTEGER NOT NULL DEFAULT 15,
+        completed_at TEXT,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE TABLE focus_configs (
+        id TEXT PRIMARY KEY,
+        default_type TEXT NOT NULL DEFAULT 'pomodoro',
+        pomodoro_work_min INTEGER NOT NULL DEFAULT 25,
+        pomodoro_short_break INTEGER NOT NULL DEFAULT 5,
+        pomodoro_long_break INTEGER NOT NULL DEFAULT 15,
+        pomodoro_set_count INTEGER NOT NULL DEFAULT 4,
+        deep_work_default_min INTEGER NOT NULL DEFAULT 90,
+        auto_start_breaks INTEGER NOT NULL DEFAULT 0,
+        auto_start_next_pomodoro INTEGER NOT NULL DEFAULT 0,
+        idle_detection_min INTEGER NOT NULL DEFAULT 5,
+        block_apps INTEGER NOT NULL DEFAULT 0,
+        block_urls TEXT NOT NULL DEFAULT '[]',
+        ambient_sound TEXT,
+        ambient_volume REAL NOT NULL DEFAULT 0.5,
+        end_sound TEXT NOT NULL DEFAULT 'bell'
+      );
+    `,
+    down: `
+      DROP TABLE IF EXISTS focus_sessions;
+      DROP TABLE IF EXISTS session_pauses;
+      DROP TABLE IF EXISTS pomodoro_work_sets;
+      DROP TABLE IF EXISTS focus_configs;
+    `
+  },
 ];
 
 // ── SQL ───────────────────────────────────────────────────────
 
 const INSERT_SQL = `
   INSERT INTO focus_sessions
-    (id, task_id, project_id, type, planned_minutes, actual_minutes,
-     state, started_at, completed_at, notes, goal, interrupt_count, mood, created_at)
-  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    (id, type, status, task_id, time_block_id, project_id, planned_duration,
+     actual_duration, work_duration, started_at, ended_at, interruption_count,
+     idle_time_minutes, flow_score, notes, accomplishment, pomodoro_number,
+     work_set_id, tags, created_at,
+     planned_minutes, actual_minutes, state, goal, interrupt_count, mood)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 `;
 
 const UPDATE_SQL = `
   UPDATE focus_sessions
-  SET task_id=?, project_id=?, type=?, planned_minutes=?, actual_minutes=?,
-      state=?, started_at=?, completed_at=?, notes=?, goal=?,
-      interrupt_count=?, mood=?
+  SET type=?, status=?, task_id=?, time_block_id=?, project_id=?,
+      planned_duration=?, actual_duration=?, work_duration=?, started_at=?,
+      ended_at=?, interruption_count=?, idle_time_minutes=?, flow_score=?,
+      notes=?, accomplishment=?, pomodoro_number=?, work_set_id=?, tags=?,
+      planned_minutes=?, actual_minutes=?, state=?, goal=?, interrupt_count=?, mood=?
   WHERE id=?
 `;
 
@@ -93,37 +177,25 @@ const SELECT_RANGE_SQL = `
 
 function insertParams(s: FocusSession): unknown[] {
   return [
-    s.id,
-    s.taskId          ?? null,
-    s.projectId       ?? null,
-    s.type,
-    s.plannedMinutes,
-    s.actualMinutes   ?? null,
-    s.state,
-    s.startedAt       ?? null,
-    s.completedAt     ?? null,
-    s.notes           ?? null,
-    s.goal            ?? null,
-    s.interruptCount  ?? 0,
-    s.mood            ?? null,
-    s.createdAt,
+    s.id, s.type, s.status, s.taskId ?? null, s.timeBlockId ?? null, s.projectId ?? null,
+    s.plannedDuration, s.actualDuration ?? null, s.workDuration ?? null, s.startedAt,
+    s.endedAt ?? null, s.interruptionCount, s.idleTimeMinutes ?? null, s.flowScore ?? null,
+    s.notes ?? null, s.accomplishment ?? null, s.pomodoroNumber ?? null, s.workSetId ?? null,
+    JSON.stringify(s.tags ?? []), s.createdAt,
+    s.plannedMinutes ?? null, s.actualMinutes ?? null, s.state ?? null, s.goal ?? null,
+    s.interruptCount ?? null, s.mood ?? null
   ];
 }
 
 function updateParams(s: FocusSession): unknown[] {
   return [
-    s.taskId          ?? null,
-    s.projectId       ?? null,
-    s.type,
-    s.plannedMinutes,
-    s.actualMinutes   ?? null,
-    s.state,
-    s.startedAt       ?? null,
-    s.completedAt     ?? null,
-    s.notes           ?? null,
-    s.goal            ?? null,
-    s.interruptCount  ?? 0,
-    s.mood            ?? null,
+    s.type, s.status, s.taskId ?? null, s.timeBlockId ?? null, s.projectId ?? null,
+    s.plannedDuration, s.actualDuration ?? null, s.workDuration ?? null, s.startedAt,
+    s.endedAt ?? null, s.interruptionCount, s.idleTimeMinutes ?? null, s.flowScore ?? null,
+    s.notes ?? null, s.accomplishment ?? null, s.pomodoroNumber ?? null, s.workSetId ?? null,
+    JSON.stringify(s.tags ?? []),
+    s.plannedMinutes ?? null, s.actualMinutes ?? null, s.state ?? null, s.goal ?? null,
+    s.interruptCount ?? null, s.mood ?? null,
     s.id, // WHERE last
   ];
 }
@@ -131,45 +203,97 @@ function updateParams(s: FocusSession): unknown[] {
 function rowToSession(row: Record<string, unknown>): FocusSession {
   return {
     id:             row.id as string,
-    taskId:         (row.task_id       as string | null) ?? undefined,
-    projectId:      (row.project_id    as string | null) ?? undefined,
     type:           row.type as FocusSession["type"],
-    plannedMinutes: row.planned_minutes as number,
-    actualMinutes:  (row.actual_minutes as number | null) ?? undefined,
-    state:          row.state as FocusSession["state"],
-    startedAt:      (row.started_at    as string | null) ?? undefined,
-    completedAt:    (row.completed_at  as string | null) ?? undefined,
-    notes:          (row.notes         as string | null) ?? undefined,
-    goal:           (row.goal          as string | null) ?? undefined,
-    interruptCount: (row.interrupt_count as number | null) ?? 0,
-    mood:           (row.mood          as 1|2|3|4|5 | null) ?? undefined,
+    status:         (row.status || "completed") as FocusSession["status"],
+    taskId:         (row.task_id       as string | null) ?? undefined,
+    timeBlockId:    (row.time_block_id as string | null) ?? undefined,
+    projectId:      (row.project_id    as string | null) ?? undefined,
+    plannedDuration: row.planned_duration as number,
+    actualDuration: (row.actual_duration as number | null) ?? undefined,
+    workDuration:   (row.work_duration as number | null) ?? undefined,
+    startedAt:      row.started_at as string,
+    endedAt:        (row.ended_at as string | null) ?? undefined,
+    interruptionCount: row.interruption_count as number,
+    idleTimeMinutes:(row.idle_time_minutes as number | null) ?? undefined,
+    flowScore:      (row.flow_score as number | null) ?? undefined,
+    notes:          (row.notes as string | null) ?? undefined,
+    accomplishment: (row.accomplishment as string | null) ?? undefined,
+    pomodoroNumber: (row.pomodoro_number as number | null) ?? undefined,
+    workSetId:      (row.work_set_id as string | null) ?? undefined,
+    tags:           JSON.parse((row.tags as string) || "[]"),
     createdAt:      row.created_at as string,
+    pauses:         [],
+
+    plannedMinutes: (row.planned_minutes as number | null) ?? undefined,
+    actualMinutes:  (row.actual_minutes as number | null) ?? undefined,
+    state:          (row.state as FocusSession["state"] | null) ?? undefined,
+    goal:           (row.goal as string | null) ?? undefined,
+    interruptCount: (row.interrupt_count as number | null) ?? undefined,
+    mood:           (row.mood as 1|2|3|4|5 | null) ?? undefined,
   };
 }
 
 // ── Public DB API ──────────────────────────────────────────────
 
+async function attachPauses(sessions: FocusSession[]): Promise<FocusSession[]> {
+  if (sessions.length === 0) return sessions;
+  const ids = sessions.map(s => `'${s.id}'`).join(',');
+  const pauses = await db.select<Record<string, unknown>>(`SELECT * FROM session_pauses WHERE session_id IN (${ids})`);
+  
+  for (const s of sessions) {
+    s.pauses = pauses
+      .filter(p => p.session_id === s.id)
+      .map(p => ({
+        id: p.id as string,
+        sessionId: p.session_id as string,
+        pausedAt: p.paused_at as string,
+        resumedAt: (p.resumed_at as string | null) ?? undefined,
+        reason: (p.reason as any) ?? undefined
+      }));
+  }
+  return sessions;
+}
+
 export async function dbLoadSessions(): Promise<FocusSession[]> {
-  const rows = await db.select<Record<string, unknown>[]>(SELECT_RECENT_SQL);
-  return rows.map((row) => rowToSession(row));
+  const rows = await db.select<Record<string, unknown>>(SELECT_RECENT_SQL);
+  return attachPauses(rows.map((row) => rowToSession(row)));
 }
 
 export async function dbLoadTodaySessions(): Promise<FocusSession[]> {
-  const rows = await db.select<Record<string, unknown>[]>(SELECT_TODAY_SQL);
-  return rows.map((row) => rowToSession(row));
+  const rows = await db.select<Record<string, unknown>>(SELECT_TODAY_SQL);
+  return attachPauses(rows.map((row) => rowToSession(row)));
 }
 
 export async function dbLoadSessionsInRange(from: string, to: string): Promise<FocusSession[]> {
-  const rows = await db.select<Record<string, unknown>[]>(SELECT_RANGE_SQL, [from, to]);
-  return rows.map((row) => rowToSession(row));
+  const rows = await db.select<Record<string, unknown>>(SELECT_RANGE_SQL, [from, to]);
+  return attachPauses(rows.map((row) => rowToSession(row)));
 }
 
 export async function dbInsertSession(s: FocusSession): Promise<void> {
   await db.execute(INSERT_SQL, insertParams(s));
+  for (const p of s.pauses) {
+    await dbInsertPause(p);
+  }
 }
 
 export async function dbUpdateSession(s: FocusSession): Promise<void> {
   await db.execute(UPDATE_SQL, updateParams(s));
+  // Not syncing all pauses on update here to avoid complexity,
+  // we will insert/update pauses individually when they happen.
+}
+
+export async function dbInsertPause(p: SessionPause): Promise<void> {
+  await db.execute(
+    `INSERT INTO session_pauses (id, session_id, paused_at, resumed_at, reason) VALUES (?, ?, ?, ?, ?)`,
+    [p.id, p.sessionId, p.pausedAt, p.resumedAt ?? null, p.reason ?? null]
+  );
+}
+
+export async function dbUpdatePause(p: SessionPause): Promise<void> {
+  await db.execute(
+    `UPDATE session_pauses SET resumed_at=?, reason=? WHERE id=?`,
+    [p.resumedAt ?? null, p.reason ?? null, p.id]
+  );
 }
 
 // ── Factory ───────────────────────────────────────────────────────
@@ -177,11 +301,66 @@ export async function dbUpdateSession(s: FocusSession): Promise<void> {
 export function newSession(overrides: Partial<FocusSession> = {}): FocusSession {
   return {
     id:             generateId(),
-    type:           "focus",
+    type:           "pomodoro",
+    status:         "active",
+    plannedDuration: 25,
+    startedAt:      now(),
+    pauses:         [],
+    interruptionCount: 0,
+    tags:           [],
     plannedMinutes: 25,
     state:          "idle",
     interruptCount: 0,
     createdAt:      now(),
     ...overrides,
   };
+}
+
+// ── Config API ──────────────────────────────────────────────────
+
+export async function dbLoadFocusConfig(): Promise<FocusConfig | null> {
+  const rows = await db.select<Record<string, unknown>>("SELECT * FROM focus_configs LIMIT 1");
+  if (rows.length === 0) return null;
+  const r = rows[0];
+  return {
+    id: r.id as string,
+    defaultType: r.default_type as FocusConfig["defaultType"],
+    pomodoroWorkMin: r.pomodoro_work_min as number,
+    pomodoroShortBreak: r.pomodoro_short_break as number,
+    pomodoroLongBreak: r.pomodoro_long_break as number,
+    pomodoroSetCount: r.pomodoro_set_count as number,
+    deepWorkDefaultMin: r.deep_work_default_min as number,
+    autoStartBreaks: Boolean(r.auto_start_breaks),
+    autoStartNextPomodoro: Boolean(r.auto_start_next_pomodoro),
+    idleDetectionMin: r.idle_detection_min as number,
+    blockApps: Boolean(r.block_apps),
+    blockUrls: JSON.parse((r.block_urls as string) || "[]"),
+    ambientSound: (r.ambient_sound as FocusConfig["ambientSound"] | null) ?? undefined,
+    ambientVolume: r.ambient_volume as number,
+    endSound: r.end_sound as FocusConfig["endSound"],
+  };
+}
+
+export async function dbSaveFocusConfig(c: FocusConfig): Promise<void> {
+  await db.execute(
+    `INSERT INTO focus_configs (
+      id, default_type, pomodoro_work_min, pomodoro_short_break, pomodoro_long_break, 
+      pomodoro_set_count, deep_work_default_min, auto_start_breaks, auto_start_next_pomodoro, 
+      idle_detection_min, block_apps, block_urls, ambient_sound, ambient_volume, end_sound
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET
+      default_type=excluded.default_type, pomodoro_work_min=excluded.pomodoro_work_min, 
+      pomodoro_short_break=excluded.pomodoro_short_break, pomodoro_long_break=excluded.pomodoro_long_break,
+      pomodoro_set_count=excluded.pomodoro_set_count, deep_work_default_min=excluded.deep_work_default_min,
+      auto_start_breaks=excluded.auto_start_breaks, auto_start_next_pomodoro=excluded.auto_start_next_pomodoro,
+      idle_detection_min=excluded.idle_detection_min, block_apps=excluded.block_apps, block_urls=excluded.block_urls,
+      ambient_sound=excluded.ambient_sound, ambient_volume=excluded.ambient_volume, end_sound=excluded.end_sound
+    `,
+    [
+      c.id, c.defaultType, c.pomodoroWorkMin, c.pomodoroShortBreak, c.pomodoroLongBreak,
+      c.pomodoroSetCount, c.deepWorkDefaultMin, c.autoStartBreaks ? 1 : 0, c.autoStartNextPomodoro ? 1 : 0,
+      c.idleDetectionMin, c.blockApps ? 1 : 0, JSON.stringify(c.blockUrls), c.ambientSound ?? null,
+      c.ambientVolume, c.endSound
+    ]
+  );
 }

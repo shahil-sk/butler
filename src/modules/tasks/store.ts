@@ -19,26 +19,48 @@ function rowToTask(r: Record<string, unknown>): Task {
     description:      (r.description as string | null) ?? undefined,
     status:           r.status as TaskStatus,
     priority:         r.priority as Priority,
-    projectId:        (r.project_id as string | null) ?? undefined,
-    parentTaskId:     (r.parent_task_id as string | null) ?? undefined,
-    labels:           JSON.parse((r.labels as string) || "[]"),
-    tags:             JSON.parse((r.tags as string) || "[]"),
     dueDate:          (r.due_date as string | null) ?? undefined,
+    dueTime:          (r.due_time as string | null) ?? undefined,
     startDate:        (r.start_date as string | null) ?? undefined,
     scheduledDate:    (r.scheduled_date as string | null) ?? undefined,
+    scheduledAt:      (r.scheduled_at as string | null) ?? undefined,
+    scheduledDuration:(r.scheduled_duration as number | null) ?? undefined,
     completedAt:      (r.completed_at as string | null) ?? undefined,
+    cancelledAt:      (r.cancelled_at as string | null) ?? undefined,
+    projectId:        (r.project_id as string | null) ?? undefined,
+    parentTaskId:     (r.parent_task_id as string | null) ?? undefined,
+    goalId:           (r.goal_id as string | null) ?? undefined,
+    assigneeId:       (r.assignee_id as string | null) ?? undefined,
+    recurrence:       r.recurrence ? JSON.parse(r.recurrence as string) : undefined,
+    recurrenceRule:   (r.recurrence_rule as string | null) ?? undefined,
+    recurrenceParent: (r.recurrence_parent as string | null) ?? undefined,
+    nextOccurrenceAt: (r.next_occurrence_at as string | null) ?? undefined,
     estimateMinutes:  (r.estimate_minutes as number | null) ?? undefined,
     actualMinutes:    (r.actual_minutes as number | null) ?? undefined,
-    recurrence:       r.recurrence ? JSON.parse(r.recurrence as string) : undefined,
+    energyLevel:      (r.energy_level as "low" | "medium" | "high" | null) ?? undefined,
+    context:          JSON.parse((r.context as string) || "[]"),
+    size:             (r.size as "xs" | "s" | "m" | "l" | "xl" | null) ?? undefined,
+    tags:             JSON.parse((r.tags as string) || "[]"),
+    labels:           JSON.parse((r.labels as string) || "[]"),
+    watchers:         JSON.parse((r.watchers as string) || "[]"),
+    attachments:      JSON.parse((r.attachments as string) || "[]"),
     dependencies:     JSON.parse((r.dependencies as string) || "[]"),
+    dependsOn:        JSON.parse((r.depends_on as string) || "[]"),
+    blocks:           JSON.parse((r.blocks as string) || "[]"),
     checklistItems:   JSON.parse((r.checklist_items as string) || "[]"),
+    customFields:     r.custom_fields ? JSON.parse(r.custom_fields as string) : undefined,
+    order:            r.sort_order as number,
+    position:         r.position as number,
+    sectionId:        (r.section_id as string | null) ?? undefined,
+    createdAt:        r.created_at as string,
+    updatedAt:        r.updated_at as string,
+    createdBy:        r.created_by as string,
+    source:           (r.source as any) || "manual",
+    version:          r.version as number,
     linkedNoteIds:    JSON.parse((r.linked_note_ids as string) || "[]"),
     linkedEventIds:   JSON.parse((r.linked_event_ids as string) || "[]"),
     linkedPlannerBlockIds: JSON.parse((r.linked_planner_block_ids as string) || "[]"),
     linkedResearchIds: JSON.parse((r.linked_research_ids as string) || "[]"),
-    order:            r.sort_order as number,
-    createdAt:        r.created_at as string,
-    updatedAt:        r.updated_at as string,
   };
 }
 
@@ -46,55 +68,46 @@ function rowToTask(r: Record<string, unknown>): Task {
 
 const INSERT_SQL = `
   INSERT INTO tasks (
-    id, title, description, status, priority,
-    project_id, parent_task_id, labels, tags,
-    due_date, start_date, scheduled_date, completed_at,
-    estimate_minutes, actual_minutes, recurrence,
-    dependencies, checklist_items, linked_note_ids, linked_event_ids,
-    linked_planner_block_ids, linked_research_ids,
-    sort_order, created_at, updated_at
-  ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    id, title, description, status, priority, due_date, due_time, start_date, scheduled_at,
+    scheduled_duration, completed_at, cancelled_at, project_id, parent_task_id, goal_id, assignee_id,
+    recurrence_rule, recurrence_parent, next_occurrence_at, estimate_minutes, actual_minutes,
+    energy_level, context, size, tags, labels, watchers, attachments, depends_on, blocks,
+    checklist_items, custom_fields, position, section_id, created_at, updated_at, created_by, source, version,
+    linked_note_ids, linked_event_ids, linked_planner_block_ids, linked_research_ids, sort_order, dependencies
+  ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 `;
 
 const UPDATE_SQL = `
   UPDATE tasks SET
-    title=?, description=?, status=?, priority=?,
-    project_id=?, parent_task_id=?, labels=?, tags=?,
-    due_date=?, start_date=?, scheduled_date=?, completed_at=?,
-    estimate_minutes=?, actual_minutes=?, recurrence=?,
-    dependencies=?, checklist_items=?, linked_note_ids=?, linked_event_ids=?,
-    linked_planner_block_ids=?, linked_research_ids=?,
-    sort_order=?, updated_at=?
+    title=?, description=?, status=?, priority=?, due_date=?, due_time=?, start_date=?, scheduled_at=?,
+    scheduled_duration=?, completed_at=?, cancelled_at=?, project_id=?, parent_task_id=?, goal_id=?, assignee_id=?,
+    recurrence_rule=?, recurrence_parent=?, next_occurrence_at=?, estimate_minutes=?, actual_minutes=?,
+    energy_level=?, context=?, size=?, tags=?, labels=?, watchers=?, attachments=?, depends_on=?, blocks=?,
+    checklist_items=?, custom_fields=?, position=?, section_id=?, updated_at=?, version=?,
+    linked_note_ids=?, linked_event_ids=?, linked_planner_block_ids=?, linked_research_ids=?, sort_order=?, dependencies=?
   WHERE id=?
 `;
 
 function insertParams(t: Task): unknown[] {
   return [
-    t.id, t.title, t.description ?? null, t.status, t.priority,
-    t.projectId ?? null, t.parentTaskId ?? null,
-    JSON.stringify(t.labels ?? []), JSON.stringify(t.tags ?? []),
-    t.dueDate ?? null, t.startDate ?? null, t.scheduledDate ?? null, t.completedAt ?? null,
-    t.estimateMinutes ?? null, t.actualMinutes ?? null,
-    t.recurrence ? JSON.stringify(t.recurrence) : null,
-    JSON.stringify(t.dependencies ?? []), JSON.stringify(t.checklistItems ?? []),
-    JSON.stringify(t.linkedNoteIds ?? []), JSON.stringify(t.linkedEventIds ?? []),
-    JSON.stringify(t.linkedPlannerBlockIds ?? []), JSON.stringify(t.linkedResearchIds ?? []),
-    t.order, t.createdAt, t.updatedAt,
+    t.id, t.title, t.description ?? null, t.status, t.priority, t.dueDate ?? null, t.dueTime ?? null, t.startDate ?? null, t.scheduledDate ?? t.scheduledAt ?? null,
+    t.scheduledDuration ?? null, t.completedAt ?? null, t.cancelledAt ?? null, t.projectId ?? null, t.parentTaskId ?? null, t.goalId ?? null, t.assigneeId ?? null,
+    t.recurrenceRule ?? null, t.recurrenceParent ?? null, t.nextOccurrenceAt ?? null, t.estimateMinutes ?? null, t.actualMinutes ?? null,
+    t.energyLevel ?? null, JSON.stringify(t.context ?? []), t.size ?? null, JSON.stringify(t.tags ?? []), JSON.stringify(t.labels ?? []), JSON.stringify(t.watchers ?? []), JSON.stringify(t.attachments ?? []), JSON.stringify(t.dependsOn ?? []), JSON.stringify(t.blocks ?? []),
+    JSON.stringify(t.checklistItems ?? []), t.customFields ? JSON.stringify(t.customFields) : null, t.position ?? 0, t.sectionId ?? null, t.createdAt, t.updatedAt, t.createdBy ?? 'system', t.source ?? 'manual', t.version ?? 1,
+    JSON.stringify(t.linkedNoteIds ?? []), JSON.stringify(t.linkedEventIds ?? []), JSON.stringify(t.linkedPlannerBlockIds ?? []), JSON.stringify(t.linkedResearchIds ?? []), t.order ?? 0, JSON.stringify(t.dependencies ?? [])
   ];
 }
 
 function updateParams(t: Task): unknown[] {
   return [
-    t.title, t.description ?? null, t.status, t.priority,
-    t.projectId ?? null, t.parentTaskId ?? null,
-    JSON.stringify(t.labels ?? []), JSON.stringify(t.tags ?? []),
-    t.dueDate ?? null, t.startDate ?? null, t.scheduledDate ?? null, t.completedAt ?? null,
-    t.estimateMinutes ?? null, t.actualMinutes ?? null,
-    t.recurrence ? JSON.stringify(t.recurrence) : null,
-    JSON.stringify(t.dependencies ?? []), JSON.stringify(t.checklistItems ?? []),
-    JSON.stringify(t.linkedNoteIds ?? []), JSON.stringify(t.linkedEventIds ?? []),
-    JSON.stringify(t.linkedPlannerBlockIds ?? []), JSON.stringify(t.linkedResearchIds ?? []),
-    t.order, t.updatedAt,
+    t.title, t.description ?? null, t.status, t.priority, t.dueDate ?? null, t.dueTime ?? null, t.startDate ?? null, t.scheduledDate ?? t.scheduledAt ?? null,
+    t.scheduledDuration ?? null, t.completedAt ?? null, t.cancelledAt ?? null, t.projectId ?? null, t.parentTaskId ?? null, t.goalId ?? null, t.assigneeId ?? null,
+    t.recurrenceRule ?? null, t.recurrenceParent ?? null, t.nextOccurrenceAt ?? null, t.estimateMinutes ?? null, t.actualMinutes ?? null,
+    t.energyLevel ?? null, JSON.stringify(t.context ?? []), t.size ?? null, JSON.stringify(t.tags ?? []), JSON.stringify(t.labels ?? []), JSON.stringify(t.watchers ?? []), JSON.stringify(t.attachments ?? []), JSON.stringify(t.dependsOn ?? []), JSON.stringify(t.blocks ?? []),
+    JSON.stringify(t.checklistItems ?? []), t.customFields ? JSON.stringify(t.customFields) : null, t.position ?? 0, t.sectionId ?? null, t.updatedAt, t.version ?? 1,
+    JSON.stringify(t.linkedNoteIds ?? []), JSON.stringify(t.linkedEventIds ?? []), JSON.stringify(t.linkedPlannerBlockIds ?? []), JSON.stringify(t.linkedResearchIds ?? []),
+    t.order ?? 0, JSON.stringify(t.dependencies ?? []),
     t.id,
   ];
 }
@@ -208,19 +221,26 @@ export const useTaskStore = create<TaskState & TaskActions>()((set, get) => ({
       dueDate:        input.dueDate,
       startDate:      input.startDate,
       scheduledDate:  input.scheduledDate,
+      scheduledAt:    input.scheduledAt,
       completedAt:    undefined,
       estimateMinutes: input.estimateMinutes,
       actualMinutes:  undefined,
       recurrence:     input.recurrence,
-      dependencies:   input.dependencies   ?? [],
+      recurrenceRule: input.recurrenceRule,
+      dependencies:   input.dependencies  ?? [],
+      dependsOn:      input.dependsOn     ?? [],
       checklistItems: input.checklistItems ?? [],
       linkedNoteIds:  input.linkedNoteIds  ?? [],
       linkedEventIds: input.linkedEventIds ?? [],
       linkedPlannerBlockIds: input.linkedPlannerBlockIds ?? [],
       linkedResearchIds: input.linkedResearchIds ?? [],
       order:          Date.now(),
+      position:       Date.now(),
       createdAt:      now(),
       updatedAt:      now(),
+      createdBy:      input.createdBy ?? "system",
+      source:         input.source ?? "manual",
+      version:        1,
     };
 
     try {
@@ -261,8 +281,26 @@ export const useTaskStore = create<TaskState & TaskActions>()((set, get) => ({
   },
 
   completeTask: async (id) => {
-    const completedAt = now();
     const task = get().tasks.find((t) => t.id === id);
+    if (!task) return;
+
+    // Check blockers
+    const blockers = task.dependencies ?? [];
+    const hasIncompleteBlocker = blockers.some((depId) => {
+      const t = get().tasks.find((x) => x.id === depId);
+      return t && t.status !== "done" && t.status !== "archived";
+    });
+
+    if (hasIncompleteBlocker) {
+      bus.emit("ui:notification", {
+        type: "warning",
+        message: `Cannot complete "${task.title}". It has incomplete blockers.`,
+        durationMs: 4000,
+      });
+      return;
+    }
+
+    const completedAt = now();
     await get().updateTask(id, { status: "done", completedAt });
     bus.emit("task:completed", { taskId: id, completedAt });
 

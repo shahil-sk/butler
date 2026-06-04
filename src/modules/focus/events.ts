@@ -32,21 +32,20 @@ export function useFocusEventListeners() {
     );
 
     // ── focus:start-requested → navigate + pre-select task ───────────────────
-    // Any module (tasks, planner, cmd palette) can emit this to deep-link
-    // into focus with a task already selected.
     unsubs.push(
-      bus.on("focus:start-requested", ({ taskId }) => {
+      bus.on("focus:start-requested", ({ taskId, timeBlockId, startImmediately }) => {
+        if (startImmediately) {
+          useFocusStore.getState().startFocus({ taskId, timeBlockId });
+          return;
+        }
+
         // Navigate to focus view
         bus.emit("navigate:to", { path: "/focus" });
-        // Pre-select the task if provided; store will handle it once idle
+        // Pre-select the task if provided
         if (taskId) {
-          // If currently idle, pre-select immediately via a microtask
-          // so the UI renders with the task selected
           setTimeout(() => {
             const store = useFocusStore.getState();
             if (!store.activeSession) {
-              // Trigger a synthetic selection by emitting into a known side channel.
-              // The Focus UI reads `pendingTaskId` from the store.
               useFocusStore.setState({ _pendingTaskId: taskId } as never);
             }
           }, 50);

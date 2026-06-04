@@ -15,7 +15,7 @@ import {
   BookOpen, Plus, AlignLeft, Calendar, FileText, Pin,
   Search, Tag, X, Star, Download, Columns2, LayoutList,
   Link2, CheckSquare, FolderKanban, ChevronRight, ChevronDown,
-  Menu, ChevronLeft,
+  Menu, ChevronLeft, Network, FileSymlink, Trash2, PenLine, Settings, FileSearch, RefreshCw, XSquare, GripVertical, CheckCircle2, Circle, Hash, Sparkles, Loader2
 } from "lucide-react";
 
 import { registry } from "@/kernel/router";
@@ -24,6 +24,7 @@ import { NoteList } from "./components/NoteList";
 import { NoteEditor } from "./components/NoteEditor";
 import { NoteToolbar } from "./components/NoteToolbar";
 import { DailyNoteContext } from "./components/DailyNoteContext";
+import { GraphView } from "./components/GraphView";
 import { cn, getTiptapPlainText } from "@/shared/utils";
 import { format } from "date-fns";
 import type { Note, Task, Project } from "@/shared/types";
@@ -71,6 +72,7 @@ const FILTER_TABS = [
   { id: "note",    icon: FileText,  label: "Notes"  },
   { id: "daily",   icon: Calendar,  label: "Daily"  },
   { id: "pinned",  icon: Pin,       label: "Pinned" },
+  { id: "graph",   icon: Network,   label: "Graph"  },
 ] as const;
 type FilterId = typeof FILTER_TABS[number]["id"];
 
@@ -240,8 +242,48 @@ function TagFilterBar({
 function ConnectionsPanel({ note }: { note: Note }) {
   const allTasks    = useTaskStore((s) => s.tasks);
   const allProjects = useProjectStore((s) => s.projects);
+  const allNotes    = useNoteStore((s) => s.notes);
+  const openNote    = useNoteStore((s) => s.openNote);
   const [expandTasks, setExpandTasks]    = useState(true);
   const [expandProjects, setExpandProjects] = useState(true);
+  const [expandNotes, setExpandNotes]    = useState(true);
+  const [aiConnections, setAiConnections] = useState<{id: string, title: string, type: string}[]>([]);
+  const [loadingAi, setLoadingAi] = useState(false);
+
+  useEffect(() => {
+    let canceled = false;
+    async function runAiCheck() {
+      const text = getTiptapPlainText(note.content || "");
+      if (text.length < 20) return;
+      
+      setLoadingAi(true);
+      try {
+        const { AIService } = await import("@/modules/ai/service");
+        const { SearchService } = await import("@/modules/search/service");
+        const available = await AIService.isAvailable();
+        
+        if (available.ok && !canceled) {
+          const prompt = `Extract 3 core themes/keywords from this text to find related notes. Text: "${text.slice(0, 1000)}". Return ONLY space-separated words, no quotes.`;
+          const keywords = await AIService.complete(prompt, { maxTokens: 10 });
+          if (keywords && !canceled) {
+            const matches = await SearchService.search(keywords);
+            const filtered = matches
+              .filter(m => m.id !== note.id && m.type === "note")
+              .slice(0, 3)
+              .map(m => ({ id: m.id, title: m.title, type: m.type }));
+            if (!canceled) {
+              setAiConnections(filtered);
+            }
+          }
+        }
+      } catch (e) {}
+      if (!canceled) setLoadingAi(false);
+    }
+    
+    // simulate background check on save (or debounce on content change)
+    const t = setTimeout(runAiCheck, 1500);
+    return () => { canceled = true; clearTimeout(t); };
+  }, [note.content, note.id]);
 
   // Naive link detection: tasks/projects whose title appears in note content
   const content = note.content ?? "";
@@ -251,8 +293,11 @@ function ConnectionsPanel({ note }: { note: Note }) {
   const linkedProjects = allProjects.filter(
     (p) => p.name && getTiptapPlainText(content).toLowerCase().includes(p.name.toLowerCase())
   ).slice(0, 6);
+  const linkedNotes = allNotes.filter(
+    (n) => n.id !== note.id && note.title && getTiptapPlainText(n.content ?? "").toLowerCase().includes(note.title.toLowerCase())
+  ).slice(0, 10);
   
-  const totalConnections = linkedTasks.length + linkedProjects.length;
+  const totalConnections = linkedTasks.length + linkedProjects.length + linkedNotes.length;
 
   return (
     <div className="flex flex-col border-l border-border overflow-y-auto shrink-0 bg-gradient-to-b from-muted/10 to-muted/5"
@@ -269,9 +314,9 @@ function ConnectionsPanel({ note }: { note: Note }) {
               <p className="text-[10px] text-muted-foreground mt-0.5">{totalConnections} linked</p>
             </div>
           </div>
-          {totalConnections > 0 && (
+          {(totalConnections + aiConnections.length > 0) && (
             <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/20 text-primary">
-              <span className="text-xs font-bold">{totalConnections}</span>
+              <span className="text-xs font-bold">{totalConnections + aiConnections.length}</span>
             </div>
           )}
         </div>
@@ -279,7 +324,7 @@ function ConnectionsPanel({ note }: { note: Note }) {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
-        {totalConnections === 0 ? (
+        {(totalConnections === 0 && aiConnections.length === 0 && !loadingAi) ? (
           <div className="flex flex-col items-center justify-center h-full px-4 py-8 text-center">
             <div className="p-2.5 rounded-lg bg-muted/40 mb-2">
               <Link2 size={16} className="text-muted-foreground/50" />
@@ -289,6 +334,28 @@ function ConnectionsPanel({ note }: { note: Note }) {
           </div>
         ) : (
           <div className="divide-y divide-border/50">
+            {/* AI Connections Section */}
+            {(aiConnections.length > 0 || loadingAi) && (
+              <div className="px-4 py-3 bg-indigo-500/5">
+                <div className="flex items-center gap-2 text-xs font-bold text-indigo-500 w-full mb-3">
+                  <div className="p-1 rounded bg-indigo-500/10">
+                    {loadingAi ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                  </div>
+                  <span>AI Suggestions</span>
+                </div>
+                {!loadingAi && aiConnections.length > 0 && (
+                  <div className="space-y-2">
+                    {aiConnections.map((c) => (
+                      <div key={c.id} onClick={() => openNote(c.id)} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-muted/50 transition-all duration-150 cursor-pointer border border-indigo-500/10 bg-background/50">
+                        <FileText size={12} className="text-indigo-400 shrink-0" />
+                        <span className="text-xs font-medium text-foreground/80 truncate">{c.title || "Untitled"}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Tasks Section */}
             {linkedTasks.length > 0 && (
               <div className="px-4 py-3">
@@ -347,6 +414,34 @@ function ConnectionsPanel({ note }: { note: Note }) {
                       <div key={p.id} className="flex items-center gap-2.5 p-2.5 rounded-lg hover:bg-muted/50 transition-all duration-150 cursor-pointer group">
                         <ProjectDot color={p.color} size={12} />
                         <span className="text-xs font-medium truncate text-foreground group-hover:text-primary transition-colors">{p.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Backlinks Section */}
+            {linkedNotes.length > 0 && (
+              <div className="px-4 py-3">
+                <button
+                  onClick={() => setExpandNotes((v) => !v)}
+                  className="flex items-center gap-2 text-xs font-bold text-foreground w-full mb-3 transition-colors duration-150 hover:text-primary">
+                  {expandNotes ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  <div className="p-1 rounded bg-orange-500/10">
+                    <FileSymlink size={12} className="text-orange-500" />
+                  </div>
+                  <span>Backlinks</span>
+                  <span className="ml-auto text-xs font-semibold bg-orange-500/15 text-orange-600 px-2 py-0.5 rounded-full">{linkedNotes.length}</span>
+                </button>
+                {expandNotes && (
+                  <div className="space-y-2">
+                    {linkedNotes.map((n) => (
+                      <div key={n.id} onClick={() => openNote(n.id)} className="flex flex-col gap-1.5 p-2.5 rounded-lg hover:bg-muted/50 transition-all duration-150 cursor-pointer group">
+                        <p className="text-xs font-semibold truncate text-foreground group-hover:text-primary transition-colors">{n.title || "Untitled"}</p>
+                        <p className="text-[10px] text-muted-foreground line-clamp-2 leading-tight">
+                          ...{getTiptapPlainText(n.content ?? "").substring(0, 100)}...
+                        </p>
                       </div>
                     ))}
                   </div>
@@ -554,9 +649,11 @@ export function NotesModule() {
           <NoteList tagFilter={activeTag} />
         </aside>
 
-        {/* Editor area */}
+        {/* Editor area / Graph area */}
         <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
-          {openedNote ? (
+          {activeFilter === "graph" ? (
+            <GraphView notes={notes ?? []} onOpenNote={openNote} />
+          ) : openedNote ? (
             <>
               {/* Toolbar row */}
               <div className="flex items-center border-b border-border/50 shrink-0 bg-background">

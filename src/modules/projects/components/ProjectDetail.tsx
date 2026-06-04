@@ -18,6 +18,9 @@ import { useFocusStore } from "@/modules/focus/store";
 import { bus } from "@/kernel/event-bus";
 import type { ProjectStatus } from "@/shared/types";
 import { TaskDetail } from "@/modules/tasks/components/TaskDetail";
+import { ProjectDocuments } from "./ProjectDocuments";
+import { ProjectDatabase } from "./ProjectDatabase";
+import { ProjectFiles } from "./ProjectFiles";
 
 const PRESET_COLORS = [
   "#3b82f6", "#8b5cf6", "#ec4899", "#f97316",
@@ -140,7 +143,7 @@ export function ProjectDetail() {
   const totalFocusMins = focusSessions.reduce((sum, s) => sum + (s.actualMinutes ?? 0), 0);
   const totalFocusHours = (totalFocusMins / 60).toFixed(1);
 
-  const [tab,             setTab]             = useState<"overview" | "tasks" | "milestones">("overview");
+  const [tab,             setTab]             = useState<"overview" | "tasks" | "milestones" | "documents" | "database" | "files">("overview");
   const [name,            setName]            = useState(project?.name ?? "");
   const [description,     setDescription]     = useState(project?.description ?? "");
   const [newMilestone,    setNewMilestone]     = useState("");
@@ -233,7 +236,7 @@ export function ProjectDetail() {
 
         {/* ── Tabs ───────────────────────────────────────── */}
         <div className="flex border-b border-border shrink-0 px-3 gap-0.5">
-          {(["overview", "tasks", "milestones"] as const).map((t) => (
+          {(["overview", "tasks", "milestones", "documents", "database", "files"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -249,9 +252,10 @@ export function ProjectDetail() {
                 <span className="ml-1.5 text-[11px] text-muted-foreground/50 tabular-nums">{total}</span>
               )}
               {t === "milestones" && project.milestones.length > 0 && (
-                <span className="ml-1.5 text-[11px] text-muted-foreground/50 tabular-nums">
-                  {project.milestones.length}
-                </span>
+                <span className="ml-1.5 text-[10px] bg-muted px-1.5 rounded-full">{doneMilestones}/{project.milestones.length}</span>
+              )}
+              {t === "files" && project.attachments.length > 0 && (
+                <span className="ml-1.5 text-[10px] bg-muted px-1.5 rounded-full">{project.attachments.length}</span>
               )}
             </button>
           ))}
@@ -447,6 +451,21 @@ export function ProjectDetail() {
                 />
               </div>
             </div>
+          )}
+
+          {/* DOCUMENTS */}
+          {tab === "documents" && (
+            <ProjectDocuments projectId={project.id} />
+          )}
+
+          {/* DATABASE */}
+          {tab === "database" && (
+            <ProjectDatabase projectId={project.id} />
+          )}
+
+          {/* FILES */}
+          {tab === "files" && (
+            <ProjectFiles project={project} />
           )}
         </div>
       </Modal>

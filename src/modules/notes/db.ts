@@ -44,5 +44,75 @@ export const NOTE_MIGRATIONS: Migration[] = [
     module: "notes",
     up: `ALTER TABLE notes ADD COLUMN linked_research_ids TEXT NOT NULL DEFAULT '[]';`,
     down: `ALTER TABLE notes DROP COLUMN linked_research_ids;`
+  },
+  {
+    version: 42,
+    module: "notes",
+    up: `
+      ALTER TABLE notes ADD COLUMN content_text TEXT;
+      ALTER TABLE notes ADD COLUMN status TEXT DEFAULT 'active';
+      ALTER TABLE notes ADD COLUMN note_type TEXT DEFAULT 'note';
+      ALTER TABLE notes ADD COLUMN is_daily INTEGER DEFAULT 0;
+      ALTER TABLE notes ADD COLUMN daily_date TEXT;
+      ALTER TABLE notes ADD COLUMN parent_id TEXT;
+      ALTER TABLE notes ADD COLUMN notebook_id TEXT;
+      ALTER TABLE notes ADD COLUMN properties TEXT;
+      ALTER TABLE notes ADD COLUMN aliases TEXT;
+      ALTER TABLE notes ADD COLUMN pinned INTEGER DEFAULT 0;
+      ALTER TABLE notes ADD COLUMN starred INTEGER DEFAULT 0;
+      ALTER TABLE notes ADD COLUMN word_count INTEGER DEFAULT 0;
+      ALTER TABLE notes ADD COLUMN reading_time_min INTEGER DEFAULT 0;
+      ALTER TABLE notes ADD COLUMN last_opened_at TEXT;
+      ALTER TABLE notes ADD COLUMN created_by TEXT;
+      ALTER TABLE notes ADD COLUMN embedding TEXT; -- Vector not natively supported by standard sqlite without extension, so store as JSON text for now
+      ALTER TABLE notes ADD COLUMN embedding_updated_at TEXT;
+
+      CREATE TABLE IF NOT EXISTS note_links (
+        id TEXT PRIMARY KEY,
+        source_note_id TEXT NOT NULL,
+        target_note_id TEXT,
+        target_raw TEXT NOT NULL,
+        block_id TEXT,
+        is_embed INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS note_blocks (
+        id TEXT PRIMARY KEY,
+        note_id TEXT NOT NULL,
+        block_id TEXT NOT NULL,
+        type TEXT NOT NULL,
+        content TEXT NOT NULL,
+        position INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS notebooks (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        icon TEXT,
+        color TEXT,
+        parent_id TEXT,
+        position REAL NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS note_versions (
+        id TEXT PRIMARY KEY,
+        note_id TEXT NOT NULL,
+        content TEXT NOT NULL,
+        word_count INTEGER NOT NULL,
+        saved_at TEXT NOT NULL,
+        saved_by TEXT NOT NULL,
+        change_summary TEXT
+      );
+    `,
+    down: `
+      DROP TABLE IF EXISTS note_versions;
+      DROP TABLE IF EXISTS notebooks;
+      DROP TABLE IF EXISTS note_blocks;
+      DROP TABLE IF EXISTS note_links;
+    `
   }
 ];

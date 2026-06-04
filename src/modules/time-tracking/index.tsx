@@ -7,7 +7,7 @@ import { Routes, Route, NavLink } from "react-router-dom";
 import {
   Timer, Square, Plus, Trash2, Edit2, Check, X,
   BarChart2, Clock, DollarSign, Tag, ChevronDown,
-  Calendar, Briefcase, Play,
+  Calendar, Briefcase, Play, Settings
 } from "lucide-react";
 
 import { registry } from "@/kernel/router";
@@ -113,6 +113,8 @@ function EntryForm({ initial = {}, onSave, onCancel }: EntryFormProps) {
   const [taskId,     setTaskId]     = useState<ID | "">(initial.taskId ?? "");
   const [projectId,  setProjectId]  = useState<ID | "">(initial.projectId ?? "");
   const [isBillable, setIsBillable] = useState(initial.isBillable ?? false);
+  const [category,   setCategory]   = useState<TimeEntry["category"] | "">(initial.category ?? "");
+  const [billableRate, setBillableRate] = useState<string>(initial.billableRate ? String(initial.billableRate) : "");
   const [startAt,    setStartAt]    = useState(
     initial.startAt ? initial.startAt.slice(0, 16) : new Date().toISOString().slice(0, 16)
   );
@@ -120,12 +122,24 @@ function EntryForm({ initial = {}, onSave, onCancel }: EntryFormProps) {
     initial.endAt ? initial.endAt.slice(0, 16) : ""
   );
 
+  // Compute billable amount implicitly if possible
+  const computeAmount = () => {
+    if (!billableRate || !endAt) return undefined;
+    const durationMins = Math.round((new Date(endAt).getTime() - new Date(startAt).getTime()) / 60000);
+    if (durationMins <= 0) return undefined;
+    const hours = durationMins / 60;
+    return (hours * parseFloat(billableRate));
+  };
+
   const handleSave = () => {
     onSave({
       description: desc,
       taskId:      taskId || undefined,
       projectId:   projectId || undefined,
       isBillable,
+      category:    (category as TimeEntry["category"]) || undefined,
+      billableRate: isBillable && billableRate ? parseFloat(billableRate) : undefined,
+      billableAmount: isBillable ? computeAmount() : undefined,
       startAt:     new Date(startAt).toISOString(),
       endAt:       endAt ? new Date(endAt).toISOString() : undefined,
     });
@@ -163,6 +177,24 @@ function EntryForm({ initial = {}, onSave, onCancel }: EntryFormProps) {
           {projects.filter((p) => p.status === "active").map((p) => (
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
+        </select>
+        
+        <select
+          className="bg-background border border-border rounded px-2 py-1.5 text-sm focus:outline-none col-span-2"
+          value={category}
+          onChange={(e) => setCategory(e.target.value as any)}
+        >
+          <option value="">No category</option>
+          <option value="deep_work">Deep Work</option>
+          <option value="meeting">Meeting</option>
+          <option value="admin">Admin</option>
+          <option value="communication">Communication</option>
+          <option value="research">Research</option>
+          <option value="design">Design</option>
+          <option value="development">Development</option>
+          <option value="review">Review</option>
+          <option value="planning">Planning</option>
+          <option value="other">Other</option>
         </select>
       </div>
 
@@ -203,6 +235,19 @@ function EntryForm({ initial = {}, onSave, onCancel }: EntryFormProps) {
           <DollarSign size={12} className="text-muted-foreground" />
           Billable
         </label>
+        
+        {isBillable && (
+          <div className="flex items-center gap-2 flex-1 mx-4">
+            <span className="text-xs text-muted-foreground">Rate/hr:</span>
+            <input
+              type="number"
+              className="w-20 bg-background border border-border rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              placeholder="0.00"
+              value={billableRate}
+              onChange={(e) => setBillableRate(e.target.value)}
+            />
+          </div>
+        )}
 
         <div className="flex gap-2">
           <button
@@ -246,6 +291,11 @@ function EntryRow({ entry, onEdit, onDelete, onResume }: EntryRowProps) {
           <span className="text-sm truncate">
             {entry.description || <span className="text-muted-foreground italic">No description</span>}
           </span>
+          {entry.category && (
+            <span className="px-1.5 py-0.5 rounded bg-muted text-[10px] uppercase font-bold text-muted-foreground shrink-0 tracking-wider">
+              {entry.category.replace("_", " ")}
+            </span>
+          )}
           {entry.isBillable && (
             <DollarSign size={11} className="text-emerald-500 shrink-0" />
           )}
@@ -484,6 +534,25 @@ function ReportsView() {
       mins,
     }));
 
+  // Focus sessions stats
+  const focusEntries = filtered.filter((e) => e.tags.includes("focus") || e.focusSessionId);
+  const focusCount = focusEntries.length;
+  const focusTotalMins = totalMinutes(focusEntries);
+  const focusAvgLength = focusCount > 0 ? Math.round(focusTotalMins / focusCount) : 0;
+  
+  const focusByTask = new Map<string, number>();
+  focusEntries.forEach((e) => {
+    if (e.taskId) {
+      focusByTask.set(e.taskId, (focusByTask.get(e.taskId) ?? 0) + (e.durationMinutes ?? 0));
+    }
+  });
+  const focusTaskRows = Array.from(focusByTask.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([id, mins]) => ({
+      task: tasks.find((t) => t.id === id),
+      mins,
+    }));
+
   return (
     <div className="p-6 overflow-y-auto h-full">
       {/* Range controls */}
@@ -548,7 +617,7 @@ function ReportsView() {
       </div>
 
       {/* By project */}
-      <div>
+      <div className="mb-8">
         <h3 className="text-sm font-medium mb-3 text-muted-foreground uppercase tracking-wider">
           By Project
         </h3>
@@ -580,6 +649,131 @@ function ReportsView() {
           </div>
         )}
       </div>
+
+      {/* Focus Sessions */}
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground uppercase tracking-wider">
+          Focus Sessions
+        </h3>
+        <div className="flex items-center gap-6 mb-4 text-sm">
+          <div>
+            <span className="text-muted-foreground mr-2">Total Sessions:</span>
+            <span className="font-medium">{focusCount}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground mr-2">Average Length:</span>
+            <span className="font-medium">{fmtDuration(focusAvgLength)}</span>
+          </div>
+        </div>
+        
+        {focusTaskRows.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <h4 className="text-xs text-muted-foreground mb-1">By Task:</h4>
+            {focusTaskRows.map(({ task, mins }) => (
+              <div key={task?.id ?? "none"} className="flex items-center gap-3">
+                <span className="text-sm flex-1 truncate">
+                  {task?.title ?? "Unknown Task"}
+                </span>
+                <span className="text-sm tabular-nums text-muted-foreground">
+                  {fmtDuration(mins)}
+                </span>
+                <div className="w-24 h-1.5 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-primary"
+                    style={{ width: `${Math.min(100, (mins / focusTotalMins) * 100)}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── SettingsView ────────────────────────────────────────────
+
+function SettingsView() {
+  const { settings, updateSettings } = useTimeStore();
+
+  if (!settings) return null;
+
+  return (
+    <div className="p-6 max-w-2xl mx-auto h-full overflow-y-auto">
+      <h2 className="text-lg font-semibold mb-6">Time Tracking Settings</h2>
+      
+      <div className="space-y-6">
+        <div className="bg-muted/20 border border-border rounded-xl p-5 space-y-4">
+          <h3 className="font-medium text-sm flex items-center gap-2">
+            <DollarSign size={16} /> Billing Defaults
+          </h3>
+          
+          <label className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              className="rounded border-border text-primary focus:ring-primary"
+              checked={settings.defaultBillable}
+              onChange={(e) => updateSettings({ defaultBillable: e.target.checked })}
+            />
+            <span className="text-sm">Default new entries to billable</span>
+          </label>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Default Hourly Rate</label>
+              <input
+                type="number"
+                className="w-full bg-background border border-border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                value={settings.defaultHourlyRate || ""}
+                onChange={(e) => updateSettings({ defaultHourlyRate: parseFloat(e.target.value) || undefined })}
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Currency</label>
+              <input
+                type="text"
+                className="w-full bg-background border border-border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                value={settings.currency}
+                onChange={(e) => updateSettings({ currency: e.target.value })}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-muted/20 border border-border rounded-xl p-5 space-y-4">
+          <h3 className="font-medium text-sm flex items-center gap-2">
+            <Timer size={16} /> Tracking Rules
+          </h3>
+          
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1">Round entries</label>
+            <select
+              className="w-full bg-background border border-border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              value={settings.roundEntries}
+              onChange={(e) => updateSettings({ roundEntries: e.target.value as any })}
+            >
+              <option value="none">No rounding</option>
+              <option value="5min">Round to nearest 5 min</option>
+              <option value="10min">Round to nearest 10 min</option>
+              <option value="15min">Round to nearest 15 min</option>
+              <option value="30min">Round to nearest 30 min</option>
+              <option value="1hour">Round to nearest 1 hour</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1">Idle detection (minutes)</label>
+            <input
+              type="number"
+              className="w-full bg-background border border-border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              value={settings.idleDetectionMin}
+              onChange={(e) => updateSettings({ idleDetectionMin: parseInt(e.target.value) || 0 })}
+            />
+            <p className="text-xs text-muted-foreground mt-1">Set to 0 to disable. Auto-pauses running timers when you are away.</p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -587,13 +781,46 @@ function ReportsView() {
 // ── Module root ──────────────────────────────────────────────
 
 export default function TimeTrackingModule() {
-  const { load, isLoaded } = useTimeStore();
+  const { load, isLoaded, settings } = useTimeStore();
 
   useEffect(() => {
     registry.register(TIME_MANIFEST);
     const unsub = setupTimeEventListeners();
     return unsub;
   }, []);
+
+  useEffect(() => {
+    if (!isLoaded || !settings || settings.idleDetectionMin <= 0) return;
+    
+    let interval: ReturnType<typeof setInterval>;
+    import("@tauri-apps/api/core").then(({ invoke }) => {
+      interval = setInterval(async () => {
+        try {
+          const state = useTimeStore.getState();
+          if (!state.activeEntryId) return;
+
+          const idleSeconds = await invoke<number>("get_idle_time");
+          const thresholdSeconds = settings.idleDetectionMin * 60;
+          
+          if (idleSeconds >= thresholdSeconds) {
+            await state.stopTimer();
+            bus.emit("ui:notification", {
+              id: "time-idle-pause",
+              type: "warning",
+              message: `Timer stopped: inactive for ${settings.idleDetectionMin}m`,
+              durationMs: 5000,
+            });
+          }
+        } catch (e) {
+          // Ignore
+        }
+      }, 10000);
+    });
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isLoaded, settings]);
 
   useEffect(() => {
     if (!isLoaded) load();
@@ -636,6 +863,19 @@ export default function TimeTrackingModule() {
           >
             <BarChart2 size={12} /> Reports
           </NavLink>
+          <NavLink
+            to="/time/settings"
+            className={({ isActive }) =>
+              cn(
+                "flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[12px] font-bold transition-all duration-200 select-none",
+                isActive
+                  ? "bg-background text-foreground shadow-sm shadow-black/5 border border-border/20"
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent/40"
+              )
+            }
+          >
+            <Settings size={12} /> Settings
+          </NavLink>
         </div>
       </div>
 
@@ -643,6 +883,7 @@ export default function TimeTrackingModule() {
         <Routes>
           <Route path="/"        element={<TrackerView />} />
           <Route path="/reports" element={<ReportsView />} />
+          <Route path="/settings" element={<SettingsView />} />
         </Routes>
       </div>
     </div>

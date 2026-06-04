@@ -10,6 +10,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { GlobalSearch } from "./components/GlobalSearch";
 import { Notifications } from "./components/Notifications";
 import { ThemeProvider } from "./components/ThemeProvider";
+import { StatusBar } from "./components/StatusBar";
 import { useShellStore } from "./store";
 import { useAutosave } from "./hooks/useAutosave";
 import { useBusEvent } from "@/kernel/event-bus";
@@ -26,11 +27,17 @@ import { PlannerModule }     from "@/modules/planner";
 import { NotesModule }       from "@/modules/notes";
 import { CalendarModule }    from "@/modules/calendar";
 import JournalModule         from "@/modules/journal";
+import HabitsModule          from "@/modules/habits";
+import GoalsModule           from "@/modules/goals";
 import FocusModule           from "@/modules/focus";
+import { FocusHUD }          from "@/modules/focus/components/FocusHUD";
+import { BreakScreen }       from "@/modules/focus/components/BreakScreen";
+import { PostSessionReview } from "@/modules/focus/components/PostSessionReview";
 import TimeTrackingModule    from "@/modules/time-tracking";
-import DatabaseModule        from "@/modules/database";
 import { ResearchModule }    from "@/modules/research";
 import { SettingsModule }    from "@/modules/settings";
+import AIModule              from "@/modules/ai";
+import DatabaseModule         from "@/modules/database";
 
 function ModuleLoader() {
   return (
@@ -93,40 +100,46 @@ export function Shell() {
       <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground ambient-bg">
         <Sidebar />
 
-        <div className="flex flex-1 min-w-0 overflow-hidden">
-          {panels.map((panel, idx) => (
-            <div
-              key={panel.id}
-              onClick={() => setActivePanel(panel.id)}
-              className={cn(
-                "flex flex-col flex-1 min-w-0 overflow-hidden",
-                idx > 0 && "border-l border-border/60",
-                activePanelId === panel.id && panels.length > 1
-                  && "ring-inset ring-1 ring-primary/20"
-              )}
-            >
-              <TabBar panel={panel} />
-              <div className="flex-1 overflow-hidden">
-                <ErrorBoundary name="module">
-                  <Routes>
-                    <Route path="/"             element={<Navigate to="/tasks" replace />} />
-                    <Route path="/tasks/*"      element={<TasksModule />} />
-                    <Route path="/projects/*"   element={<ProjectsModule />} />
-                    <Route path="/planner/*"    element={<PlannerModule />} />
-                    <Route path="/notes/*"      element={<NotesModule />} />
-                    <Route path="/calendar/*"   element={<CalendarModule />} />
-                    <Route path="/journal/*"    element={<JournalModule />} />
-                    <Route path="/focus/*"      element={<FocusModule />} />
-                    <Route path="/time/*"       element={<TimeTrackingModule />} />
-                    <Route path="/database/*"   element={<DatabaseModule />} />
-                    <Route path="/research/*"   element={<ResearchModule />} />
-                    <Route path="/settings/*"   element={<SettingsModule />} />
-                    <Route path="*"             element={<Navigate to="/tasks" replace />} />
-                  </Routes>
-                </ErrorBoundary>
+        <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+          <div className="flex flex-1 min-w-0 overflow-hidden">
+            {panels.map((panel, idx) => (
+              <div
+                key={panel.id}
+                onClick={() => setActivePanel(panel.id)}
+                className={cn(
+                  "flex flex-col flex-1 min-w-0 overflow-hidden",
+                  idx > 0 && "border-l border-border/60",
+                  activePanelId === panel.id && panels.length > 1
+                    && "ring-inset ring-1 ring-primary/20"
+                )}
+              >
+                <TabBar panel={panel} />
+                <div className="flex-1 overflow-hidden">
+                  <ErrorBoundary name="module">
+                    <Routes>
+                      <Route path="/"             element={<Navigate to="/tasks" replace />} />
+                      <Route path="/tasks/*"      element={<TasksModule />} />
+                      <Route path="/projects/*"   element={<ProjectsModule />} />
+                      <Route path="/planner/*"    element={<PlannerModule />} />
+                      <Route path="/notes/*"      element={<NotesModule />} />
+                      <Route path="/calendar/*"   element={<CalendarModule />} />
+                      <Route path="/journal/*"    element={<JournalModule />} />
+                      <Route path="/habits/*"     element={<HabitsModule />} />
+                      <Route path="/goals/*"      element={<GoalsModule />} />
+                      <Route path="/focus/*"      element={<FocusModule />} />
+                      <Route path="/time/*"       element={<TimeTrackingModule />} />
+                      <Route path="/research/*"   element={<ResearchModule />} />
+                      <Route path="/database/*"   element={<DatabaseModule />} />
+                      <Route path="/settings/*"   element={<SettingsModule />} />
+                      <Route path="/ai/*"         element={<AIModule />} />
+                      <Route path="*"             element={<Navigate to="/tasks" replace />} />
+                    </Routes>
+                  </ErrorBoundary>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
+          <StatusBar />
         </div>
 
         <CommandPalette />
@@ -134,6 +147,9 @@ export function Shell() {
         <Notifications />
         <GlobalQuickAdd />
         <GlobalTaskDetail />
+        <FocusHUD />
+        <BreakScreen />
+        <PostSessionReview />
         <ErrorBoundary name="IntegrationLayer">
           <IntegrationLayer />
         </ErrorBoundary>

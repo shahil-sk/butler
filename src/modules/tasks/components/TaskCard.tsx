@@ -15,6 +15,7 @@ import { cn, formatDate } from "@/shared/utils";
 import { Popover, PopoverItem, PopoverDivider, ProjectDot } from "@/shared/ui";
 import { useTaskStore } from "../store";
 import { useProjectStore } from "@/modules/projects/store";
+import { useNoteStore } from "@/modules/notes/store";
 import { bus } from "@/kernel/event-bus";
 import type { Task } from "@/shared/types";
 
@@ -187,6 +188,8 @@ export function TaskCard({ task, view }: TaskCardProps) {
   const project = useProjectStore((s) =>
     task.projectId ? s.getProjectById(task.projectId) : undefined
   );
+  const allNotes = useNoteStore((s) => s.notes);
+  const linkedNotes = allNotes.filter((n) => task.linkedNoteIds?.includes(n.id));
 
   const subtasks     = getSubtasks(task.id);
   const doneSubtasks = subtasks.filter((s) => s.status === "done").length;
@@ -200,11 +203,21 @@ export function TaskCard({ task, view }: TaskCardProps) {
   );
   const hasPriority  = task.priority && task.priority !== "none";
 
+  const handleCardClick = () => {
+    if (task.attachments && task.attachments.length > 0) {
+      const sourceId = task.attachments[0];
+      bus.emit("navigate:to", { path: "/research" });
+      setTimeout(() => bus.emit("research:open-source" as any, { sourceId }), 50);
+    } else {
+      openTask(task.id);
+    }
+  };
+
   // ── List view ─────────────────────────────────────────────
   if (view === "list") {
     return (
       <div
-        onClick={() => openTask(task.id)}
+        onClick={handleCardClick}
         className={cn(
           "group/card relative flex items-center gap-3 px-3.5 py-2.5 rounded-xl cursor-pointer select-none",
           "border border-transparent hover:border-border/50 hover:bg-accent/30",
@@ -244,6 +257,11 @@ export function TaskCard({ task, view }: TaskCardProps) {
 
         {/* Right metadata */}
         <div className="flex items-center gap-2 shrink-0">
+          {linkedNotes.length > 0 && (
+            <span className="flex items-center gap-1 text-[10px] font-semibold text-blue-500 bg-blue-500/10 px-1.5 py-0.5 rounded-md shrink-0">
+              {linkedNotes.length} Note{linkedNotes.length > 1 ? "s" : ""}
+            </span>
+          )}
           {isBlocked && (
             <span className="flex items-center gap-1 text-[10px] font-semibold text-red-500/80 shrink-0">
               <Lock size={9} strokeWidth={2} /> Blocked
@@ -299,7 +317,7 @@ export function TaskCard({ task, view }: TaskCardProps) {
   // ── Grid view ─────────────────────────────────────────────
   return (
     <div
-      onClick={() => openTask(task.id)}
+      onClick={handleCardClick}
       className={cn(
         "group/card relative cursor-pointer select-none",
         // outer shell
@@ -373,9 +391,14 @@ export function TaskCard({ task, view }: TaskCardProps) {
             <CardMenu task={task} />
           </div>
 
-          {/* Tags */}
-          {task.tags.length > 0 && (
+          {/* Tags & Notes */}
+          {(task.tags.length > 0 || linkedNotes.length > 0) && (
             <div className="flex flex-wrap gap-1">
+              {linkedNotes.map((n) => (
+                <span key={n.id} className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md bg-blue-500/10 text-blue-500/80 font-medium">
+                  {n.title || "Note"}
+                </span>
+              ))}
               {task.tags.slice(0, 2).map((tag) => (
                 <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded-md bg-muted/60 text-muted-foreground/70 font-medium">
                   {tag}

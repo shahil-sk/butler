@@ -56,6 +56,11 @@ export function EventForm() {
   const [taskSearch,  setTaskSearch]  = useState("");
   const [noteSearch,  setNoteSearch]  = useState("");
 
+  const [location,    setLocation]    = useState("");
+  const [meetingUrl,  setMeetingUrl]  = useState("");
+  const [status,      setStatus]      = useState("");
+  const [visibility,  setVisibility]  = useState("");
+
   useEffect(() => {
     if (open) {
       setTab("details");
@@ -70,6 +75,10 @@ export function EventForm() {
       setRecurrence(  prefill.recurrence?.frequency ?? "");
       setLinkedTasks( prefill.linkedTaskIds ?? []);
       setLinkedNotes( prefill.linkedNoteIds ?? []);
+      setLocation(    prefill.location ?? "");
+      setMeetingUrl(  prefill.meetingUrl ?? "");
+      setStatus(      prefill.status ?? "confirmed");
+      setVisibility(  prefill.visibility ?? "default");
       setTaskSearch(""); setNoteSearch("");
     }
   }, [open]);
@@ -103,6 +112,10 @@ export function EventForm() {
       calendarId:    calId,
       color:         color || undefined,
       description:   description || undefined,
+      location:      location || undefined,
+      meetingUrl:    meetingUrl || undefined,
+      status:        status as any,
+      visibility:    visibility as any,
       isTimeBlock,
       recurrence:    recurrence ? { frequency: recurrence as "daily" | "weekly" | "monthly" } : undefined,
       linkedTaskIds: linkedTasks,
@@ -253,9 +266,59 @@ export function EventForm() {
                   onChange={(e) => setIsTimeBlock(e.target.checked)}
                   className="rounded accent-primary"
                 />
-                <Timer size={11} className="text-muted-foreground" />
-                <span className="text-muted-foreground">Mark as time block (focus session)</span>
+                <Timer size={13} className="text-muted-foreground/60" />
+                Time block
               </label>
+
+              {/* Status & Visibility */}
+              <div className="grid grid-cols-2 gap-3 mt-2">
+                <div>
+                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Status</label>
+                  <select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value)}
+                    className="w-full text-xs bg-popover outline-none border border-border rounded-md px-2 py-1.5 mt-1"
+                  >
+                    <option value="confirmed">Confirmed</option>
+                    <option value="tentative">Tentative</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Visibility</label>
+                  <select
+                    value={visibility}
+                    onChange={(e) => setVisibility(e.target.value)}
+                    className="w-full text-xs bg-popover outline-none border border-border rounded-md px-2 py-1.5 mt-1"
+                  >
+                    <option value="default">Default</option>
+                    <option value="private">Private</option>
+                    <option value="public">Public</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Location & Meeting */}
+              <div className="grid grid-cols-2 gap-3 mt-2">
+                <div>
+                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Location</label>
+                  <input
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="Address or place"
+                    className="w-full text-xs bg-popover outline-none border border-border rounded-md px-2 py-1.5 mt-1 placeholder:text-muted-foreground/40"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Meeting URL</label>
+                  <input
+                    value={meetingUrl}
+                    onChange={(e) => setMeetingUrl(e.target.value)}
+                    placeholder="Zoom, Meet, etc."
+                    className="w-full text-xs bg-popover outline-none border border-border rounded-md px-2 py-1.5 mt-1 placeholder:text-muted-foreground/40"
+                  />
+                </div>
+              </div>
 
               <textarea
                 value={description}
@@ -364,13 +427,35 @@ export function EventForm() {
         {/* Footer */}
         <div className="flex items-center gap-2 px-4 py-3 border-t border-border shrink-0">
           {editingId && (
-            <button
-              onClick={async () => { await deleteEvent(editingId); closeEventForm(); }}
-              className="text-xs text-destructive hover:text-destructive/80 transition-fast mr-auto"
-            >
-              Delete
-            </button>
+            <>
+              <button
+                onClick={async () => {
+                  const evt = useCalendarStore.getState().events.find(e => e.id === editingId);
+                  if (evt) {
+                    const est = Math.max(15, (new Date(evt.endAt).getTime() - new Date(evt.startAt).getTime()) / 60000);
+                    await useTaskStore.getState().createTask({
+                      title: evt.title,
+                      description: evt.description,
+                      dueDate: evt.startAt.slice(0, 10),
+                      estimateMinutes: Math.round(est),
+                    });
+                    await deleteEvent(editingId);
+                    closeEventForm();
+                  }
+                }}
+                className="text-xs text-primary hover:text-primary/80 transition-fast mr-2"
+              >
+                Convert to Task
+              </button>
+              <button
+                onClick={async () => { await deleteEvent(editingId); closeEventForm(); }}
+                className="text-xs text-destructive hover:text-destructive/80 transition-fast mr-auto"
+              >
+                Delete
+              </button>
+            </>
           )}
+          {!editingId && <div className="mr-auto" />}
           <button onClick={closeEventForm} className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-accent transition-fast">Cancel</button>
           <button
             onClick={() => void submit()}

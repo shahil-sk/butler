@@ -48,6 +48,11 @@ import { Markdown } from "tiptap-markdown";
 import { useEffect, useCallback, useRef, useState } from "react";
 import { cn } from "@/shared/utils";
 import type { Editor } from "@tiptap/react";
+import { bus } from "@/kernel/event-bus";
+import { LiveTasksExtension, LiveDatabaseExtension } from "./extensions/EmbedBlocks";
+
+// Track the last focused editor to know where to insert links
+let lastFocusedEditor: Editor | null = null;
 
 // ── View Mode Types ───────────────────────────────────────────────────────────
 
@@ -105,41 +110,41 @@ function Toolbar({
       {isEditing && (
         <>
           <ToolbarBtn title="Heading 1" active={editor.isActive("heading", { level: 1 })}
-            onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}>H1</ToolbarBtn>
+            onClick={() => ((editor.chain().focus() as any)).toggleHeading({ level: 1 }).run()}>H1</ToolbarBtn>
           <ToolbarBtn title="Heading 2" active={editor.isActive("heading", { level: 2 })}
-            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>H2</ToolbarBtn>
+            onClick={() => ((editor.chain().focus() as any)).toggleHeading({ level: 2 }).run()}>H2</ToolbarBtn>
           <ToolbarBtn title="Heading 3" active={editor.isActive("heading", { level: 3 })}
-            onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>H3</ToolbarBtn>
+            onClick={() => ((editor.chain().focus() as any)).toggleHeading({ level: 3 }).run()}>H3</ToolbarBtn>
           <Sep />
           <ToolbarBtn title="Bold" active={editor.isActive("bold")}
-            onClick={() => editor.chain().focus().toggleBold().run()}><strong>B</strong></ToolbarBtn>
+            onClick={() => ((editor.chain().focus() as any)).toggleBold().run()}><strong>B</strong></ToolbarBtn>
           <ToolbarBtn title="Italic" active={editor.isActive("italic")}
-            onClick={() => editor.chain().focus().toggleItalic().run()}><em>I</em></ToolbarBtn>
+            onClick={() => ((editor.chain().focus() as any)).toggleItalic().run()}><em>I</em></ToolbarBtn>
           <ToolbarBtn title="Strikethrough" active={editor.isActive("strike")}
-            onClick={() => editor.chain().focus().toggleStrike().run()}><s>S</s></ToolbarBtn>
+            onClick={() => ((editor.chain().focus() as any)).toggleStrike().run()}><s>S</s></ToolbarBtn>
           <ToolbarBtn title="Inline code" active={editor.isActive("code")}
-            onClick={() => editor.chain().focus().toggleCode().run()}>
+            onClick={() => ((editor.chain().focus() as any)).toggleCode().run()}>
             <span className="font-mono text-[11px]">`c`</span>
           </ToolbarBtn>
           <Sep />
           <ToolbarBtn title="Bullet list" active={editor.isActive("bulletList")}
-            onClick={() => editor.chain().focus().toggleBulletList().run()}>• List</ToolbarBtn>
+            onClick={() => ((editor.chain().focus() as any)).toggleBulletList().run()}>• List</ToolbarBtn>
           <ToolbarBtn title="Numbered list" active={editor.isActive("orderedList")}
-            onClick={() => editor.chain().focus().toggleOrderedList().run()}>1. List</ToolbarBtn>
+            onClick={() => ((editor.chain().focus() as any)).toggleOrderedList().run()}>1. List</ToolbarBtn>
           <ToolbarBtn title="Task list" active={editor.isActive("taskList")}
-            onClick={() => editor.chain().focus().toggleTaskList().run()}>☑ Tasks</ToolbarBtn>
+            onClick={() => ((editor.chain().focus() as any)).toggleTaskList().run()}>☑ Tasks</ToolbarBtn>
           <Sep />
           <ToolbarBtn title="Blockquote" active={editor.isActive("blockquote")}
-            onClick={() => editor.chain().focus().toggleBlockquote().run()}>" Quote</ToolbarBtn>
+            onClick={() => ((editor.chain().focus() as any)).toggleBlockquote().run()}>" Quote</ToolbarBtn>
           <ToolbarBtn title="Code block" active={editor.isActive("codeBlock")}
-            onClick={() => editor.chain().focus().toggleCodeBlock().run()}>
+            onClick={() => ((editor.chain().focus() as any)).toggleCodeBlock().run()}>
             <span className="font-mono text-[11px]">{"</>"}</span>
           </ToolbarBtn>
           <ToolbarBtn title="Horizontal rule"
-            onClick={() => editor.chain().focus().setHorizontalRule().run()}>― Rule</ToolbarBtn>
+            onClick={() => ((editor.chain().focus() as any)).setHorizontalRule().run()}>― Rule</ToolbarBtn>
           <Sep />
-          <ToolbarBtn title="Undo" onClick={() => editor.chain().focus().undo().run()}>↩</ToolbarBtn>
-          <ToolbarBtn title="Redo" onClick={() => editor.chain().focus().redo().run()}>↪</ToolbarBtn>
+          <ToolbarBtn title="Undo" onClick={() => ((editor.chain().focus() as any)).undo().run()}>↩</ToolbarBtn>
+          <ToolbarBtn title="Redo" onClick={() => ((editor.chain().focus() as any)).redo().run()}>↪</ToolbarBtn>
         </>
       )}
 
@@ -292,10 +297,10 @@ export function RichEditor({
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({
+      (StarterKit.configure({
         heading:   { levels: [1, 2, 3] },
         codeBlock: { languageClassPrefix: "language-" },
-      }),
+      }) as any),
       Placeholder.configure({
         placeholder: ({ node }) =>
           node.type.name === "heading" ? "Heading…" : placeholder,
@@ -309,16 +314,35 @@ export function RichEditor({
         transformPastedText: true,   // paste markdown → rendered nodes
         transformCopiedText: false,
       }),
+      LiveTasksExtension,
+      LiveDatabaseExtension,
     ],
     content: parseContent(content),
     onUpdate: ({ editor }) => {
+      // Detect /task slash command and [[ linking
+      const { $to } = editor.state.selection;
+      if ($to && $to.parent) {
+        const textBefore = $to.parent.textBetween(0, $to.parentOffset, undefined, "\ufffc");
+        if (textBefore.endsWith("/task")) {
+          editor.chain().deleteRange({ from: $to.pos - 5, to: $to.pos }).run();
+          bus.emit("editor:slash-task", undefined as any);
+        } else if (textBefore.endsWith("/tasks")) {
+          editor.chain().deleteRange({ from: $to.pos - 6, to: $to.pos }).insertContent('<live-tasks-block></live-tasks-block>').run();
+        } else if (textBefore.endsWith("/database")) {
+          editor.chain().deleteRange({ from: $to.pos - 9, to: $to.pos }).insertContent('<live-database-block></live-database-block>').run();
+        } else if (textBefore.endsWith("[[")) {
+          editor.chain().deleteRange({ from: $to.pos - 2, to: $to.pos }).run();
+          bus.emit("search:open", { mode: "link" });
+        }
+      }
+
       const json = editor.getJSON();
       const jsonString = JSON.stringify(json);
       debouncedOnChange(jsonString);
       
       // Update markdown and HTML representations
       try {
-        const md = editor.storage.markdown?.getMarkdown?.() || "";
+        const md = (editor.storage as any).markdown?.getMarkdown?.() || "";
         setMarkdownContent(md);
       } catch {
         setMarkdownContent("");
@@ -332,6 +356,26 @@ export function RichEditor({
       }
     },
     editorProps: {
+      handleClick(view, pos, event) {
+        const target = event.target as HTMLElement;
+        const link = target.closest("a");
+        if (link && link.href && link.href.startsWith("butler://")) {
+          event.preventDefault();
+          const [type, id] = link.href.replace("butler://", "").split("/");
+          if (type === "task") {
+            bus.emit("navigate:to", { path: "/tasks" });
+            setTimeout(() => bus.emit("task:open", { taskId: id }), 50);
+          } else if (type === "note") {
+            bus.emit("navigate:to", { path: "/notes" });
+            setTimeout(() => bus.emit("note:open", { noteId: id }), 50);
+          } else if (type === "project") {
+            bus.emit("navigate:to", { path: "/projects" });
+            setTimeout(() => bus.emit("project:open", { projectId: id }), 50);
+          }
+          return true;
+        }
+        return false;
+      },
       attributes: {
         class: cn(
           "prose prose-sm dark:prose-invert max-w-none outline-none",
@@ -371,7 +415,7 @@ export function RichEditor({
     if (!editor) return;
     
     try {
-      const md = editor.storage.markdown?.getMarkdown?.() || "";
+      const md = (editor.storage as any).markdown?.getMarkdown?.() || "";
       setMarkdownContent(md);
     } catch {
       setMarkdownContent("");
@@ -396,7 +440,7 @@ export function RichEditor({
     
     switch (format) {
       case "markdown": {
-        const md = markdownContent || editor.storage.markdown?.getMarkdown?.() || "";
+        const md = markdownContent || (editor.storage as any).markdown?.getMarkdown?.() || "";
         downloadFile(md, `export-${timestamp}.md`, "text/markdown");
         break;
       }
@@ -412,6 +456,39 @@ export function RichEditor({
       }
     }
   };
+
+  // Track focus and handle link insertion
+  useEffect(() => {
+    if (!editor) return;
+
+    const handleFocus = () => {
+      lastFocusedEditor = editor;
+    };
+    editor.on("focus", handleFocus);
+    
+    // Fallback focus check on update (sometimes focus events are tricky)
+    const handleUpdate = () => {
+      if (editor.isFocused) lastFocusedEditor = editor;
+    };
+    editor.on("update", handleUpdate);
+
+    const unsubLink = bus.on("editor:insert-link", (payload: any) => {
+      if (lastFocusedEditor === editor) {
+        const { result } = payload;
+        // Insert as standard markdown/HTML link
+        editor.chain().focus().insertContent(`<a href="butler://${result.type || result.entityType}/${result.id || result.entityId}">${result.title}</a> `).run();
+      }
+    });
+
+    return () => {
+      editor.off("focus", handleFocus);
+      editor.off("update", handleUpdate);
+      unsubLink();
+      if (lastFocusedEditor === editor) {
+        lastFocusedEditor = null;
+      }
+    };
+  }, [editor]);
 
   if (!editor) {
     return (

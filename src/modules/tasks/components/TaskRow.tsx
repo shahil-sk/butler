@@ -16,6 +16,7 @@ import { Popover, PopoverItem, PopoverDivider, PriorityDot } from "@/shared/ui";
 import { useTaskStore } from "../store";
 import { useProjectStore } from "@/modules/projects/store";
 import { bus } from "@/kernel/event-bus";
+import { useNoteStore } from "@/modules/notes/store";
 import type { Task } from "@/shared/types";
 
 interface TaskRowProps {
@@ -48,6 +49,10 @@ export function TaskRow({ task, depth = 0 }: TaskRowProps) {
 
   const project = useProjectStore((s) =>
     task.projectId ? s.getProjectById(task.projectId) : undefined
+  );
+
+  const linkedNotes = useNoteStore((s) => 
+    s.notes.filter((n) => task.linkedNoteIds?.includes(n.id))
   );
 
   const subtasks     = getSubtasks(task.id);
@@ -123,14 +128,22 @@ export function TaskRow({ task, depth = 0 }: TaskRowProps) {
           />
         )}
 
-        {/* Title */}
         <span className={cn(
-          "flex-1 text-[13px] font-medium leading-snug truncate min-w-0 transition-colors",
+          "flex-1 text-[13px] font-medium leading-snug truncate min-w-0 transition-colors flex items-center gap-2",
           (isDone || isCancelled)
             ? "line-through text-muted-foreground/35"
             : "text-foreground/85 group-hover/row:text-foreground"
         )}>
           {task.title}
+          {linkedNotes.length > 0 && (
+            <span className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity">
+              {linkedNotes.map(n => (
+                <span key={n.id} className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500/80 font-semibold uppercase tracking-wider">
+                  {n.title || "NOTE"}
+                </span>
+              ))}
+            </span>
+          )}
         </span>
 
         {/* Right-side metadata */}

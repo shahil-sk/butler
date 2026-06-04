@@ -2,42 +2,9 @@ import { create } from "zustand";
 import { db } from "@/kernel/db";
 import { bus } from "@/kernel/event-bus";
 import { generateId, now, today, toISODate } from "@/shared/utils";
-import type { ID, ISODate } from "@/shared/types";
+import type { ID, ISODate, TimeBlock, DayPlan, PlannerTemplate } from "@/shared/types";
 
 // ── Types ─────────────────────────────────────────────────────
-
-export interface TimeBlock {
-  id: ID;
-  date: ISODate;
-  taskId?: ID;
-  title: string;
-  startTime: string;   // "09:00"
-  endTime: string;     // "10:30"
-  color?: string;
-  isBreak: boolean;
-  isCompleted: boolean;
-  notes?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/** A single block entry inside a saved template */
-export interface TemplateBlock {
-  title: string;
-  startTime: string;
-  endTime: string;
-  color?: string;
-  isBreak: boolean;
-  notes?: string;
-}
-
-/** A named, reusable day-plan template */
-export interface PlanTemplate {
-  id: ID;
-  name: string;
-  blocks: TemplateBlock[];
-  createdAt: string;
-}
 
 export const BLOCK_COLORS = [
   "#3b82f6", // blue
@@ -52,43 +19,50 @@ export const BLOCK_COLORS = [
 
 function rowToBlock(r: Record<string, unknown>): TimeBlock {
   return {
-    id:        r.id as string,
-    date:      r.date as string,
-    taskId:    (r.task_id as string | null) ?? undefined,
-    title:     r.title as string,
-    startTime: r.start_time as string,
-    endTime:   r.end_time as string,
-    color:     (r.color as string | null) ?? undefined,
-    isBreak:   Boolean(r.is_break),
-    isCompleted: Boolean(r.is_completed),
-    notes:     (r.notes as string | null) ?? undefined,
-    createdAt: r.created_at as string,
-    updatedAt: r.updated_at as string,
+    id:               r.id as string,
+    date:             r.date as string,
+    startTime:        r.start_time as string,
+    endTime:          r.end_time as string,
+    durationMinutes:  r.duration_minutes as number || 0,
+    title:            (r.title as string | null) ?? undefined,
+    color:            (r.color as string | null) ?? undefined,
+    category:         (r.category as any) ?? undefined,
+    taskId:           (r.task_id as string | null) ?? undefined,
+    eventId:          (r.event_id as string | null) ?? undefined,
+    note:             (r.notes as string | null) ?? undefined,
+    isOverflow:       Boolean(r.is_overflow),
+    actualStart:      (r.actual_start as string | null) ?? undefined,
+    actualEnd:        (r.actual_end as string | null) ?? undefined,
+    actualDuration:   (r.actual_duration as number | null) ?? undefined,
+    focusSessionId:   (r.focus_session_id as string | null) ?? undefined,
+    completed:        Boolean(r.is_completed),
+    position:         (r.position as number | null) ?? 0,
+    createdAt:        r.created_at as string,
+    updatedAt:        r.updated_at as string,
   };
 }
 
 const INSERT_BLOCK_SQL = `
   INSERT INTO planner_blocks
-    (id, date, task_id, title, start_time, end_time, color, is_break, is_completed, notes, created_at, updated_at)
-  VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+    (id, date, start_time, end_time, title, color, category, task_id, event_id, notes, is_overflow, actual_start, actual_end, actual_duration, focus_session_id, is_completed, position, created_at, updated_at)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 `;
 const UPDATE_BLOCK_SQL = `
   UPDATE planner_blocks SET
-    date=?, task_id=?, title=?, start_time=?, end_time=?,
-    color=?, is_break=?, is_completed=?, notes=?, updated_at=?
+    date=?, start_time=?, end_time=?, title=?, color=?, category=?, task_id=?, event_id=?, notes=?, is_overflow=?, actual_start=?, actual_end=?, actual_duration=?, focus_session_id=?, is_completed=?, position=?, updated_at=?
   WHERE id=?
 `;
 
 function insertBlockParams(b: TimeBlock): unknown[] {
   return [
-    b.id, b.date, b.taskId ?? null, b.title, b.startTime, b.endTime,
-    b.color ?? null, b.isBreak ? 1 : 0, b.isCompleted ? 1 : 0, b.notes ?? null, b.createdAt, b.updatedAt,
+    b.id, b.date, b.startTime, b.endTime, b.title ?? null, b.color ?? null, b.category ?? null, b.taskId ?? null, b.eventId ?? null, b.note ?? b.notes ?? null,
+    b.isOverflow ? 1 : 0, b.actualStart ?? null, b.actualEnd ?? null, b.actualDuration ?? null, b.focusSessionId ?? null, b.completed || b.isCompleted ? 1 : 0, b.position ?? 0, b.createdAt, b.updatedAt,
   ];
 }
 function updateBlockParams(b: TimeBlock): unknown[] {
   return [
-    b.date, b.taskId ?? null, b.title, b.startTime, b.endTime,
-    b.color ?? null, b.isBreak ? 1 : 0, b.isCompleted ? 1 : 0, b.notes ?? null, b.updatedAt,
+    b.date, b.startTime, b.endTime, b.title ?? null, b.color ?? null, b.category ?? null, b.taskId ?? null, b.eventId ?? null, b.note ?? b.notes ?? null,
+    b.isOverflow ? 1 : 0, b.actualStart ?? null, b.actualEnd ?? null, b.actualDuration ?? null, b.focusSessionId ?? null, b.completed || b.isCompleted ? 1 : 0, b.position ?? 0, b.updatedAt,
     b.id,
   ];
 }
@@ -133,7 +107,7 @@ export type PlannerView = "day" | "3day" | "week";
 
 interface PlannerState {
   blocks:           TimeBlock[];
-  templates:        PlanTemplate[];
+  templates:        PlannerTemplate[];
   activeDate:       ISODate;
   view:             PlannerView;
   loading:          boolean;
@@ -154,8 +128,8 @@ interface PlannerActions {
   carryForward:       (taskId: ID, fromDate: ISODate, toDate: ISODate) => Promise<void>;
   carryOverIncomplete: () => Promise<void>;
   // Template actions
-  loadTemplates:      () => Promise<void>;
-  savePlanTemplate:   (name: string, date: ISODate) => Promise<PlanTemplate>;
+  loadTemplates:    () => Promise<void>;
+  savePlanTemplate: (name: string, date: string) => Promise<PlannerTemplate>;
   deleteTemplate:     (id: ID) => Promise<void>;
   applyTemplate:      (templateId: ID, targetDate: ISODate) => Promise<void>;
   // Navigation
@@ -319,6 +293,16 @@ export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get
     const updated: TimeBlock = { ...existing, startTime: newStart, endTime: newEnd, updatedAt: now() };
     await db.execute(UPDATE_BLOCK_SQL, updateBlockParams(updated));
     set((s) => ({ blocks: s.blocks.map((b) => b.id === id ? updated : b) }));
+    
+    if (updated.taskId) {
+      const taskStore = (await import("@/modules/tasks/store")).useTaskStore.getState();
+      const dur = toMin(newEnd) - toMin(newStart);
+      await taskStore.updateTask(updated.taskId, {
+        scheduledDate: updated.date,
+        scheduledAt: `${updated.date}T${newStart}:00`,
+        scheduledDuration: Math.max(dur, 15)
+      });
+    }
   },
 
   resizeBlock: async (id, newEnd) => {
@@ -328,6 +312,14 @@ export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get
     const updated: TimeBlock = { ...existing, endTime: safeEnd, updatedAt: now() };
     await db.execute(UPDATE_BLOCK_SQL, updateBlockParams(updated));
     set((s) => ({ blocks: s.blocks.map((b) => b.id === id ? updated : b) }));
+    
+    if (updated.taskId) {
+      const taskStore = (await import("@/modules/tasks/store")).useTaskStore.getState();
+      const dur = toMin(safeEnd) - toMin(updated.startTime);
+      await taskStore.updateTask(updated.taskId, {
+        scheduledDuration: Math.max(dur, 15)
+      });
+    }
   },
 
   scheduleTask: async (taskId, date, startTime, durationMinutes, syncScheduledDate = true) => {
@@ -339,9 +331,10 @@ export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get
 
     // Only sync scheduledDate to task if explicitly requested (avoid duplicate updates)
     if (syncScheduledDate) {
-      bus.emit("task:updated", {
-        task: { id: taskId } as never,
-        changed: { scheduledDate: date },
+      await (await import("@/modules/tasks/store")).useTaskStore.getState().updateTask(taskId, {
+        scheduledDate: date,
+        scheduledAt: `${date}T${startTime}:00`,
+        scheduledDuration: endMinutes - (h * 60 + m)
       });
     }
 
@@ -393,10 +386,10 @@ export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get
         "SELECT * FROM planner_templates ORDER BY created_at DESC",
         []
       );
-      const templates: PlanTemplate[] = rows.map((r) => ({
+      const templates: PlannerTemplate[] = rows.map((r) => ({
         id:        r.id as string,
         name:      r.name as string,
-        blocks:    JSON.parse(r.blocks_json as string) as TemplateBlock[],
+        blocks:    JSON.parse(r.blocks as string || r.blocks_json as string),
         createdAt: r.created_at as string,
       }));
       set({ templates });
@@ -408,15 +401,15 @@ export const usePlannerStore = create<PlannerState & PlannerActions>()((set, get
   savePlanTemplate: async (name, date) => {
     await ensureTemplatesTable();
     const sourceBlocks = get().blocks.filter((b) => b.date === date);
-    const templateBlocks: TemplateBlock[] = sourceBlocks.map((b) => ({
-      title:     b.title,
+    const templateBlocks = sourceBlocks.map((b) => ({
+      title:     b.title || "Untitled",
       startTime: b.startTime,
       endTime:   b.endTime,
       color:     b.color,
-      isBreak:   b.isBreak,
-      notes:     b.notes,
+      isBreak:   b.isBreak || false,
+      notes:     b.notes || b.note,
     }));
-    const template: PlanTemplate = {
+    const template: PlannerTemplate = {
       id:        generateId(),
       name,
       blocks:    templateBlocks,
