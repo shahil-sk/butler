@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
+import { useGSAP } from "@gsap/react";
+import gsap from "gsap";
 import { useTaskStore } from "../store";
 import { TaskCard } from "./TaskCard";
 import type { Task } from "@/shared/types";
@@ -19,6 +21,15 @@ const COLUMNS = [
 export function KanbanView({ tasks, onOpenTask, onToggleComplete }: Props) {
   const updateTask = useTaskStore(s => s.updateTask);
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useGSAP(() => {
+    if (!containerRef.current) return;
+    gsap.fromTo(".kanban-col",
+      { y: 30, opacity: 0 },
+      { y: 0, opacity: 1, duration: 0.5, stagger: 0.1, ease: "power3.out" }
+    );
+  }, { scope: containerRef });
 
   const handleDragStart = (e: React.DragEvent, id: string) => {
     e.dataTransfer.setData("taskId", id);
@@ -39,7 +50,7 @@ export function KanbanView({ tasks, onOpenTask, onToggleComplete }: Props) {
   };
 
   return (
-    <div className="w-full h-full mt-4 px-4 md:px-8 pb-32 flex justify-start lg:justify-center gap-4 md:gap-8 overflow-x-auto max-w-[1600px] mx-auto">
+    <div ref={containerRef} className="w-full h-full mt-4 px-4 md:px-8 pb-32 flex justify-start lg:justify-center gap-4 md:gap-8 overflow-x-auto max-w-[1600px] mx-auto">
       {COLUMNS.map(col => {
         const colTasks = tasks.filter(t => 
           t.status === col.id || 
@@ -52,7 +63,7 @@ export function KanbanView({ tasks, onOpenTask, onToggleComplete }: Props) {
             onDrop={(e) => handleDrop(e, col.id)}
             onDragOver={handleDragOver}
             className={cn(
-              "flex flex-col flex-1 min-w-[320px] rounded-3xl border border-border/50",
+              "kanban-col flex flex-col flex-1 min-w-[320px] rounded-3xl border border-border/50",
               "transition-colors duration-300 backdrop-blur-sm",
               col.bg
             )}

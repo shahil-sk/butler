@@ -1,3 +1,6 @@
+import { useRef } from "react";
+import { useGSAP } from "@gsap/react";
+import gsap from "gsap";
 import { CheckCircle2, Circle, Calendar, Clock, ArrowRight } from "lucide-react";
 import type { Task } from "@/shared/types";
 import { cn, formatDate } from "@/shared/utils";
@@ -9,6 +12,15 @@ interface Props {
 }
 
 export function ListView({ tasks, onOpenTask, onToggleComplete }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useGSAP(() => {
+    if (!containerRef.current) return;
+    gsap.fromTo(".list-item-row",
+      { x: -20, opacity: 0 },
+      { x: 0, opacity: 1, duration: 0.4, stagger: 0.05, ease: "power2.out" }
+    );
+  }, { scope: containerRef });
   if (tasks.length === 0) {
     return (
       <div className="py-32 text-center">
@@ -18,13 +30,13 @@ export function ListView({ tasks, onOpenTask, onToggleComplete }: Props) {
   }
 
   return (
-    <div className="w-full max-w-5xl mx-auto px-4 md:px-8 pt-32 pb-32 flex flex-col gap-2">
+    <div ref={containerRef} className="w-full max-w-5xl mx-auto px-4 md:px-8 pt-32 pb-32 flex flex-col gap-2">
       {tasks.map(task => (
         <div 
           key={task.id}
           onClick={() => onOpenTask(task.id)}
           className={cn(
-            "group flex items-center justify-between p-4 rounded-2xl cursor-pointer",
+            "list-item-row group flex items-center justify-between p-4 rounded-2xl cursor-pointer",
             "bg-card/30 hover:bg-card/80 border border-transparent hover:border-border/50",
             "transition-all duration-300",
             task.status === "done" && "opacity-50 grayscale"
