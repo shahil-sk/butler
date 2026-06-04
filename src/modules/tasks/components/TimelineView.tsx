@@ -44,7 +44,7 @@ export function TimelineView({ tasks, onOpenTask }: Props) {
   }
 
   return (
-    <div ref={containerRef} className="relative w-full max-w-5xl mx-auto py-24 px-4 md:px-8">
+    <div ref={containerRef} className="relative w-full mx-auto py-24 px-4 md:px-8">
       {/* Center Vertical Line */}
       <div className="absolute left-4 md:left-1/2 top-0 bottom-0 w-[2px] bg-gradient-to-b from-transparent via-border to-transparent md:-translate-x-1/2" />
 

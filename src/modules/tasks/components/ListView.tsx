@@ -18,7 +18,7 @@ export function ListView({ tasks, onOpenTask, onToggleComplete }: Props) {
   }
 
   return (
-    <div className="w-full max-w-5xl mx-auto px-4 md:px-8 pt-32 pb-32 flex flex-col gap-2">
+    <div className="w-full mx-auto px-4 md:px-8 pt-8 pb-32 flex flex-col gap-2">
       {tasks.map((task, i) => (
         <div 
           key={task.id}

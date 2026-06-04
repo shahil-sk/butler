@@ -42,7 +42,7 @@ export function BentoGrid({ tasks, onOpenTask, onToggleComplete, priorityFilter,
   }
 
   return (
-    <div ref={gridRef} className="w-full max-w-7xl mx-auto px-4 md:px-8 pb-32 flex justify-center">
+    <div ref={gridRef} className="w-full mx-auto px-4 md:px-8 pb-32 flex justify-center">
       <div className="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 auto-rows-min gap-4 md:gap-6 place-content-center" style={{ gridAutoFlow: 'dense' }}>
         {filteredTasks.map((task) => (
           <TaskCard 
