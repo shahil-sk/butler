@@ -12,8 +12,10 @@ import {
   BarChart2, Clock, DollarSign, Tag, Play, Pause,
   Zap, Target, ChevronDown, ChevronUp, Moon, ChevronRight,
   FileText, Smile, AlertCircle, Copy, Volume2, VolumeX,
-  Flame, TrendingUp,
+  Flame, TrendingUp, LayoutGrid, List
 } from "lucide-react";
+import { useGSAP } from "@gsap/react";
+import gsap from "gsap";
 
 import { registry } from "@/kernel/router";
 import { RichEditor } from "@/shared/RichEditor";
@@ -1245,75 +1247,84 @@ function ReportsTab() {
 }
 
 export default function FocusModule() {
+  const [activeView, setActiveView] = useState<"focus" | "tracker" | "reports">(() => {
+    return (localStorage.getItem("focus_view") as any) || "focus";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("focus_view", activeView);
+  }, [activeView]);
+
+  useGSAP(() => {
+    gsap.from(".view-content", {
+      y: 20,
+      opacity: 0,
+      duration: 0.4,
+      ease: "power2.out",
+      clearProps: "all"
+    });
+  }, [activeView]);
+
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-background">
-      {/* Active timer banner (cross-tab) */}
-      <ActiveTimerBanner onJump={() => {}} />
-
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 pt-6 pb-3 border-b border-border/40 shrink-0 gap-4 flex-wrap md:flex-nowrap bg-background">
-        <div>
-          <h1 className="text-[20px] font-bold leading-tight tracking-tight text-gradient">Time & Focus Dashboard</h1>
-          <p className="text-[12px] text-muted-foreground mt-0.5 leading-tight font-medium">All your time tracking and pomodoro sessions in one place</p>
-        </div>
+    <main className="w-full h-full overflow-y-auto overflow-x-hidden bg-background text-foreground pb-32">
+      
+      {/* Top Glass Navigation */}
+      <div className="sticky top-6 mx-auto w-fit z-50 flex items-center gap-2 p-2 bg-card/70 backdrop-blur-xl border border-border/50 rounded-full shadow-2xl mb-8">
+        <button
+          onClick={() => setActiveView("focus")}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all",
+            activeView === "focus" ? "bg-foreground text-background shadow-md" : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Target size={16} /> Focus
+        </button>
+        <button
+          onClick={() => setActiveView("tracker")}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all",
+            activeView === "tracker" ? "bg-foreground text-background shadow-md" : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Clock size={16} /> Tracker
+        </button>
+        <button
+          onClick={() => setActiveView("reports")}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all",
+            activeView === "reports" ? "bg-foreground text-background shadow-md" : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <BarChart2 size={16} /> Reports
+        </button>
       </div>
 
-      <div className="flex-1 overflow-hidden bg-background flex flex-col lg:flex-row">
-        {/* Left Sidebar (Focus History) */}
-        <div className="hidden lg:block border-r border-border/40 h-full w-[250px] shrink-0">
-          <FocusTabHistoryOnly />
-        </div>
-
-        {/* Main Dashboard Content */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 space-y-8">
-          
-          {/* Top Row: Focus + Time Tracker Quick View */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
-            
-            {/* Focus Control Panel */}
-            <div className="rounded-xl border border-border/50 bg-card shadow-sm overflow-hidden flex flex-col" style={{ minHeight: '500px' }}>
-              <div className="px-4 py-3 border-b border-border/40 bg-muted/20">
-                <h2 className="text-sm font-semibold flex items-center gap-2">
-                  <Target size={14} className="text-primary" />
-                  Focus Session
-                </h2>
-              </div>
-              <div className="flex-1 p-4 relative overflow-y-auto flex items-center justify-center">
-                <FocusTabCoreOnly />
-              </div>
+      <div className="px-6 lg:px-12 max-w-7xl mx-auto view-content h-full">
+        {activeView === "focus" && (
+          <div className="flex flex-col lg:flex-row gap-6 h-[80vh]">
+            <div className="hidden lg:block border border-border/40 rounded-3xl h-full w-[300px] shrink-0 bg-card/50 overflow-hidden">
+              <FocusTabHistoryOnly />
             </div>
-
-            {/* Time Tracker Panel */}
-            <div className="rounded-xl border border-border/50 bg-card shadow-sm overflow-hidden flex flex-col" style={{ minHeight: '500px' }}>
-              <div className="px-4 py-3 border-b border-border/40 bg-muted/20">
-                <h2 className="text-sm font-semibold flex items-center gap-2">
-                  <Clock size={14} className="text-emerald-500" />
-                  Time Tracker
-                </h2>
-              </div>
-              <div className="flex-1 overflow-y-auto">
-                <TrackerTab />
-              </div>
-            </div>
-
-          </div>
-
-          {/* Bottom Row: Reports */}
-          <div className="rounded-xl border border-border/50 bg-card shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-border/40 bg-muted/20">
-              <h2 className="text-sm font-semibold flex items-center gap-2">
-                <BarChart2 size={14} className="text-blue-500" />
-                Reports & Analytics
-              </h2>
-            </div>
-            <div className="h-[400px]">
-              <ReportsTab />
+            <div className="flex-1 rounded-3xl border border-border/50 bg-card shadow-sm overflow-hidden flex flex-col items-center justify-center p-8">
+              <FocusTabCoreOnly />
             </div>
           </div>
-          
-        </div>
+        )}
+
+        {activeView === "tracker" && (
+          <div className="rounded-3xl border border-border/50 bg-card shadow-sm overflow-hidden flex flex-col h-[80vh]">
+            <TrackerTab />
+          </div>
+        )}
+
+        {activeView === "reports" && (
+          <div className="rounded-3xl border border-border/50 bg-card shadow-sm overflow-hidden h-[80vh]">
+            <ReportsTab />
+          </div>
+        )}
       </div>
-    </div>
+
+    </main>
   );
 }
 
