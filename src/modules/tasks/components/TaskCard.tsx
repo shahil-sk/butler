@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { CheckCircle2, Circle, Calendar, ArrowRight, Repeat, Link as LinkIcon, Network, GitBranch, Clock, Sun, CalendarDays, CalendarRange } from "lucide-react";
+import { CheckCircle2, Circle, Calendar, ArrowRight, Repeat, Link as LinkIcon, Network, GitBranch, Clock, Sun, CalendarDays, CalendarRange, AlertCircle } from "lucide-react";
 import { format, isValid } from "date-fns";
 import { cn } from "@/shared/utils";
 import type { Task } from "@/shared/types";
@@ -58,6 +58,28 @@ export function TaskCard({ task, onOpen, onToggleComplete, onPriorityClick }: Pr
   const isWide = task.title.length > 50;
 
   const prio = task.priority ? priorityConfig[task.priority] : null;
+
+  const todayDate = new Date();
+  todayDate.setHours(0, 0, 0, 0);
+
+  let dueStatus: { label: string; class: string; icon: React.ReactNode } | null = null;
+  const targetDateStr = task.dueDate || task.scheduledDate;
+
+  if (targetDateStr && task.status !== "done") {
+    const d = new Date(targetDateStr);
+    d.setHours(0, 0, 0, 0);
+    const diffDays = Math.round((d.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) {
+      dueStatus = { label: "Overdue", class: "bg-red-500/10 text-red-500 border-red-500/30", icon: <AlertCircle size={12} /> };
+    } else if (diffDays === 0) {
+      dueStatus = { label: "Due Today", class: "bg-orange-500/10 text-orange-500 border-orange-500/30", icon: <Clock size={12} /> };
+    } else if (diffDays === 1) {
+      dueStatus = { label: "Due Tomorrow", class: "bg-amber-500/10 text-amber-500 border-amber-500/30", icon: <Calendar size={12} /> };
+    } else if (diffDays <= 3) {
+      dueStatus = { label: `Due in ${diffDays}d`, class: "bg-blue-500/10 text-blue-500 border-blue-500/30", icon: <Calendar size={12} /> };
+    }
+  }
   
   return (
     <div
@@ -116,10 +138,16 @@ export function TaskCard({ task, onOpen, onToggleComplete, onPriorityClick }: Pr
               {project.name}
             </span>
           )}
-          {task.scheduledDate && (
+          {dueStatus && (
+            <span className={cn("flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border", dueStatus.class)}>
+              {dueStatus.icon}
+              {dueStatus.label}
+            </span>
+          )}
+          {!dueStatus && targetDateStr && (
             <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest">
               <Calendar size={12} />
-              {formatTaskDate(task.scheduledDate)}
+              {formatTaskDate(targetDateStr)}
             </span>
           )}
         </div>
