@@ -50,7 +50,7 @@ export function KanbanView({ tasks, onOpenTask, onToggleComplete }: Props) {
   };
 
   return (
-    <div ref={containerRef} className="w-full h-full mt-4 px-4 md:px-8 pb-32 flex gap-4 md:gap-8 overflow-x-auto">
+    <div ref={containerRef} className="w-full min-h-[calc(100vh-180px)] mt-4 px-4 md:px-8 pb-32 flex gap-4 md:gap-8 overflow-x-auto">
       {COLUMNS.map(col => {
         const colTasks = tasks.filter(t => 
           t.status === col.id || 
