@@ -125,22 +125,22 @@ export function CalendarModule() {
     <div className="flex flex-col h-full bg-background overflow-hidden relative pt-4">
 
       {/* Glassmorphism Toolbar (View Selector) at the very top */}
-      <div className="z-[80] mx-auto mb-2 animate-slide-in shrink-0" style={{ animationDelay: '200ms', animationFillMode: 'both' }}>
-        <div className="flex items-center gap-4 px-6 py-3 bg-background/60 backdrop-blur-2xl border border-border/50 shadow-2xl rounded-full">
-          <div className="flex items-center gap-1">
-            <button onClick={goPrev} className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-fast" aria-label="Previous">
+      <div className="z-[80] mx-auto mb-8 animate-slide-in shrink-0 w-fit" style={{ animationDelay: '200ms', animationFillMode: 'both' }}>
+        <div className="flex items-center gap-2 p-2 bg-card/70 backdrop-blur-xl border border-border/50 rounded-full shadow-2xl">
+          <div className="flex items-center gap-1 pl-2">
+            <button onClick={goPrev} className="p-1.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-fast" aria-label="Previous">
               <ChevronLeft size={16} />
             </button>
-            <button onClick={goNext} className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-fast" aria-label="Next">
+            <button onClick={goNext} className="p-1.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-fast" aria-label="Next">
               <ChevronRight size={16} />
             </button>
           </div>
 
-          <h2 onClick={goToday} className="text-sm font-bold tracking-widest uppercase hover:text-primary transition-colors hover:cursor-pointer min-w-[120px] text-center">
+          <h2 onClick={goToday} className="text-sm font-semibold hover:text-primary transition-colors hover:cursor-pointer min-w-[120px] text-center">
             {headerLabel}
           </h2>
           
-          <div className="w-[1px] h-4 bg-border/80" />
+          <div className="w-[1px] h-6 bg-border/60 mx-1" />
 
           {/* Jump-to-date button */}
           <button
@@ -152,34 +152,36 @@ export function CalendarModule() {
             <Search size={16} />
           </button>
 
-          <div className="flex items-center gap-2 bg-muted/40 p-1 rounded-full">
-            {(Object.keys(VIEW_LABELS) as (keyof typeof VIEW_LABELS)[]).map((v) => (
-              <button
-                key={v}
-                onClick={() => setView(v)}
-                className={cn(
-                  "px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-200",
-                  view === v
-                    ? "bg-background text-foreground shadow-sm shadow-black/5"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent/40"
-                )}
-              >
-                {VIEW_LABELS[v]}
-              </button>
-            ))}
-          </div>
+          <div className="w-[1px] h-6 bg-border/60 mx-1" />
+
+          {(Object.keys(VIEW_LABELS) as (keyof typeof VIEW_LABELS)[]).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all",
+                view === v
+                  ? "bg-foreground text-background shadow-md"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {VIEW_LABELS[v]}
+            </button>
+          ))}
+
+          <div className="w-[1px] h-6 bg-border/60 mx-1" />
 
           <button
             onClick={() => setShowProjectsLayer(!showProjectsLayer)}
             className={cn(
-              "flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold rounded-full transition-fast border",
+              "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all",
               showProjectsLayer 
-                ? "bg-indigo-500/10 text-indigo-500 border-indigo-500/20"
-                : "text-muted-foreground hover:bg-accent/40 border-transparent"
+                ? "bg-indigo-500/10 text-indigo-500"
+                : "text-muted-foreground hover:bg-muted"
             )}
             title="Toggle Projects layer (milestones)"
           >
-            <Layers size={14} />
+            <Layers size={16} />
             Projects
           </button>
         </div>
