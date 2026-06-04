@@ -13,7 +13,10 @@ import {
   startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   format, parseISO,
 } from "date-fns";
-import { ChevronLeft, ChevronRight, Plus, Calendar, Layers } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Calendar, Layers, Search } from "lucide-react";
+import { useGSAP } from "@gsap/react";
+import gsap from "gsap";
+import { useRef } from "react";
 import { cn } from "@/shared/utils";
 import { useCalendarStore } from "./store";
 import { MonthGrid }          from "./components/MonthGrid";
@@ -28,6 +31,38 @@ import { useTaskStore }       from "@/modules/tasks/store";
 const loadNotes = () => {};
 
 const VIEW_LABELS = { month: "Month", week: "Week", day: "Day", agenda: "Agenda" } as const;
+
+function CalendarHeroHeader({ anchor, eventsCount }: { anchor: Date, eventsCount: number }) {
+  const container = useRef<HTMLDivElement>(null);
+  
+  useGSAP(() => {
+    gsap.from(".hero-text", {
+      y: 30,
+      opacity: 0,
+      duration: 1,
+      stagger: 0.1,
+      ease: "power4.out"
+    });
+  }, { scope: container });
+
+  return (
+    <div ref={container} className="relative w-full px-4 md:px-8 mx-auto pt-16 pb-12 flex flex-col items-center text-center shrink-0">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/20 blur-[120px] rounded-full pointer-events-none -z-10" />
+      
+      <p className="hero-text text-sm md:text-base font-medium tracking-widest uppercase text-muted-foreground mb-4">
+        {format(anchor, "EEEE, MMMM do")}
+      </p>
+      
+      <h1 className="hero-text text-5xl md:text-[5rem] font-black tracking-tighter leading-[0.9] text-foreground max-w-5xl mx-auto flex flex-wrap justify-center items-center gap-x-4 gap-y-2">
+        <span>You have</span>
+        <span className="relative inline-block px-6 py-2 bg-primary text-primary-foreground rounded-full -rotate-2 transform hover:rotate-0 transition-transform duration-500 shadow-2xl">
+          {eventsCount} events
+        </span>
+        <span>this {format(anchor, "MMMM")}.</span>
+      </h1>
+    </div>
+  );
+}
 
 export function CalendarModule() {
   const {
@@ -83,39 +118,60 @@ export function CalendarModule() {
     return format(anchor, "MMMM yyyy");
   })();
 
+  const allEvents = useCalendarStore(s => s.events);
+  const eventsCount = allEvents.filter(e => e.startAt >= from.toISOString() && e.startAt <= to.toISOString()).length;
+
   return (
-    <div className="flex flex-col h-full bg-background">
-      {/* Toolbar */}
-      <div className="flex items-center gap-4 px-4 py-2 border-b border-border shrink-0">
-        <button onClick={goPrev} className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-fast" aria-label="Previous">
-          <ChevronLeft size={14} />
-        </button>
-        <button onClick={goNext} className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-fast" aria-label="Next">
-          <ChevronRight size={14} />
-        </button>
+    <div className="flex flex-col h-full bg-background overflow-y-auto overflow-x-hidden relative">
+      
+      <CalendarHeroHeader anchor={anchor} eventsCount={eventsCount} />
 
-        <h1 onClick={goToday} className="text-[24px] font-semibold tracking-tight text-gradient flex-1 text-center md:text-center md:pl-2 min-w-[150px] hover:cursor-pointer">{headerLabel}</h1>
-        
-        {/* Jump-to-date button */}
-        <button
-          onClick={() => setJumpOpen(true)}
-          title="Jump to date (Ctrl+G)"
-          className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-fast"
-          aria-label="Jump to date"
-        >
-          <Calendar size={13} />
-        </button>
+      {/* Floating Action CTA */}
+      <button 
+        onClick={() => openEventForm({ startAt: `${activeDate}T09:00:00`, endAt: `${activeDate}T10:00:00` })}
+        className="fixed bottom-8 right-8 z-[90] w-16 h-16 bg-primary text-primary-foreground rounded-full shadow-[0_8px_40px_-12px_rgba(0,0,0,0.5)] flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-300"
+        title="New Event"
+      >
+        <Plus size={32} />
+      </button>
 
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-0.5 bg-muted/40 dark:bg-muted/20 p-0.5 border border-border/30 rounded-xl shrink-0">
+      {/* Glassmorphism Toolbar */}
+      <div className="sticky top-4 z-[80] mx-auto mb-8 animate-slide-in" style={{ animationDelay: '300ms', animationFillMode: 'both' }}>
+        <div className="flex items-center gap-4 px-6 py-3 bg-background/60 backdrop-blur-2xl border border-border/50 shadow-2xl rounded-full">
+          <div className="flex items-center gap-1">
+            <button onClick={goPrev} className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-fast" aria-label="Previous">
+              <ChevronLeft size={16} />
+            </button>
+            <button onClick={goNext} className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-fast" aria-label="Next">
+              <ChevronRight size={16} />
+            </button>
+          </div>
+
+          <h2 onClick={goToday} className="text-sm font-bold tracking-widest uppercase hover:text-primary transition-colors hover:cursor-pointer min-w-[120px] text-center">
+            {headerLabel}
+          </h2>
+          
+          <div className="w-[1px] h-4 bg-border/80" />
+
+          {/* Jump-to-date button */}
+          <button
+            onClick={() => setJumpOpen(true)}
+            title="Jump to date (Ctrl+G)"
+            className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-fast"
+            aria-label="Jump to date"
+          >
+            <Search size={16} />
+          </button>
+
+          <div className="flex items-center gap-2 bg-muted/40 p-1 rounded-full">
             {(Object.keys(VIEW_LABELS) as (keyof typeof VIEW_LABELS)[]).map((v) => (
               <button
                 key={v}
                 onClick={() => setView(v)}
                 className={cn(
-                  "px-3 py-1.5 rounded-lg text-[12px] font-bold transition-all duration-200",
+                  "px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-200",
                   view === v
-                    ? "bg-background text-foreground shadow-sm shadow-black/5 border border-border/20"
+                    ? "bg-background text-foreground shadow-sm shadow-black/5"
                     : "text-muted-foreground hover:text-foreground hover:bg-accent/40"
                 )}
               >
@@ -127,46 +183,40 @@ export function CalendarModule() {
           <button
             onClick={() => setShowProjectsLayer(!showProjectsLayer)}
             className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl transition-fast shrink-0",
+              "flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold rounded-full transition-fast border",
               showProjectsLayer 
-                ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800"
-                : "text-muted-foreground hover:bg-accent/40 border border-transparent"
+                ? "bg-indigo-500/10 text-indigo-500 border-indigo-500/20"
+                : "text-muted-foreground hover:bg-accent/40 border-transparent"
             )}
             title="Toggle Projects layer (milestones)"
           >
-            <Layers size={12} />
+            <Layers size={14} />
             Projects
-          </button>
-
-          <button
-            onClick={() => openEventForm({ startAt: `${activeDate}T09:00:00`, endAt: `${activeDate}T10:00:00` })}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-primary text-primary-foreground hover:bg-primary/95 transition-fast shadow-sm shadow-primary/25 shrink-0"
-          >
-            <Plus size={12} />
-            New event
           </button>
         </div>
       </div>
 
       {/* Main content area */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-        <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-          {(view === "month" || view === "week") && (
-            <div className="grid grid-cols-7 border-b border-border shrink-0">
-              {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d) => (
-                <div key={d} className="py-1.5 text-center text-[11px] font-medium text-muted-foreground">{d}</div>
-              ))}
-            </div>
-          )}
+      <div className="flex flex-col flex-1 min-h-[800px] max-w-[1400px] w-full mx-auto px-4 md:px-8 pb-32 animate-slide-in" style={{ animationDelay: '400ms', animationFillMode: 'both' }}>
+        <div className="flex flex-1 rounded-[2rem] border border-border/50 bg-card/30 backdrop-blur-xl shadow-2xl overflow-hidden relative">
+          <div className="flex flex-col flex-1 min-w-0 overflow-hidden bg-background/50">
+            {(view === "month" || view === "week") && (
+              <div className="grid grid-cols-7 border-b border-border/50 shrink-0 bg-muted/20">
+                {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d) => (
+                  <div key={d} className="py-3 text-center text-xs font-bold tracking-widest uppercase text-muted-foreground/70">{d}</div>
+                ))}
+              </div>
+            )}
 
-          {view === "month"  && <MonthGrid />}
-          {view === "week"   && <WeekView />}
-          {view === "day"    && <DayView />}
-          {view === "agenda" && <AgendaView />}
+            {view === "month"  && <MonthGrid />}
+            {view === "week"   && <WeekView />}
+            {view === "day"    && <DayView />}
+            {view === "agenda" && <AgendaView />}
+          </div>
+
+          {/* Mini agenda sidebar — only on month view */}
+          {view === "month" && <MiniAgendaSidebar />}
         </div>
-
-        {/* Mini agenda sidebar — only on month view */}
-        {view === "month" && <MiniAgendaSidebar />}
       </div>
 
       <EventForm />

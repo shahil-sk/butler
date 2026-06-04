@@ -3,6 +3,7 @@ import { db } from "@/kernel/db";
 import { bus } from "@/kernel/event-bus";
 import { generateId, now, today, toISODate } from "@/shared/utils";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addMonths, subMonths, addWeeks, subWeeks } from "date-fns";
+import { getHolidaysInRange } from "./holidays";
 import { useTaskStore } from "@/modules/tasks/store";
 import type { CalendarEvent, Calendar, ID } from "@/shared/types";
 
@@ -307,7 +308,9 @@ export const useCalendarStore = create<CalendarState & CalendarActions>()((set, 
       }
     });
 
-    return [...taskEvents, ...rawEvents];
+    const holidays = getHolidaysInRange(from, to);
+
+    return [...taskEvents, ...rawEvents, ...holidays];
   },
 
   getEventsForDay: (date) => {
