@@ -27,8 +27,14 @@ export function TasksModule() {
 
   const activeTasks = useMemo(() => {
     const pWeight = { urgent: 4, high: 3, medium: 2, low: 1, none: 0 };
+    const tDay = new Date().toISOString().slice(0, 10);
     return tasks
-      .filter(t => t.status !== "archived" && t.status !== "done")
+      .filter(t => {
+        if (t.status === "archived" || t.status === "done") return false;
+        const date = t.scheduledDate || t.dueDate;
+        if (!date) return true;
+        return date <= tDay;
+      })
       .sort((a, b) => {
         const pA = a.priority ? pWeight[a.priority as keyof typeof pWeight] || 0 : 0;
         const pB = b.priority ? pWeight[b.priority as keyof typeof pWeight] || 0 : 0;

@@ -42,12 +42,20 @@ export function HeroHeader({ priorityFilter, onPriorityFilter }: HeroHeaderProps
   const container = useRef<HTMLDivElement>(null);
   const tasks = useTaskStore((s) => s.tasks);
   
-  const incomplete = tasks.filter(t => t.status !== "done" && t.status !== "archived").length;
+  const tDay = new Date().toISOString().slice(0, 10);
+  const activeTasks = tasks.filter(t => {
+    if (t.status === "done" || t.status === "archived") return false;
+    const date = t.scheduledDate || t.dueDate;
+    if (!date) return true;
+    return date <= tDay;
+  });
+  
+  const incomplete = activeTasks.length;
   const counts: Record<string, number> = {
-    urgent: tasks.filter(t => t.status !== "done" && t.priority === "urgent").length,
-    high:   tasks.filter(t => t.status !== "done" && t.priority === "high").length,
-    medium: tasks.filter(t => t.status !== "done" && t.priority === "medium").length,
-    low:    tasks.filter(t => t.status !== "done" && t.priority === "low").length,
+    urgent: activeTasks.filter(t => t.priority === "urgent").length,
+    high:   activeTasks.filter(t => t.priority === "high").length,
+    medium: activeTasks.filter(t => t.priority === "medium").length,
+    low:    activeTasks.filter(t => t.priority === "low").length,
   };
 
   useGSAP(() => {
