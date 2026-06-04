@@ -176,31 +176,7 @@ export function IntegrationLayer() {
         notify({ type: "info", message: `Active focus session completed with task.`, durationMs: 2500 });
       }
 
-      // ⑥ Auto-spawn next instance of recurring task
-      if (task && task.recurrence) {
-        const nextDate = getNextRecurrenceDate(task.dueDate ?? today(), task.recurrence);
-        if (nextDate) {
-          void useTaskStore.getState().createTask({
-            title: task.title,
-            description: task.description,
-            priority: task.priority,
-            projectId: task.projectId,
-            parentTaskId: task.parentTaskId,
-            labels: task.labels,
-            tags: task.tags,
-            dueDate: nextDate,
-            estimateMinutes: task.estimateMinutes,
-            recurrence: task.recurrence,
-            dependencies: task.dependencies,
-          }).then((newInst) => {
-            notify({
-              type: "success",
-              message: `Recurring task spawned for ${nextDate}`,
-              durationMs: 3000,
-            });
-          });
-        }
-      }
+      // ⑥ Auto-spawn next instance of recurring task (REMOVED - Handled natively by store.ts completeTask)
 
       // ⑦ Check for unblocked dependents
       const allTasks = useTaskStore.getState().tasks;
@@ -290,13 +266,19 @@ export function IntegrationLayer() {
 
     // task:updated → if scheduledDate changed, shift the corresponding planner blocks to match!
     unsubs.push(bus.on("task:updated", ({ task, changed }) => {
-      if (changed.scheduledDate) {
+      if ("scheduledDate" in changed) {
         const blocks = usePlannerStore.getState().blocks.filter((b) => b.taskId === task.id);
-        blocks.forEach((block) => {
-          if (block.date !== changed.scheduledDate) {
-            void usePlannerStore.getState().updateBlock(block.id, { date: changed.scheduledDate });
-          }
-        });
+        if (changed.scheduledDate) {
+          blocks.forEach((block) => {
+            if (block.date !== changed.scheduledDate) {
+              void usePlannerStore.getState().updateBlock(block.id, { date: changed.scheduledDate });
+            }
+          });
+        } else if (changed.scheduledDate === undefined) {
+          blocks.forEach((block) => {
+            void usePlannerStore.getState().deleteBlock(block.id);
+          });
+        }
       }
     }));
 

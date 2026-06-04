@@ -65,7 +65,20 @@ export function getNextRecurrenceDate(currentDateStr: string, rule: RecurrenceRu
       }
       break;
     case "monthly":
-      nextDate = addMonths(currentDate, interval);
+      if (rule.dayOfMonth && rule.dayOfMonth >= 1 && rule.dayOfMonth <= 31) {
+        let currentMonthTarget = new Date(currentDate.getFullYear(), currentDate.getMonth(), rule.dayOfMonth);
+        // ensure day isn't past end of month
+        if (currentMonthTarget.getMonth() !== currentDate.getMonth()) {
+          currentMonthTarget = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+        }
+        if (currentMonthTarget > currentDate) {
+          nextDate = currentMonthTarget;
+        } else {
+          nextDate = addMonths(currentMonthTarget, interval);
+        }
+      } else {
+        nextDate = addMonths(currentDate, interval);
+      }
       break;
     case "yearly":
       nextDate = addYears(currentDate, interval);
@@ -88,10 +101,15 @@ export function getNextRecurrenceDate(currentDateStr: string, rule: RecurrenceRu
 export function formatDate(date: ISODate | ISODateTime | undefined): string {
   if (!date) return "";
   const d = parseISO(date);
-  if (isToday(d)) return "Today";
-  if (isTomorrow(d)) return "Tomorrow";
-  if (isYesterday(d)) return "Yesterday";
-  return format(d, "MMM d, yyyy");
+  
+  const hasTime = date.includes("T");
+  const timeStr = hasTime ? ", " + format(d, "h:mm a") : "";
+
+  if (isToday(d)) return "Today" + timeStr;
+  if (isTomorrow(d)) return "Tomorrow" + timeStr;
+  if (isYesterday(d)) return "Yesterday" + timeStr;
+  
+  return format(d, "MMM d, yyyy") + timeStr;
 }
 
 export function formatRelative(date: ISODateTime): string {

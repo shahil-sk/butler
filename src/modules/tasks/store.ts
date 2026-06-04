@@ -6,7 +6,7 @@
 import { create } from "zustand";
 import { db } from "@/kernel/db";
 import { bus } from "@/kernel/event-bus";
-import { generateId, now, today } from "@/shared/utils";
+import { getNextRecurrenceDate, generateId, now, today } from "@/shared/utils";
 import { parseNaturalTaskInput } from "./nlp";
 import type { Task, Priority, TaskStatus, ChecklistItem, RecurrenceRule, ID } from "@/shared/types";
 
@@ -81,7 +81,7 @@ const UPDATE_SQL = `
   UPDATE tasks SET
     title=?, description=?, status=?, priority=?, due_date=?, due_time=?, start_date=?, scheduled_at=?,
     scheduled_duration=?, completed_at=?, cancelled_at=?, project_id=?, parent_task_id=?, goal_id=?, assignee_id=?,
-    recurrence_rule=?, recurrence_parent=?, next_occurrence_at=?, estimate_minutes=?, actual_minutes=?,
+    recurrence=?, recurrence_rule=?, recurrence_parent=?, next_occurrence_at=?, estimate_minutes=?, actual_minutes=?,
     energy_level=?, context=?, size=?, tags=?, labels=?, watchers=?, attachments=?, depends_on=?, blocks=?,
     checklist_items=?, custom_fields=?, position=?, section_id=?, updated_at=?, version=?,
     linked_note_ids=?, linked_event_ids=?, linked_planner_block_ids=?, linked_research_ids=?, sort_order=?, dependencies=?
@@ -103,7 +103,7 @@ function updateParams(t: Task): unknown[] {
   return [
     t.title, t.description ?? null, t.status, t.priority, t.dueDate ?? null, t.dueTime ?? null, t.startDate ?? null, t.scheduledDate ?? t.scheduledAt ?? null,
     t.scheduledDuration ?? null, t.completedAt ?? null, t.cancelledAt ?? null, t.projectId ?? null, t.parentTaskId ?? null, t.goalId ?? null, t.assigneeId ?? null,
-    t.recurrenceRule ?? null, t.recurrenceParent ?? null, t.nextOccurrenceAt ?? null, t.estimateMinutes ?? null, t.actualMinutes ?? null,
+    t.recurrence ? JSON.stringify(t.recurrence) : null, t.recurrenceRule ?? null, t.recurrenceParent ?? null, t.nextOccurrenceAt ?? null, t.estimateMinutes ?? null, t.actualMinutes ?? null,
     t.energyLevel ?? null, JSON.stringify(t.context ?? []), t.size ?? null, JSON.stringify(t.tags ?? []), JSON.stringify(t.labels ?? []), JSON.stringify(t.watchers ?? []), JSON.stringify(t.attachments ?? []), JSON.stringify(t.dependsOn ?? []), JSON.stringify(t.blocks ?? []),
     JSON.stringify(t.checklistItems ?? []), t.customFields ? JSON.stringify(t.customFields) : null, t.position ?? 0, t.sectionId ?? null, t.updatedAt, t.version ?? 1,
     JSON.stringify(t.linkedNoteIds ?? []), JSON.stringify(t.linkedEventIds ?? []), JSON.stringify(t.linkedPlannerBlockIds ?? []), JSON.stringify(t.linkedResearchIds ?? []),
@@ -513,37 +513,7 @@ function addDays(isoDate: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-function nextRecurringDate(rule: RecurrenceRule, fromDate: string): string | null {
-  if (rule.frequency === "daily") {
-    return addDays(fromDate, rule.interval || 1);
-  }
-  if (rule.frequency === "weekly") {
-    const base = addDays(fromDate, (rule.interval || 1) * 7);
-    if (rule.daysOfWeek && rule.daysOfWeek.length > 0) {
-      // Find next matching weekday on or after base
-      const d = new Date(base + "T00:00:00");
-      for (let i = 0; i < 7; i++) {
-        if (rule.daysOfWeek.includes(d.getDay())) {
-          return d.toISOString().slice(0, 10);
-        }
-        d.setDate(d.getDate() + 1);
-      }
-    }
-    return base;
-  }
-  if (rule.frequency === "monthly") {
-    const d = new Date(fromDate + "T00:00:00");
-    d.setMonth(d.getMonth() + (rule.interval || 1));
-    return d.toISOString().slice(0, 10);
-  }
-  if (rule.frequency === "yearly") {
-    const d = new Date(fromDate + "T00:00:00");
-    d.setFullYear(d.getFullYear() + (rule.interval || 1));
-    return d.toISOString().slice(0, 10);
-  }
-  // custom: treat same as daily with interval
-  return addDays(fromDate, rule.interval || 1);
-}
+// nextRecurringDate is removed, we use getNextRecurrenceDate from utils
 
 async function spawnNextRecurring(
   completed: Task,
@@ -555,7 +525,7 @@ async function spawnNextRecurring(
   // Respect endDate / count (simple guard)
   if (rule.endDate && fromDate >= rule.endDate) return;
 
-  const nextDate = nextRecurringDate(rule, fromDate);
+  const nextDate = getNextRecurrenceDate(fromDate, rule);
   if (!nextDate) return;
   if (rule.endDate && nextDate > rule.endDate) return;
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Plus, LayoutGrid, List, FolderKanban, AlertTriangle, CalendarRange } from "lucide-react";
 import { registry } from "@/kernel/router";
 import { projectsManifest } from "./manifest";
@@ -238,7 +238,6 @@ function KpiCard({
     </div>
   );
 }
-
 // ── Module ───────────────────────────────────────────────────
 export function ProjectsModule() {
   const {
@@ -246,11 +245,15 @@ export function ProjectsModule() {
     openProjectId, createModalOpen,
     openCreateModal, activeFilter, setActiveFilter,
   } = useProjectStore();
+  const { loadTasks } = useTaskStore();
 
   const allTasks = useTaskStore((s) => s.tasks);
   const [view, setView] = useState<"grid" | "list" | "board" | "timeline">("grid");
 
-  useEffect(() => { void loadProjects(); }, []);
+  useEffect(() => {
+    void loadProjects();
+    void loadTasks();
+  }, [loadProjects, loadTasks]);
 
   const projects = getFilteredProjects();
 

@@ -134,6 +134,7 @@ export interface RecurrenceRule {
   frequency: "daily" | "weekly" | "monthly" | "yearly" | "custom";
   interval: number;
   daysOfWeek?: number[];       // 0=Sun … 6=Sat
+  dayOfMonth?: number;         // 1..31
   endDate?: ISODate;
   count?: number;
 }
