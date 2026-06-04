@@ -13,8 +13,10 @@
 // linking is for manual context (meeting notes, focus tasks).
 // ============================================================
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { X, Calendar, CheckSquare, FileText, Timer, Repeat, Search } from "lucide-react";
+import { useGSAP } from "@gsap/react";
+import gsap from "gsap";
 import { cn } from "@/shared/utils";
 import { useCalendarStore } from "./store";
 import { useTaskStore } from "@/modules/tasks/store";
@@ -141,13 +143,31 @@ export function EventForm() {
 
   const linkCount = linkedTasks.length + linkedNotes.length;
 
+  const container = useRef<HTMLDivElement>(null);
+  
+  useGSAP(() => {
+    if (open && !editingId?.startsWith("task:")) {
+      gsap.from(".modal-overlay", { opacity: 0, duration: 0.3, ease: "power2.out" });
+      gsap.from(".modal-content", {
+        y: 40,
+        opacity: 0,
+        scale: 0.95,
+        duration: 0.4,
+        ease: "back.out(1.1)"
+      });
+    }
+  }, [open, editingId]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closeEventForm} />
-      <div className="relative z-10 w-full max-w-[460px] rounded-xl border border-border bg-popover shadow-2xl flex flex-col max-h-[90vh]">
+    <div ref={container} className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div className="modal-overlay absolute inset-0 bg-background/60 backdrop-blur-md" onClick={closeEventForm} />
+      
+      <div className="modal-content relative z-10 w-full max-w-[480px] rounded-[2rem] border border-border/50 bg-card/60 backdrop-blur-2xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.3)] flex flex-col max-h-[90vh] overflow-hidden">
+        {/* Glow effect */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[300px] h-[150px] bg-primary/20 blur-[60px] rounded-full pointer-events-none -z-10" />
 
         {/* Header */}
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-border shrink-0">
+        <div className="flex items-center gap-3 px-6 py-5 border-b border-border/30 shrink-0">
           <Calendar size={14} className="text-muted-foreground" />
           <h2 className="text-sm font-semibold flex-1">{editingId ? "Edit event" : "New event"}</h2>
           <button onClick={closeEventForm} className="text-muted-foreground hover:text-foreground transition-fast">
@@ -155,27 +175,28 @@ export function EventForm() {
           </button>
         </div>
 
-        {/* Title */}
-        <div className="px-4 pt-4 pb-2 shrink-0">
+        <div className="px-6 pt-6 pb-2 shrink-0">
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) void submit(); }}
             placeholder="Event title"
             autoFocus
-            className="w-full text-sm font-medium bg-transparent outline-none border-b border-border pb-2 placeholder:text-muted-foreground/40"
+            className="w-full text-2xl font-bold bg-transparent outline-none pb-2 placeholder:text-muted-foreground/30 transition-all border-b-2 border-transparent focus:border-primary/30"
           />
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-border shrink-0 px-4">
+        <div className="flex border-b border-border/30 shrink-0 px-6 gap-6">
           {(["details", "links"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={cn(
-                "py-2 px-1 mr-4 text-[11px] font-medium border-b-2 -mb-px transition-fast",
-                tab === t ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+                "py-3 px-1 text-xs font-bold uppercase tracking-wider border-b-2 -mb-px transition-all duration-300",
+                tab === t 
+                  ? "border-primary text-primary" 
+                  : "border-transparent text-muted-foreground/60 hover:text-foreground"
               )}
             >
               {t === "links" && linkCount > 0 ? `Links (${linkCount})` : t.charAt(0).toUpperCase() + t.slice(1)}
@@ -184,10 +205,10 @@ export function EventForm() {
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
           {tab === "details" && (
             <>
-              <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+              <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground transition-fast">
                 <input
                   type="checkbox"
                   checked={allDay}
@@ -216,11 +237,11 @@ export function EventForm() {
 
               {calendars.length > 0 && (
                 <div>
-                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Calendar</label>
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-2">Calendar</label>
                   <select
                     value={calId}
                     onChange={(e) => setCalId(e.target.value)}
-                    className="w-full text-xs bg-popover outline-none border border-border rounded-md px-2 py-1.5 mt-1"
+                    className="w-full text-sm bg-muted/30 outline-none border border-border/50 rounded-xl px-3 py-2.5 transition-all focus:border-primary/50 focus:bg-background/80"
                   >
                     {calendars.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
@@ -228,18 +249,18 @@ export function EventForm() {
               )}
 
               <div>
-                <label className="text-[10px] text-muted-foreground uppercase tracking-wide block mb-1.5">Color</label>
-                <div className="flex items-center gap-1.5 flex-wrap">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-2">Color</label>
+                <div className="flex items-center gap-2 flex-wrap">
                   <button
                     onClick={() => setColor("")}
-                    className={cn("w-5 h-5 rounded-full border-2 bg-muted transition-fast", !color ? "border-foreground" : "border-transparent")}
+                    className={cn("w-7 h-7 rounded-full border-[3px] bg-muted transition-all duration-300", !color ? "border-foreground scale-110 shadow-lg" : "border-transparent hover:scale-105")}
                     title="Calendar default"
                   />
                   {PRESET_COLORS.map((c) => (
                     <button
                       key={c}
                       onClick={() => setColor(c)}
-                      className={cn("w-5 h-5 rounded-full border-2 transition-fast", color === c ? "border-foreground scale-110" : "border-transparent")}
+                      className={cn("w-7 h-7 rounded-full border-[3px] transition-all duration-300", color === c ? "border-foreground scale-110 shadow-lg" : "border-transparent hover:scale-105")}
                       style={{ backgroundColor: c }}
                     />
                   ))}
@@ -247,38 +268,38 @@ export function EventForm() {
               </div>
 
               <div>
-                <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Repeat</label>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <Repeat size={12} className="text-muted-foreground/50 shrink-0" />
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-2">Repeat</label>
+                <div className="flex items-center gap-2 relative">
+                  <Repeat size={14} className="absolute left-3 text-muted-foreground/50 pointer-events-none" />
                   <select
                     value={recurrence}
                     onChange={(e) => setRecurrence(e.target.value)}
-                    className="flex-1 text-xs bg-popover outline-none border border-border rounded-md px-2 py-1.5"
+                    className="w-full text-sm bg-muted/30 outline-none border border-border/50 rounded-xl pl-9 pr-3 py-2.5 transition-all focus:border-primary/50 focus:bg-background/80"
                   >
                     {RECURRENCE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 </div>
               </div>
 
-              <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
+              <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground transition-fast mt-2">
                 <input
                   type="checkbox"
                   checked={isTimeBlock}
                   onChange={(e) => setIsTimeBlock(e.target.checked)}
                   className="rounded accent-primary"
                 />
-                <Timer size={13} className="text-muted-foreground/60" />
+                <Timer size={14} className="text-muted-foreground/60" />
                 Time block
               </label>
 
               {/* Status & Visibility */}
-              <div className="grid grid-cols-2 gap-3 mt-2">
+              <div className="grid grid-cols-2 gap-4 pt-2">
                 <div>
-                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Status</label>
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-2">Status</label>
                   <select
                     value={status}
                     onChange={(e) => setStatus(e.target.value)}
-                    className="w-full text-xs bg-popover outline-none border border-border rounded-md px-2 py-1.5 mt-1"
+                    className="w-full text-sm bg-muted/30 outline-none border border-border/50 rounded-xl px-3 py-2.5 transition-all focus:border-primary/50"
                   >
                     <option value="confirmed">Confirmed</option>
                     <option value="tentative">Tentative</option>
@@ -286,11 +307,11 @@ export function EventForm() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Visibility</label>
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-2">Visibility</label>
                   <select
                     value={visibility}
                     onChange={(e) => setVisibility(e.target.value)}
-                    className="w-full text-xs bg-popover outline-none border border-border rounded-md px-2 py-1.5 mt-1"
+                    className="w-full text-sm bg-muted/30 outline-none border border-border/50 rounded-xl px-3 py-2.5 transition-all focus:border-primary/50"
                   >
                     <option value="default">Default</option>
                     <option value="private">Private</option>
@@ -300,23 +321,23 @@ export function EventForm() {
               </div>
 
               {/* Location & Meeting */}
-              <div className="grid grid-cols-2 gap-3 mt-2">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Location</label>
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-2">Location</label>
                   <input
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
                     placeholder="Address or place"
-                    className="w-full text-xs bg-popover outline-none border border-border rounded-md px-2 py-1.5 mt-1 placeholder:text-muted-foreground/40"
+                    className="w-full text-sm bg-muted/30 outline-none border border-border/50 rounded-xl px-3 py-2.5 transition-all focus:border-primary/50 placeholder:text-muted-foreground/40"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Meeting URL</label>
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-2">Meeting URL</label>
                   <input
                     value={meetingUrl}
                     onChange={(e) => setMeetingUrl(e.target.value)}
                     placeholder="Zoom, Meet, etc."
-                    className="w-full text-xs bg-popover outline-none border border-border rounded-md px-2 py-1.5 mt-1 placeholder:text-muted-foreground/40"
+                    className="w-full text-sm bg-muted/30 outline-none border border-border/50 rounded-xl px-3 py-2.5 transition-all focus:border-primary/50 placeholder:text-muted-foreground/40"
                   />
                 </div>
               </div>
@@ -325,8 +346,8 @@ export function EventForm() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Description (optional)"
-                rows={2}
-                className="w-full text-xs bg-transparent outline-none border border-border rounded-md px-2 py-1.5 resize-none text-muted-foreground placeholder:text-muted-foreground/30"
+                rows={3}
+                className="w-full text-sm bg-muted/30 outline-none border border-border/50 rounded-xl px-3 py-3 resize-none text-muted-foreground placeholder:text-muted-foreground/40 transition-all focus:border-primary/50 focus:bg-background/80"
               />
             </>
           )}
@@ -426,45 +447,49 @@ export function EventForm() {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center gap-2 px-4 py-3 border-t border-border shrink-0">
-          {editingId && (
-            <>
-              <button
-                onClick={async () => {
-                  const evt = useCalendarStore.getState().events.find(e => e.id === editingId);
-                  if (evt) {
-                    const est = Math.max(15, (new Date(evt.endAt).getTime() - new Date(evt.startAt).getTime()) / 60000);
-                    await useTaskStore.getState().createTask({
-                      title: evt.title,
-                      description: evt.description,
-                      dueDate: evt.startAt.slice(0, 10),
-                      estimateMinutes: Math.round(est),
-                    });
-                    await deleteEvent(editingId);
-                    closeEventForm();
-                  }
-                }}
-                className="text-xs text-primary hover:text-primary/80 transition-fast mr-2"
-              >
-                Convert to Task
-              </button>
-              <button
-                onClick={async () => { await deleteEvent(editingId); closeEventForm(); }}
-                className="text-xs text-destructive hover:text-destructive/80 transition-fast mr-auto"
-              >
-                Delete
-              </button>
-            </>
-          )}
-          {!editingId && <div className="mr-auto" />}
-          <button onClick={closeEventForm} className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-accent transition-fast">Cancel</button>
-          <button
-            onClick={() => void submit()}
-            disabled={!title.trim()}
-            className="px-3 py-1.5 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 transition-fast"
-          >
-            {editingId ? "Save changes" : "Create event"}
-          </button>
+        <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-border/30 bg-muted/10 shrink-0">
+          <div className="flex gap-2">
+            {editingId && (
+              <>
+                <button
+                  onClick={async () => {
+                    const evt = useCalendarStore.getState().events.find(e => e.id === editingId);
+                    if (evt) {
+                      const est = Math.max(15, (new Date(evt.endAt).getTime() - new Date(evt.startAt).getTime()) / 60000);
+                      await useTaskStore.getState().createTask({
+                        title: evt.title,
+                        description: evt.description,
+                        dueDate: evt.startAt.slice(0, 10),
+                        estimateMinutes: Math.round(est),
+                      });
+                      await deleteEvent(editingId);
+                      closeEventForm();
+                    }
+                  }}
+                  className="px-4 py-2 text-xs font-bold text-primary bg-primary/10 rounded-full hover:bg-primary/20 transition-all"
+                >
+                  Convert to Task
+                </button>
+                <button
+                  onClick={async () => { await deleteEvent(editingId); closeEventForm(); }}
+                  className="px-4 py-2 text-xs font-bold text-destructive bg-destructive/10 rounded-full hover:bg-destructive/20 transition-all"
+                >
+                  Delete
+                </button>
+              </>
+            )}
+          </div>
+          
+          <div className="flex gap-2">
+            <button onClick={closeEventForm} className="px-5 py-2 text-xs font-bold rounded-full hover:bg-accent transition-fast">Cancel</button>
+            <button
+              onClick={() => void submit()}
+              disabled={!title.trim()}
+              className="px-6 py-2 text-xs font-bold rounded-full bg-primary text-primary-foreground hover:brightness-110 disabled:opacity-40 transition-all shadow-md shadow-primary/20"
+            >
+              {editingId ? "Save changes" : "Create event"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -74,8 +74,6 @@ export function ProjectDetail() {
       
       <div ref={panelRef} className="relative w-full md:w-[700px] max-h-[90vh] bg-card border border-border/50 flex flex-col shadow-2xl rounded-3xl overflow-hidden">
         
-        {/* Header Ribbon */}
-        <div className="h-2 w-full shrink-0" style={{ backgroundColor: project.color }} />
         
         {/* Action Bar */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border/50">

@@ -68,18 +68,20 @@ export function JumpToDateOverlay({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-24"
-      style={{ background: "oklch(0 0 0 / 0.35)" }}
+      className="fixed inset-0 z-[110] flex items-start justify-center pt-32 backdrop-blur-sm"
+      style={{ background: "oklch(0 0 0 / 0.4)" }}
       onClick={onClose}
     >
       <div
-        className="w-[340px] rounded-xl border border-border bg-popover shadow-xl px-4 py-4"
+        className="w-[360px] rounded-3xl border border-border/50 bg-card/60 backdrop-blur-2xl shadow-2xl px-6 py-5 relative overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-xs font-semibold text-foreground">Jump to date</span>
-          <button type="button" onClick={onClose} className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-fast">
-            <X size={12} />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[200px] h-[100px] bg-primary/20 blur-[50px] rounded-full pointer-events-none -z-10" />
+
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-sm font-bold text-foreground tracking-wider uppercase">Jump to date</span>
+          <button type="button" onClick={onClose} className="p-1.5 rounded-full text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-all">
+            <X size={14} />
           </button>
         </div>
         <input
@@ -91,19 +93,19 @@ export function JumpToDateOverlay({ onClose }: { onClose: () => void }) {
             if (e.key === "Escape") onClose();
           }}
           placeholder='e.g. "May 24" or "2026-05-24"'
-          className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-surface-2 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/40"
+          className="w-full px-4 py-3 text-sm rounded-xl border border-border/50 bg-muted/30 text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-primary/50 transition-all font-medium"
         />
-        {error && <p className="mt-1.5 text-[11px] text-red-400">{error}</p>}
-        <div className="flex justify-end mt-3">
+        {error && <p className="mt-2 text-xs font-medium text-red-400">{error}</p>}
+        <div className="flex justify-end mt-4">
           <button
             type="button"
             onClick={submit}
-            className="px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-fast"
+            className="px-6 py-2 text-xs font-bold uppercase tracking-wider rounded-full bg-primary text-primary-foreground hover:brightness-110 transition-all shadow-md shadow-primary/20"
           >
             Go
           </button>
         </div>
-        <p className="mt-2 text-[10px] text-muted-foreground/50">Press <kbd className="px-1 py-0.5 rounded border border-border text-[9px]">Esc</kbd> to close</p>
+        <p className="mt-3 text-[10px] text-muted-foreground/50 text-center font-medium">Press <kbd className="px-1.5 py-0.5 rounded border border-border/50 bg-muted/20 text-[9px] mx-0.5">Esc</kbd> to close</p>
       </div>
     </div>
   );

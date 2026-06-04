@@ -208,11 +208,11 @@ export function AgendaView() {
                   <div key={evt.id}>
                     <div
                       onClick={() => openEventForm(evt, evt.id)}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-border hover:border-primary/30 cursor-pointer transition-fast"
-                      style={{ borderLeftColor: color, borderLeftWidth: 3 }}
+                      className="group flex items-center gap-4 px-4 py-3 rounded-2xl border border-border/50 hover:border-primary/50 bg-card/40 backdrop-blur-md cursor-pointer transition-all duration-300 hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-0.5"
+                      style={{ borderLeftColor: color, borderLeftWidth: 4 }}
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium truncate text-foreground">{evt.title}</p>
+                        <p className="text-sm font-bold truncate text-foreground group-hover:text-primary transition-colors">{evt.title}</p>
                         <p className="text-[10px] text-muted-foreground tabular-nums mt-0.5">
                           {evt.allDay
                             ? "All day"
@@ -243,18 +243,18 @@ export function AgendaView() {
                 <button
                   key={t.id}
                   onClick={() => (useTaskStore.getState() as any).openTask?.(t.id)}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border border-border/60 hover:border-border bg-muted/20 transition-fast group text-left"
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl border border-border/40 hover:border-border bg-muted/10 hover:bg-muted/20 backdrop-blur-sm transition-all duration-300 group text-left hover:-translate-y-0.5"
                 >
                   {t.status === "done"
-                    ? <CheckCircle2 size={12} className="text-green-500 shrink-0" />
-                    : <Circle size={12} className="text-muted-foreground/40 shrink-0" />}
+                    ? <CheckCircle2 size={16} className="text-green-500 shrink-0 transition-transform group-hover:scale-110" />
+                    : <Circle size={16} className="text-muted-foreground/40 shrink-0 transition-transform group-hover:scale-110 group-hover:text-primary/50" />}
                   <span className={cn(
-                    "text-xs flex-1 truncate transition-fast group-hover:text-foreground",
+                    "text-sm font-bold flex-1 truncate transition-fast group-hover:text-foreground",
                     t.status === "done" ? "line-through text-muted-foreground/50" : "text-muted-foreground"
                   )}>
                     {t.title}
                   </span>
-                  <span className="text-[9px] text-muted-foreground/40 shrink-0">
+                  <span className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40 shrink-0">
                     {t.dueDate?.startsWith(ds) ? "due" : "scheduled"}
                   </span>
                 </button>
@@ -268,13 +268,13 @@ export function AgendaView() {
                     
                     bus.emit("navigate:to", { path: "/notes" });
                   }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border border-border/40 hover:border-border bg-muted/10 transition-fast group text-left"
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl border border-border/30 hover:border-border bg-muted/5 hover:bg-muted/10 backdrop-blur-sm transition-all duration-300 group text-left hover:-translate-y-0.5"
                 >
-                  <StickyNote size={11} className="text-muted-foreground/40 shrink-0" />
-                  <span className="text-xs flex-1 truncate text-muted-foreground group-hover:text-foreground transition-fast">
+                  <StickyNote size={14} className="text-muted-foreground/40 shrink-0 transition-transform group-hover:scale-110 group-hover:text-yellow-500/50" />
+                  <span className="text-sm font-bold flex-1 truncate text-muted-foreground group-hover:text-foreground transition-fast">
                     {n.title || "Untitled"}
                   </span>
-                  <span className="text-[9px] text-muted-foreground/40 shrink-0">note</span>
+                  <span className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40 shrink-0">note</span>
                 </button>
               ))}
             </div>

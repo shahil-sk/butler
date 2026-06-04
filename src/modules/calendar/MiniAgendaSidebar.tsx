@@ -34,21 +34,20 @@ export function MiniAgendaSidebar() {
   return (
     <div
       className={cn(
-        "flex flex-col shrink-0 border-l border-border transition-all duration-200 overflow-hidden",
-        collapsed ? "w-8" : "w-[220px]"
+        "flex flex-col shrink-0 border-l border-border/50 bg-background/50 backdrop-blur-xl transition-all duration-300 overflow-hidden",
+        collapsed ? "w-10" : "w-[240px]"
       )}
-      style={{ background: "hsl(var(--surface-1))" }}
     >
       {/* Toggle strip */}
       <button
         type="button"
         onClick={() => setCollapsed((v) => !v)}
         aria-label={collapsed ? "Expand agenda" : "Collapse agenda"}
-        className="flex items-center justify-center h-[38px] shrink-0 border-b border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-fast"
+        className="flex items-center justify-center h-12 shrink-0 border-b border-border/40 text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-all duration-300"
       >
-        {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+        {collapsed ? <ChevronRight size={14} className="hover:scale-110 transition-transform" /> : <ChevronDown size={14} className="hover:scale-110 transition-transform" />}
         {!collapsed && (
-          <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+          <span className="ml-2 text-[10px] font-bold uppercase tracking-widest text-foreground">
             Next 7 days
           </span>
         )}
@@ -70,20 +69,20 @@ export function MiniAgendaSidebar() {
               const isToday = dateStr === todayStr;
               return (
                 <div key={dateStr}>
-                  <div className="flex items-center gap-1.5 mb-1">
+                  <div className="flex items-center gap-2 mb-2">
                     <span
                       className={cn(
-                        "text-[10px] font-semibold uppercase tracking-wider",
-                        isToday ? "text-primary" : "text-muted-foreground/60"
+                        "text-[10px] font-bold uppercase tracking-widest",
+                        isToday ? "text-primary drop-shadow-sm" : "text-muted-foreground/60"
                       )}
                     >
                       {isToday ? "Today" : format(day, "EEE d")}
                     </span>
-                    <span className="text-[9px] text-muted-foreground/40 tabular-nums">
+                    <span className="text-[10px] font-bold text-muted-foreground/40 tabular-nums">
                       {dayEvents.length}
                     </span>
                   </div>
-                  <div className="space-y-0.5">
+                  <div className="space-y-1">
                     {dayEvents.map((evt) => {
                       const isTask = isTaskEvent(evt.id);
                       const cal = calendars.find((c) => c.id === evt.calendarId);
@@ -93,16 +92,16 @@ export function MiniAgendaSidebar() {
                           key={evt.id}
                           type="button"
                           onClick={() => { setActiveDate(dateStr); setView("day"); }}
-                          className="w-full flex items-center gap-1.5 px-1.5 py-1 rounded text-left hover:bg-accent transition-fast"
+                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left hover:bg-muted/40 transition-all duration-300 group hover:translate-x-1"
                         >
                           {isTask ? (
-                            <CheckSquare size={9} style={{ color }} className="shrink-0" />
+                            <CheckSquare size={10} style={{ color }} className="shrink-0 transition-transform group-hover:scale-110" />
                           ) : (
-                            <Circle size={7} style={{ color, fill: color }} className="shrink-0" />
+                            <Circle size={8} style={{ color, fill: color }} className="shrink-0 transition-transform group-hover:scale-110" />
                           )}
-                          <span className="text-[10px] text-foreground/80 truncate flex-1">{evt.title}</span>
+                          <span className="text-xs font-bold text-foreground/80 truncate flex-1 group-hover:text-foreground transition-colors">{evt.title}</span>
                           {evt.startAt && (
-                            <span className="text-[9px] text-muted-foreground/50 tabular-nums shrink-0">
+                            <span className="text-[10px] font-bold text-muted-foreground/50 tabular-nums shrink-0">
                               {format(parseISO(evt.startAt), "h:mm")}
                             </span>
                           )}

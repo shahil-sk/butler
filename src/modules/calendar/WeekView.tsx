@@ -117,8 +117,8 @@ export function WeekView() {
                     }}
                     onClick={() => openEventForm(e, e.id)}
                     onContextMenu={(ev) => handleContextMenu(ev, e)}
-                    className={cn("text-[10px] px-1 rounded truncate cursor-pointer", e.status === "completed" && "line-through opacity-60")}
-                    style={{ backgroundColor: `${color}25`, color }}
+                    className={cn("text-[10px] px-2 py-0.5 rounded-md truncate cursor-pointer font-bold transition-all hover:scale-[1.02] shadow-sm mb-1", e.status === "completed" && "line-through opacity-60")}
+                    style={{ backgroundColor: `${color}25`, color, border: `1px solid ${color}30` }}
                   >
                     {e.title}
                   </div>
@@ -197,16 +197,17 @@ export function WeekView() {
                         }}
                         onClick={(e) => { e.stopPropagation(); openEventForm(evt, evt.id); }}
                         onContextMenu={(e) => handleContextMenu(e, evt)}
-                        className="absolute left-0.5 right-0.5 rounded overflow-hidden cursor-pointer z-10 px-1 py-0.5 transition-fast hover:brightness-95"
+                        className="absolute left-1 right-1 rounded-lg overflow-hidden cursor-pointer z-10 px-2 py-1 transition-all hover:brightness-110 hover:shadow-md hover:scale-[1.02] hover:z-20 backdrop-blur-sm shadow-sm"
                         style={{
                           top,
-                          height: Math.max(height, 20),
-                          backgroundColor: `${color}22`,
-                          borderLeft: `2.5px solid ${color}`,
+                          height: Math.max(height, 24),
+                          backgroundColor: `${color}25`,
+                          border: `1px solid ${color}40`,
+                          borderLeft: `4px solid ${color}`,
                           color,
                         }}
                       >
-                        <p className={cn("text-[10px] font-medium leading-tight truncate", evt.status === "completed" && "line-through opacity-60")}>{evt.title}</p>
+                        <p className={cn("text-xs font-bold leading-tight truncate drop-shadow-sm", evt.status === "completed" && "line-through opacity-50")}>{evt.title}</p>
                         {height > 30 && (
                           <p className="text-[9px] opacity-70 tabular-nums">
                             {evt.startAt.slice(11, 16)}&ndash;{evt.endAt.slice(11, 16)}

@@ -131,12 +131,12 @@ export function MonthGrid() {
                 <div className="flex items-center justify-end mb-1">
                   <span
                     className={cn(
-                      "w-6 h-6 flex items-center justify-center rounded-full text-xs font-medium",
+                      "w-7 h-7 flex items-center justify-center rounded-full text-xs font-bold transition-all duration-300 shadow-sm",
                       isToday
-                        ? "bg-primary text-primary-foreground font-semibold"
+                        ? "bg-primary text-primary-foreground shadow-primary/30"
                         : "text-foreground hover:bg-accent",
-                      !isToday && hasOverdue  && "ring-2 ring-red-500/60",
-                      !isToday && hasDueToday && "ring-2 ring-amber-400/60"
+                      !isToday && hasOverdue  && "ring-2 ring-red-500/60 text-red-500 bg-red-500/5",
+                      !isToday && hasDueToday && "ring-2 ring-amber-400/60 text-amber-500 bg-amber-500/5"
                     )}
                   >
                     {format(day, "d")}
@@ -171,13 +171,13 @@ export function MonthGrid() {
                         onClick={(e) => handleEventClick(e, evt)}
                         onContextMenu={(e) => handleContextMenu(e, evt)}
                         className={cn(
-                          "flex items-center gap-1 px-1 py-0.5 rounded text-[10px] truncate cursor-pointer transition-fast",
+                          "flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold truncate cursor-pointer transition-all hover:scale-[1.02] shadow-sm",
                           isTask
-                            ? "hover:brightness-95 border border-dashed border-current/30"
-                            : "hover:brightness-95",
-                          (evt.status === "cancelled" || evt.status === "completed") && "line-through opacity-60"
+                            ? "hover:brightness-110 border border-current/20 bg-current/5"
+                            : "hover:brightness-110 bg-current/10",
+                          (evt.status === "cancelled" || evt.status === "completed") && "line-through opacity-50"
                         )}
-                        style={{ backgroundColor: `${color}20`, color }}
+                        style={{ color }}
                         title={isTask ? "Click to view/edit task" : evt.title}
                       >
                         {isTask ? (

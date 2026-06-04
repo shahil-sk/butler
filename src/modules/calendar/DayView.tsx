@@ -113,8 +113,8 @@ export function DayView() {
                   }}
                   onClick={() => openEventForm(e, e.id)}
                   onContextMenu={(ev) => handleContextMenu(ev, e)}
-                  className={cn("text-[11px] px-2 py-0.5 rounded-full font-medium transition-fast hover:brightness-95", e.status === "completed" && "line-through opacity-60")}
-                  style={{ backgroundColor: `${color}22`, color }}
+                  className={cn("text-xs px-3 py-1 rounded-full font-bold transition-all hover:scale-[1.03] shadow-sm", e.status === "completed" && "line-through opacity-60")}
+                  style={{ backgroundColor: `${color}25`, color, border: `1px solid ${color}30` }}
                 >
                   {e.title}
                 </button>
@@ -177,16 +177,17 @@ export function DayView() {
                     }}
                     onClick={(e) => { e.stopPropagation(); openEventForm(evt, evt.id); }}
                     onContextMenu={(e) => handleContextMenu(e, evt)}
-                    className="absolute left-1 right-1 rounded-md overflow-hidden cursor-pointer z-10 px-2 py-1 transition-fast hover:brightness-95"
+                    className="absolute left-1 right-2 rounded-xl overflow-hidden cursor-pointer z-10 px-3 py-2 transition-all hover:brightness-110 hover:shadow-lg hover:scale-[1.01] hover:z-20 backdrop-blur-sm shadow-sm"
                     style={{
                       top,
-                      height: Math.max(height, 24),
-                      backgroundColor: `${color}20`,
-                      borderLeft: `3px solid ${color}`,
+                      height: Math.max(height, 28),
+                      backgroundColor: `${color}25`,
+                      border: `1px solid ${color}40`,
+                      borderLeft: `4px solid ${color}`,
                       color,
                     }}
                   >
-                    <p className={cn("text-[11px] font-semibold leading-tight truncate", evt.status === "completed" && "line-through opacity-60")}>{evt.title}</p>
+                    <p className={cn("text-xs font-bold leading-tight truncate drop-shadow-sm", evt.status === "completed" && "line-through opacity-50")}>{evt.title}</p>
                     {height > 36 && (
                       <p className="text-[10px] opacity-70 tabular-nums mt-0.5">
                         {evt.startAt.slice(11,16)}&ndash;{evt.endAt.slice(11,16)}
@@ -221,13 +222,13 @@ export function DayView() {
               <button
                 key={t.id}
                 onClick={() => (useTaskStore.getState() as any).openTask?.(t.id)}
-                className="w-full flex items-center gap-2 py-1.5 text-left group"
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-muted/40 transition-all text-left group hover:-translate-y-0.5"
               >
                 {t.status === "done"
-                  ? <CheckCircle2 size={11} className="text-green-500 shrink-0" />
-                  : <Circle size={11} className="text-muted-foreground/50 shrink-0" />}
+                  ? <CheckCircle2 size={16} className="text-green-500 shrink-0 transition-transform group-hover:scale-110" />
+                  : <Circle size={16} className="text-muted-foreground/40 shrink-0 transition-transform group-hover:scale-110 group-hover:text-primary/50" />}
                 <span className={cn(
-                  "text-[11px] flex-1 truncate transition-fast group-hover:text-primary",
+                  "text-xs font-bold flex-1 truncate transition-fast group-hover:text-foreground",
                   t.status === "done" && "line-through opacity-50"
                 )}>
                   {t.title}

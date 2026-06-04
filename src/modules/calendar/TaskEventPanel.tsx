@@ -4,11 +4,13 @@
 // View, quick-edit, complete, or navigate to full task detail.
 // ============================================================
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   X, CheckCircle2, Circle, ExternalLink,
   AlertTriangle, Flag,
 } from "lucide-react";
+import { useGSAP } from "@gsap/react";
+import gsap from "gsap";
 import { cn } from "@/shared/utils";
 import { useTaskStore } from "@/modules/tasks/store";
 import { bus } from "@/kernel/event-bus";
@@ -96,16 +98,32 @@ export function TaskEventPanel({ taskId, onClose }: Props) {
     onClose();
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+  const container = useRef<HTMLDivElement>(null);
+  
+  useGSAP(() => {
+    gsap.from(".modal-overlay", { opacity: 0, duration: 0.3, ease: "power2.out" });
+    gsap.from(".modal-content", {
+      y: 40,
+      opacity: 0,
+      scale: 0.95,
+      duration: 0.4,
+      ease: "back.out(1.1)"
+    });
+  }, []);
 
-      <div className="relative z-10 w-full max-w-[420px] rounded-xl border border-border bg-popover shadow-2xl flex flex-col max-h-[85vh]">
+  return (
+    <div ref={container} className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4">
+      <div className="modal-overlay absolute inset-0 bg-background/60 backdrop-blur-md" onClick={onClose} />
+
+      <div className="modal-content relative z-10 w-full max-w-[480px] rounded-[2rem] border border-border/50 bg-card/60 backdrop-blur-2xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.3)] flex flex-col max-h-[85vh] overflow-hidden">
+        
+        {/* Glow effect */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[300px] h-[150px] bg-primary/20 blur-[60px] rounded-full pointer-events-none -z-10" />
 
         {/* Header */}
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-border shrink-0">
+        <div className="flex items-center gap-3 px-6 py-5 border-b border-border/30 shrink-0">
           <span className={cn(
-            "px-2 py-0.5 rounded-full text-[10px] font-medium",
+            "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
             isDone     ? "bg-green-500/15 text-green-500" :
             isOverdue  ? "bg-red-500/15 text-red-500" :
             isDueToday ? "bg-orange-500/15 text-orange-500" :
@@ -116,38 +134,38 @@ export function TaskEventPanel({ taskId, onClose }: Props) {
           <span className="flex-1" />
           <button
             onClick={handleOpenInTasks}
-            className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-fast"
+            className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-primary transition-fast px-2 py-1 rounded-lg hover:bg-primary/10"
             title="Open full task detail"
           >
-            <ExternalLink size={11} />
+            <ExternalLink size={14} />
             Open in Tasks
           </button>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-fast ml-1">
-            <X size={14} />
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-fast ml-2 p-1 rounded-full hover:bg-muted">
+            <X size={18} />
           </button>
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
 
           {/* Complete toggle + title */}
-          <div className="flex items-start gap-3">
+          <div className="flex items-start gap-4">
             <button
               onClick={handleToggleComplete}
               className={cn(
-                "mt-0.5 shrink-0 transition-fast",
+                "mt-1 shrink-0 transition-all hover:scale-110 active:scale-95",
                 isDone ? "text-green-500 hover:text-muted-foreground" : "text-muted-foreground hover:text-green-500"
               )}
               title={isDone ? "Mark incomplete" : "Mark complete"}
             >
-              {isDone ? <CheckCircle2 size={18} /> : <Circle size={18} />}
+              {isDone ? <CheckCircle2 size={24} /> : <Circle size={24} />}
             </button>
 
             {editing ? (
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="flex-1 text-sm font-semibold bg-transparent border-b border-primary outline-none pb-0.5"
+                className="flex-1 text-2xl font-bold bg-transparent border-b-2 border-primary outline-none pb-1 transition-all"
                 autoFocus
                 onKeyDown={(e) => {
                   if (e.key === "Enter") void handleSave();
@@ -158,7 +176,7 @@ export function TaskEventPanel({ taskId, onClose }: Props) {
               <h2
                 onClick={() => setEditing(true)}
                 className={cn(
-                  "flex-1 text-sm font-semibold cursor-text hover:text-primary transition-fast leading-snug",
+                  "flex-1 text-2xl font-bold cursor-text hover:text-primary transition-fast leading-tight",
                   isDone && "line-through text-muted-foreground"
                 )}
                 title="Click to edit title"
@@ -195,16 +213,16 @@ export function TaskEventPanel({ taskId, onClose }: Props) {
           </div>
 
           {/* Priority + Status */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="flex items-center gap-1 text-[10px] text-muted-foreground uppercase tracking-wide">
-                <Flag size={9} /> Priority
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                <Flag size={12} /> Priority
               </label>
               {editing ? (
                 <select
                   value={priority}
                   onChange={(e) => setPriority(e.target.value as Priority)}
-                  className="w-full text-xs bg-popover border border-border rounded-md px-2 py-1.5 outline-none"
+                  className="w-full text-sm bg-muted/30 border border-border/50 rounded-xl px-3 py-2.5 outline-none focus:border-primary/50 transition-all"
                 >
                   {(Object.keys(PRIORITY_LABELS) as Priority[]).map((p) => (
                     <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>
@@ -213,20 +231,20 @@ export function TaskEventPanel({ taskId, onClose }: Props) {
               ) : (
                 <p
                   onClick={() => setEditing(true)}
-                  className={cn("text-xs font-medium cursor-pointer hover:brightness-110 transition-fast", PRIORITY_COLORS[task.priority])}
+                  className={cn("text-sm font-bold cursor-pointer hover:brightness-110 transition-fast bg-muted/20 px-3 py-2 rounded-xl inline-block", PRIORITY_COLORS[task.priority])}
                 >
                   {PRIORITY_LABELS[task.priority]}
                 </p>
               )}
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[10px] text-muted-foreground uppercase tracking-wide block">Status</label>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Status</label>
               {editing ? (
                 <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value as TaskStatus)}
-                  className="w-full text-xs bg-popover border border-border rounded-md px-2 py-1.5 outline-none"
+                  className="w-full text-sm bg-muted/30 border border-border/50 rounded-xl px-3 py-2.5 outline-none focus:border-primary/50 transition-all"
                 >
                   {(Object.keys(STATUS_LABELS) as TaskStatus[]).filter((s) => s !== "archived").map((s) => (
                     <option key={s} value={s}>{STATUS_LABELS[s]}</option>
@@ -235,7 +253,7 @@ export function TaskEventPanel({ taskId, onClose }: Props) {
               ) : (
                 <p
                   onClick={() => setEditing(true)}
-                  className="text-xs text-foreground cursor-pointer hover:text-primary transition-fast"
+                  className="text-sm font-bold text-foreground cursor-pointer hover:text-primary transition-fast bg-muted/20 px-3 py-2 rounded-xl inline-block"
                 >
                   {STATUS_LABELS[task.status]}
                 </p>
@@ -276,20 +294,20 @@ export function TaskEventPanel({ taskId, onClose }: Props) {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center gap-2 px-4 py-3 border-t border-border shrink-0">
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border/30 bg-muted/10 shrink-0">
           {editing ? (
             <>
-              <button onClick={() => setEditing(false)} className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-accent transition-fast">Cancel</button>
-              <button onClick={() => void handleSave()} className="px-3 py-1.5 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-fast">Save</button>
+              <button onClick={() => setEditing(false)} className="px-5 py-2 text-xs font-bold rounded-full hover:bg-accent transition-fast">Cancel</button>
+              <button onClick={() => void handleSave()} className="px-6 py-2 text-xs font-bold rounded-full bg-primary text-primary-foreground hover:brightness-110 transition-fast shadow-md shadow-primary/20">Save</button>
             </>
           ) : (
             <>
-              <button onClick={() => setEditing(true)} className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-accent transition-fast">Edit</button>
+              <button onClick={() => setEditing(true)} className="px-5 py-2 text-xs font-bold rounded-full hover:bg-accent transition-fast mr-auto">Edit</button>
               <button
                 onClick={handleToggleComplete}
                 className={cn(
-                  "flex-1 py-1.5 text-xs rounded-md font-medium transition-fast",
-                  isDone ? "bg-muted text-muted-foreground hover:bg-accent" : "bg-green-600 text-white hover:bg-green-700"
+                  "px-6 py-2 text-xs font-bold rounded-full transition-fast flex items-center gap-2",
+                  isDone ? "bg-muted text-muted-foreground hover:bg-accent" : "bg-green-500/10 text-green-500 hover:bg-green-500/20"
                 )}
               >
                 {isDone ? "Restore task" : "✓ Mark complete"}
