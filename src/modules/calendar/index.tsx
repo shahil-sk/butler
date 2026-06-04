@@ -122,21 +122,10 @@ export function CalendarModule() {
   const eventsCount = allEvents.filter(e => e.startAt >= from.toISOString() && e.startAt <= to.toISOString()).length;
 
   return (
-    <div className="flex flex-col h-full bg-background overflow-hidden relative">
-      
-      <CalendarHeroHeader anchor={anchor} eventsCount={eventsCount} />
+    <div className="flex flex-col h-full bg-background overflow-hidden relative pt-4">
 
-      {/* Floating Action CTA */}
-      <button 
-        onClick={() => openEventForm({ startAt: `${activeDate}T09:00:00`, endAt: `${activeDate}T10:00:00` })}
-        className="fixed bottom-8 right-8 z-[90] w-14 h-14 bg-primary text-primary-foreground rounded-full shadow-[0_8px_40px_-12px_rgba(0,0,0,0.5)] flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-300"
-        title="New Event"
-      >
-        <Plus size={28} />
-      </button>
-
-      {/* Glassmorphism Toolbar */}
-      <div className="z-[80] mx-auto mb-4 animate-slide-in shrink-0" style={{ animationDelay: '300ms', animationFillMode: 'both' }}>
+      {/* Glassmorphism Toolbar (View Selector) at the very top */}
+      <div className="z-[80] mx-auto mb-2 animate-slide-in shrink-0" style={{ animationDelay: '200ms', animationFillMode: 'both' }}>
         <div className="flex items-center gap-4 px-6 py-3 bg-background/60 backdrop-blur-2xl border border-border/50 shadow-2xl rounded-full">
           <div className="flex items-center gap-1">
             <button onClick={goPrev} className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-fast" aria-label="Previous">
@@ -195,6 +184,19 @@ export function CalendarModule() {
           </button>
         </div>
       </div>
+      
+      {/* Hero Header */}
+      <CalendarHeroHeader anchor={anchor} eventsCount={eventsCount} />
+
+      {/* Floating Action CTA */}
+      <button 
+        onClick={() => openEventForm({ startAt: `${activeDate}T09:00:00`, endAt: `${activeDate}T10:00:00` })}
+        className="fixed bottom-8 right-8 z-[90] w-14 h-14 bg-primary text-primary-foreground rounded-full shadow-[0_8px_40px_-12px_rgba(0,0,0,0.5)] flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-300"
+        title="New Event"
+      >
+        <Plus size={28} />
+      </button>
+
 
       {/* Main content area */}
       <div className="flex flex-col flex-1 min-h-0 w-full mx-auto px-2 md:px-4 pb-4 animate-slide-in" style={{ animationDelay: '400ms', animationFillMode: 'both' }}>

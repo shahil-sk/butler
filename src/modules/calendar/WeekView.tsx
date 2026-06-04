@@ -93,7 +93,7 @@ export function WeekView() {
   };
 
   return (
-    <div className="flex flex-col flex-1 overflow-hidden border-t border-border">
+    <div className="flex flex-col h-full w-full overflow-hidden border-t border-border">
       {/* All-day row */}
       <div className="flex shrink-0 border-b border-border">
         <div className="w-12 shrink-0 text-[10px] text-muted-foreground flex items-center justify-center border-r border-border py-1.5">
