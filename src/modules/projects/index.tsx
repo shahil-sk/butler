@@ -23,8 +23,14 @@ const STATUS_OPTIONS: { value: ProjectStatus; label: string }[] = [
   { value: "archived",  label: "Archived" },
 ];
 
-function ProjectsHeroHeader({ activeCount, doneTasks }: { activeCount: number, doneTasks: number }) {
+function ProjectsHeroHeader({ activeCount, doneTasks, statusFilter, onStatusFilter }: { activeCount: number, doneTasks: number, statusFilter: string | null, onStatusFilter: (s: string) => void }) {
   const container = useRef<HTMLDivElement>(null);
+  
+  const statuses = [
+    { value: "active", label: "Active", dot: "bg-emerald-500", active: "bg-emerald-500/15 text-emerald-500 border-emerald-500/40 shadow-emerald-500/20", hover: "hover:bg-emerald-500/10 hover:text-emerald-500" },
+    { value: "on_hold", label: "On Hold", dot: "bg-amber-500", active: "bg-amber-500/15 text-amber-500 border-amber-500/40 shadow-amber-500/20", hover: "hover:bg-amber-500/10 hover:text-amber-500" },
+    { value: "completed", label: "Completed", dot: "bg-blue-500", active: "bg-blue-500/15 text-blue-500 border-blue-500/40 shadow-blue-500/20", hover: "hover:bg-blue-500/10 hover:text-blue-500" }
+  ];
   
   useGSAP(() => {
     gsap.from(".hero-text", {
@@ -59,6 +65,28 @@ function ProjectsHeroHeader({ activeCount, doneTasks }: { activeCount: number, d
         </div>
       </div>
 
+      {/* Status Filters */}
+      <div className="hero-text mt-8 flex flex-wrap justify-center items-center gap-3">
+        {statuses.map(s => {
+          const isActive = statusFilter === s.value;
+          return (
+            <button
+              key={s.value}
+              onClick={() => onStatusFilter(s.value)}
+              className={cn(
+                "flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold border border-transparent transition-all duration-200",
+                "text-muted-foreground bg-muted/30",
+                s.hover,
+                isActive && s.active,
+                isActive ? "scale-105" : "hover:scale-102"
+              )}
+            >
+              <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", s.dot)} />
+              <span>{s.label}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -246,14 +274,22 @@ export function ProjectsModule() {
   const { loadTasks } = useTaskStore();
 
   const allTasks = useTaskStore((s) => s.tasks);
-  const [activeView, setActiveView] = useState<"grid" | "list" | "board" | "timeline">("grid");
+  const [activeView, setActiveView] = useState<"grid" | "list" | "board" | "timeline">(() => {
+    return (localStorage.getItem("projects_view") as any) || "grid";
+  });
+  const [statusFilter, setStatusFilter] = useState<string | null>(() => {
+    return localStorage.getItem("projects_status_filter") || null;
+  });
+
+  useEffect(() => { localStorage.setItem("projects_view", activeView); }, [activeView]);
+  useEffect(() => { if (statusFilter) localStorage.setItem("projects_status_filter", statusFilter); else localStorage.removeItem("projects_status_filter"); }, [statusFilter]);
 
   useEffect(() => {
     void loadProjects();
     void loadTasks();
   }, [loadProjects, loadTasks]);
 
-  const projects = getFilteredProjects();
+  const projects = getFilteredProjects().filter(p => statusFilter ? p.status === statusFilter : true);
 
   const doneTasks   = allTasks.filter((t) => t.projectId != null && t.status === "done").length;
   const activeCount = projects.filter((p) => p.status === "active").length;
@@ -301,7 +337,14 @@ export function ProjectsModule() {
         </button>
       </div>
 
-      {activeView === "grid" && <ProjectsHeroHeader activeCount={activeCount} doneTasks={doneTasks} />}
+      {activeView === "grid" && (
+        <ProjectsHeroHeader 
+          activeCount={activeCount} 
+          doneTasks={doneTasks}
+          statusFilter={statusFilter}
+          onStatusFilter={(s) => setStatusFilter(prev => prev === s ? null : s)} 
+        />
+      )}
 
       {/* ── Content Area ─────────────────────────────────────── */}
       <div className="w-full">

@@ -36,9 +36,11 @@ const PRIORITY_CONFIG: Record<string, { label: string; dot: string; active: stri
 interface HeroHeaderProps {
   priorityFilter: Priority | null;
   onPriorityFilter: (p: Priority) => void;
+  dueFilter: "overdue" | "today" | "tomorrow" | null;
+  onDueFilter: (d: "overdue" | "today" | "tomorrow") => void;
 }
 
-export function HeroHeader({ priorityFilter, onPriorityFilter }: HeroHeaderProps) {
+export function HeroHeader({ priorityFilter, onPriorityFilter, dueFilter, onDueFilter }: HeroHeaderProps) {
   const container = useRef<HTMLDivElement>(null);
   const tasks = useTaskStore((s) => s.tasks);
   
@@ -59,6 +61,33 @@ export function HeroHeader({ priorityFilter, onPriorityFilter }: HeroHeaderProps
     high:   activeTasks.filter(t => t.priority === "high").length,
     medium: activeTasks.filter(t => t.priority === "medium").length,
     low:    activeTasks.filter(t => t.priority === "low").length,
+  };
+
+  const dueCounts = {
+    overdue: tasks.filter(t => {
+      if (t.status === "done" || t.status === "archived") return false;
+      const dStr = t.dueDate || t.scheduledDate;
+      if (!dStr) return false;
+      const d = new Date(dStr); d.setHours(0,0,0,0);
+      const td = new Date(); td.setHours(0,0,0,0);
+      return Math.round((d.getTime() - td.getTime()) / 86400000) < 0;
+    }).length,
+    today: tasks.filter(t => {
+      if (t.status === "done" || t.status === "archived") return false;
+      const dStr = t.dueDate || t.scheduledDate;
+      if (!dStr) return false;
+      const d = new Date(dStr); d.setHours(0,0,0,0);
+      const td = new Date(); td.setHours(0,0,0,0);
+      return Math.round((d.getTime() - td.getTime()) / 86400000) === 0;
+    }).length,
+    tomorrow: tasks.filter(t => {
+      if (t.status === "done" || t.status === "archived") return false;
+      const dStr = t.dueDate || t.scheduledDate;
+      if (!dStr) return false;
+      const d = new Date(dStr); d.setHours(0,0,0,0);
+      const td = new Date(); td.setHours(0,0,0,0);
+      return Math.round((d.getTime() - td.getTime()) / 86400000) === 1;
+    }).length,
   };
 
   useGSAP(() => {
@@ -126,6 +155,37 @@ export function HeroHeader({ priorityFilter, onPriorityFilter }: HeroHeaderProps
           })}
         </div>
       )}
+
+      {/* Due Date Filters */}
+      <div className="hero-text mt-4 flex flex-wrap justify-center items-center gap-3">
+        {(["overdue", "today", "tomorrow"] as const).map(d => {
+          if (dueCounts[d] === 0) return null;
+          
+          let cfg = { label: "", dot: "", active: "", hover: "" };
+          if (d === "overdue") cfg = { label: "Overdue", dot: "bg-red-500", active: "bg-red-500/15 text-red-500 border border-red-500/40 shadow-red-500/20 shadow-lg", hover: "hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30" };
+          if (d === "today") cfg = { label: "Today", dot: "bg-orange-500", active: "bg-orange-500/15 text-orange-500 border border-orange-500/40 shadow-orange-500/20 shadow-lg", hover: "hover:bg-orange-500/10 hover:text-orange-400 hover:border-orange-500/30" };
+          if (d === "tomorrow") cfg = { label: "Tomorrow", dot: "bg-amber-500", active: "bg-amber-500/15 text-amber-500 border border-amber-500/40 shadow-amber-500/20 shadow-lg", hover: "hover:bg-amber-500/10 hover:text-amber-400 hover:border-amber-500/30" };
+          
+          const isActive = dueFilter === d;
+          return (
+            <button
+              key={d}
+              onClick={() => onDueFilter(d)}
+              className={cn(
+                "flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold border border-transparent transition-all duration-200",
+                "text-muted-foreground bg-muted/30",
+                cfg.hover,
+                isActive && cfg.active,
+                isActive ? "scale-105" : "hover:scale-102"
+              )}
+            >
+              <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", cfg.dot)} />
+              <span className="tabular-nums font-bold">{dueCounts[d]}</span>
+              <span>{cfg.label}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

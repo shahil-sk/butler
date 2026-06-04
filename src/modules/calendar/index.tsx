@@ -197,8 +197,8 @@ export function CalendarModule() {
 
 
       {/* Main content area */}
-      <div className="flex flex-col flex-1 min-h-0 w-full mx-auto px-2 md:px-4 pb-4 animate-slide-in" style={{ animationDelay: '400ms', animationFillMode: 'both' }}>
-        <div className="flex flex-1 rounded-[2rem] border border-border/50 bg-card/30 backdrop-blur-xl shadow-2xl overflow-hidden relative">
+      <div className="flex flex-col flex-1 min-h-0 w-full mx-auto animate-slide-in" style={{ animationDelay: '400ms', animationFillMode: 'both' }}>
+        <div className="flex flex-1 border-t border-border/50 bg-card/30 backdrop-blur-xl overflow-hidden relative">
           <div className="flex flex-col flex-1 min-w-0 overflow-hidden bg-background/50">
             {(view === "month" || view === "week") && (
               <div className="grid grid-cols-7 border-b border-border/50 shrink-0 bg-muted/20">

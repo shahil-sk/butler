@@ -18,8 +18,19 @@ setupTaskEventListeners();
 
 export function TasksModule() {
   const { tasks, completeTask, updateTask, openTask, openQuickAdd, loadTasks } = useTaskStore();
-  const [activeView, setActiveView] = useState<"bento" | "kanban" | "list" | "timeline">("bento");
-  const [priorityFilter, setPriorityFilter] = useState<Priority | null>(null);
+  const [activeView, setActiveView] = useState<"bento" | "kanban" | "list" | "timeline">(() => {
+    return (localStorage.getItem("tasks_view") as any) || "bento";
+  });
+  const [priorityFilter, setPriorityFilter] = useState<Priority | null>(() => {
+    return (localStorage.getItem("tasks_priority_filter") as Priority) || null;
+  });
+  const [dueFilter, setDueFilter] = useState<"overdue" | "today" | "tomorrow" | null>(() => {
+    return (localStorage.getItem("tasks_due_filter") as any) || null;
+  });
+
+  useEffect(() => { localStorage.setItem("tasks_view", activeView); }, [activeView]);
+  useEffect(() => { if (priorityFilter) localStorage.setItem("tasks_priority_filter", priorityFilter); else localStorage.removeItem("tasks_priority_filter"); }, [priorityFilter]);
+  useEffect(() => { if (dueFilter) localStorage.setItem("tasks_due_filter", dueFilter); else localStorage.removeItem("tasks_due_filter"); }, [dueFilter]);
 
   useEffect(() => {
     void loadTasks();
@@ -31,9 +42,24 @@ export function TasksModule() {
     return tasks
       .filter(t => {
         if (t.status === "archived" || t.status === "done") return false;
-        const date = t.scheduledDate || t.dueDate;
-        if (!date) return true;
-        return date <= tDay;
+        const dateStr = t.scheduledDate || t.dueDate;
+        
+        if (dueFilter && dateStr) {
+          const d = new Date(dateStr);
+          d.setHours(0,0,0,0);
+          const td = new Date();
+          td.setHours(0,0,0,0);
+          const diff = Math.round((d.getTime() - td.getTime()) / 86400000);
+          
+          if (dueFilter === "overdue" && diff >= 0) return false;
+          if (dueFilter === "today" && diff !== 0) return false;
+          if (dueFilter === "tomorrow" && diff !== 1) return false;
+        } else if (dueFilter && !dateStr) {
+          return false;
+        }
+
+        if (!dateStr) return true;
+        return dateStr <= tDay || dueFilter != null;
       })
       .sort((a, b) => {
         const pA = a.priority ? pWeight[a.priority as keyof typeof pWeight] || 0 : 0;
@@ -55,6 +81,10 @@ export function TasksModule() {
 
   const handlePriorityFilter = useCallback((p: Priority) => {
     setPriorityFilter(prev => prev === p ? null : p);
+  }, []);
+
+  const handleDueFilter = useCallback((d: "overdue" | "today" | "tomorrow") => {
+    setDueFilter(prev => prev === d ? null : d);
   }, []);
 
   return (
@@ -104,6 +134,8 @@ export function TasksModule() {
         <HeroHeader 
           priorityFilter={priorityFilter} 
           onPriorityFilter={handlePriorityFilter} 
+          dueFilter={dueFilter}
+          onDueFilter={handleDueFilter}
         />
       )}
 
