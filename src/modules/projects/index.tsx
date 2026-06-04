@@ -23,16 +23,16 @@ function ProjectsHeroHeader({ activeCount, doneTasks }: { activeCount: number, d
   return (
     <div className="px-8 md:px-12 pt-8 pb-12">
       <div className="max-w-4xl">
-        <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight text-foreground leading-none mb-6">
+        <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight text-foreground leading-none mb-6 animate-slide-in">
           Projects
         </h1>
-        <p className="text-lg md:text-xl text-muted-foreground max-w-2xl leading-relaxed">
+        <p className="text-lg md:text-xl text-muted-foreground max-w-2xl leading-relaxed animate-slide-in" style={{ animationDelay: '100ms', animationFillMode: 'both' }}>
           You are currently driving <span className="font-bold text-foreground">{activeCount} active projects</span>. 
           Across all initiatives, <span className="font-bold text-foreground">{doneTasks} tasks</span> have been completed.
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-4 mt-10">
+      <div className="flex flex-wrap gap-4 mt-10 animate-slide-in" style={{ animationDelay: '200ms', animationFillMode: 'both' }}>
         <div className="px-6 py-4 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 flex flex-col gap-2 min-w-[200px]">
           <span className="text-xs font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
             <Activity size={14} /> Active
@@ -87,6 +87,7 @@ function ProjectsBoardView({ projects }: { projects: Project[] }) {
 // ── Gantt Roadmap Timeline View ──────────────────────────────
 function ProjectsTimelineView({ projects }: { projects: Project[] }) {
   const { openProject } = useProjectStore();
+  const allTasks = useTaskStore(s => s.tasks);
   const dates = projects.flatMap(p => [p.startDate, p.dueDate].filter(Boolean) as string[]);
   const todayStr = new Date().toISOString().slice(0, 10);
   
@@ -153,12 +154,23 @@ function ProjectsTimelineView({ projects }: { projects: Project[] }) {
                   const rightPct = getPercentage(due);
                   const widthPct = Math.max(8, rightPct - leftPct);
 
+                  const projectTasks = allTasks.filter(t => t.projectId === p.id && t.status !== "archived");
+                  const doneTasks = projectTasks.filter(t => t.status === "done").length;
+                  const totalTasks = projectTasks.length;
+                  const progress = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+
                   return (
                     <div key={p.id} className="flex items-center group cursor-pointer hover:bg-muted/30 p-2 rounded-2xl transition-colors animate-slide-in" style={{ animationDelay: `${i * 30}ms`, animationFillMode: 'both' }} onClick={() => openProject(p.id)}>
-                      <div className="w-1/4 min-w-[200px] pr-4 flex items-center gap-4 sticky left-0 bg-card group-hover:bg-muted/10 z-10 transition-colors">
-                        <div className="w-3 h-3 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: p.color }} />
-                        <div className="min-w-0">
+                      <div className="w-1/4 min-w-[200px] pr-4 flex flex-col justify-center sticky left-0 bg-card group-hover:bg-muted/10 z-10 transition-colors py-1">
+                        <div className="flex items-center gap-3">
+                          <div className="w-3 h-3 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: p.color }} />
                           <span className="text-[14px] font-semibold text-foreground block truncate group-hover:text-primary transition-colors">{p.name}</span>
+                        </div>
+                        <div className="flex items-center gap-3 mt-1.5 pl-6 text-[10px] uppercase font-bold tracking-wider text-muted-foreground">
+                          <span className={cn("px-1.5 py-0.5 rounded", p.status === 'active' ? "bg-emerald-500/10 text-emerald-500" : "bg-muted")}>
+                            {STATUS_OPTIONS.find(s => s.value === p.status)?.label || p.status}
+                          </span>
+                          {totalTasks > 0 && <span>{progress}% • {doneTasks}/{totalTasks} Tasks</span>}
                         </div>
                       </div>
 
@@ -172,6 +184,7 @@ function ProjectsTimelineView({ projects }: { projects: Project[] }) {
                             border: `1px solid ${p.color}40`,
                           }}
                         >
+                          <div className="absolute left-0 top-0 bottom-0 opacity-20" style={{ width: `${progress}%`, backgroundColor: p.color }} />
                           <span className="text-[10px] font-bold tracking-widest uppercase truncate z-10" style={{ color: p.color }}>
                             {formatDate(start)} → {formatDate(due)}
                           </span>

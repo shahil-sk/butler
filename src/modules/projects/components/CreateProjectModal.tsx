@@ -2,6 +2,9 @@ import { useState } from "react";
 import { X, Folder, Calendar } from "lucide-react";
 import { cn } from "@/shared/utils";
 import { useProjectStore } from "../store";
+import { useGSAP } from "@gsap/react";
+import gsap from "gsap";
+import { useRef } from "react";
 
 const PRESET_COLORS = [
   "#3b82f6", "#8b5cf6", "#ec4899", "#f97316",
@@ -24,18 +27,43 @@ export function CreateProjectModal() {
     closeCreateModal();
   };
 
-  return (
-    <div className="fixed inset-0 z-[100] flex justify-end">
-      <div className="absolute inset-0 bg-background/40 backdrop-blur-sm transition-opacity animate-fade-in" onClick={closeCreateModal} />
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
-      <div className="relative w-full md:w-[500px] h-full bg-card border-l border-border/50 flex flex-col shadow-2xl animate-slide-in-right">
+  useGSAP(() => {
+    if (createModalOpen && panelRef.current && overlayRef.current) {
+      gsap.fromTo(overlayRef.current, { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power2.out" });
+      gsap.fromTo(panelRef.current, 
+        { scale: 0.96, opacity: 0 }, 
+        { scale: 1, opacity: 1, duration: 0.4, ease: "power3.out" }
+      );
+    }
+  }, [createModalOpen]);
+
+  const handleClose = () => {
+    if (panelRef.current && overlayRef.current) {
+      gsap.to(overlayRef.current, { opacity: 0, duration: 0.2 });
+      gsap.to(panelRef.current, { 
+        scale: 0.98, opacity: 0, duration: 0.2, ease: "power2.in",
+        onComplete: closeCreateModal
+      });
+    } else {
+      closeCreateModal();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-8 lg:p-12">
+      <div ref={overlayRef} className="absolute inset-0 bg-background/60 backdrop-blur-md" onClick={handleClose} />
+
+      <div ref={panelRef} className="relative w-full md:w-[600px] max-h-[90vh] bg-card border border-border/50 rounded-3xl flex flex-col shadow-2xl overflow-hidden">
         
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-border/50 bg-card/80 backdrop-blur-md">
           <div className="flex items-center gap-2 text-xs font-bold tracking-wider text-muted-foreground uppercase">
             <Folder size={14} /> New Project
           </div>
-          <button onClick={closeCreateModal} className="p-2 text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted">
+          <button onClick={handleClose} className="p-2 text-muted-foreground hover:text-foreground transition-colors rounded-full hover:bg-muted">
             <X size={16} />
           </button>
         </div>

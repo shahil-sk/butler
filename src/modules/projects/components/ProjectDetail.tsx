@@ -4,6 +4,9 @@ import { cn, formatDate } from "@/shared/utils";
 import { useProjectStore } from "../store";
 import { useTaskStore } from "@/modules/tasks/store";
 import type { ProjectStatus } from "@/shared/types";
+import { useGSAP } from "@gsap/react";
+import gsap from "gsap";
+import { useRef } from "react";
 
 const STATUS_OPTIONS: { value: ProjectStatus; label: string }[] = [
   { value: "active",    label: "Active" },
@@ -35,16 +38,41 @@ export function ProjectDetail() {
 
   if (!project) return null;
 
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useGSAP(() => {
+    if (project && panelRef.current && overlayRef.current) {
+      gsap.fromTo(overlayRef.current, { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power2.out" });
+      gsap.fromTo(panelRef.current, 
+        { scale: 0.96, opacity: 0 }, 
+        { scale: 1, opacity: 1, duration: 0.4, ease: "power3.out" }
+      );
+    }
+  }, [project?.id]);
+
+  const handleClose = () => {
+    if (panelRef.current && overlayRef.current) {
+      gsap.to(overlayRef.current, { opacity: 0, duration: 0.2 });
+      gsap.to(panelRef.current, { 
+        scale: 0.98, opacity: 0, duration: 0.2, ease: "power2.in",
+        onComplete: closeProject
+      });
+    } else {
+      closeProject();
+    }
+  };
+
   const done = tasks.filter((t) => t.status === "done").length;
   const total = tasks.length;
   const progress = total > 0 ? Math.round((done / total) * 100) : 0;
   const save = (patch: Parameters<typeof updateProject>[1]) => void updateProject(project.id, patch);
 
   return (
-    <div className="fixed inset-0 z-[100] flex justify-end">
-      <div className="absolute inset-0 bg-background/40 backdrop-blur-sm transition-opacity animate-fade-in" onClick={closeProject} />
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-8 lg:p-12">
+      <div ref={overlayRef} className="absolute inset-0 bg-background/60 backdrop-blur-md" onClick={handleClose} />
       
-      <div className="relative w-full md:w-[680px] h-full bg-card border-l border-border/50 flex flex-col shadow-2xl animate-slide-in-right">
+      <div ref={panelRef} className="relative w-full md:w-[700px] max-h-[90vh] bg-card border border-border/50 flex flex-col shadow-2xl rounded-3xl overflow-hidden">
         
         {/* Header Ribbon */}
         <div className="h-2 w-full shrink-0" style={{ backgroundColor: project.color }} />
@@ -62,10 +90,10 @@ export function ProjectDetail() {
             </select>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => { void deleteProject(project.id); closeProject(); }} className="p-2 text-muted-foreground hover:text-red-500 rounded-md hover:bg-red-500/10 transition-colors" title="Delete">
+            <button onClick={() => { void deleteProject(project.id); handleClose(); }} className="p-2 text-muted-foreground hover:text-red-500 rounded-full hover:bg-red-500/10 transition-colors" title="Delete">
               <Trash2 size={16} />
             </button>
-            <button onClick={closeProject} className="p-2 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted transition-colors">
+            <button onClick={handleClose} className="p-2 text-muted-foreground hover:text-foreground rounded-full hover:bg-muted transition-colors">
               <X size={16} />
             </button>
           </div>

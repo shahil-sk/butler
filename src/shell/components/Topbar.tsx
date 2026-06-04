@@ -60,7 +60,7 @@ export function Topbar() {
         <button onClick={() => bus.emit("task:quick-add", {})} className="p-1.5 rounded-lg text-muted-foreground hover:bg-surface-2 hover:text-foreground transition-fast" title="New Task (⌘N)">
           <Plus size={16} />
         </button>
-        <button onClick={openCommandPalette} className="p-1.5 rounded-lg text-muted-foreground hover:bg-surface-2 hover:text-foreground transition-fast" title="Search (⌘K)">
+        <button onClick={() => openCommandPalette()} className="p-1.5 rounded-lg text-muted-foreground hover:bg-surface-2 hover:text-foreground transition-fast" title="Search (⌘K)">
           <Search size={16} />
         </button>
         <div className="w-[1px] h-4 bg-border/80 mx-1" />
