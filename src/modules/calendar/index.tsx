@@ -120,7 +120,7 @@ export function CalendarModule() {
   const eventsCount = allEvents.filter(e => e.startAt >= from.toISOString() && e.startAt <= to.toISOString()).length;
 
   return (
-    <div className="flex flex-col h-full bg-background overflow-hidden relative pt-4">
+    <div className="flex flex-col h-full bg-background overflow-hidden relative">
 
       {/* Glassmorphism Toolbar (View Selector) at the very top */}
       <div className="sticky top-6 mx-auto w-fit z-[80] flex items-center gap-2 p-2 bg-card/70 backdrop-blur-xl border border-border/50 rounded-full shadow-2xl mb-8">
