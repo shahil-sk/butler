@@ -31,6 +31,15 @@ function ProjectsHeroHeader({ count, doneTasks, statusFilter, onStatusFilter }: 
     { value: "on_hold", label: "On Hold", dot: "bg-amber-500", active: "bg-amber-500/15 text-amber-500 border-amber-500/40 shadow-amber-500/20", hover: "hover:bg-amber-500/10 hover:text-amber-500" },
     { value: "completed", label: "Completed", dot: "bg-blue-500", active: "bg-blue-500/15 text-blue-500 border-blue-500/40 shadow-blue-500/20", hover: "hover:bg-blue-500/10 hover:text-blue-500" }
   ];
+  const PILL_STYLES: Record<string, { bg: string; text: string }> = {
+    active: { bg: "bg-emerald-500", text: "text-white" },
+    on_hold: { bg: "bg-amber-500", text: "text-white" },
+    completed: { bg: "bg-blue-500", text: "text-white" },
+    archived: { bg: "bg-gray-500", text: "text-white" },
+  };
+
+  const currentPill = statusFilter ? (PILL_STYLES[statusFilter] ?? PILL_STYLES.active) : PILL_STYLES.active;
+  const pillClass = `relative inline-block px-6 py-2 ${currentPill.bg} ${currentPill.text} rounded-full -rotate-2 transform hover:rotate-0 transition-transform duration-500 shadow-2xl`;
   
   useGSAP(() => {
     gsap.from(".hero-text", {
@@ -52,7 +61,7 @@ function ProjectsHeroHeader({ count, doneTasks, statusFilter, onStatusFilter }: 
       
       <h1 className="hero-text text-5xl md:text-7xl lg:text-[5rem] font-black tracking-tighter leading-[0.9] text-foreground max-w-5xl mx-auto flex flex-wrap justify-center items-center gap-x-4 gap-y-2">
         <span>You are driving</span>
-        <span className="relative inline-block px-6 py-2 bg-emerald-500 text-white rounded-full -rotate-2 transform hover:rotate-0 transition-transform duration-500 shadow-2xl">
+        <span className={pillClass}>
           {count} {statusFilter ? (STATUS_OPTIONS.find(s => s.value === statusFilter)?.label ?? statusFilter) : 'Active'}
         </span>
         <span>projects.</span>
