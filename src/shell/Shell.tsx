@@ -54,26 +54,24 @@ export function Shell() {
       <div className="flex flex-col h-screen w-screen overflow-hidden bg-background text-foreground antialiased selection:bg-primary/20">
         <Topbar />
 
-        <div className="flex flex-1 min-w-0 overflow-hidden bg-background">
-          <div className="flex flex-1 min-w-0 overflow-hidden p-2 gap-2 max-w-screen-2xl mx-auto w-full">
-            <div className="flex flex-col flex-1 min-w-0 overflow-hidden rounded-xl border border-border/80 shadow-sm bg-card relative">
-              <ErrorBoundary name="module">
-                <Routes>
-                  <Route path="/"             element={<Navigate to="/tasks" replace />} />
-                  <Route path="/tasks/*"      element={<TasksModule />} />
-                  <Route path="/projects/*"   element={<ProjectsModule />} />
-                  <Route path="/planner/*"    element={<PlannerModule />} />
-                  <Route path="/calendar/*"   element={<CalendarModule />} />
-                  <Route path="/habits/*"     element={<HabitsModule />} />
-                  <Route path="/goals/*"      element={<GoalsModule />} />
-                  <Route path="/focus/*"      element={<FocusModule />} />
-                  <Route path="/time/*"       element={<TimeTrackingModule />} />
-                  <Route path="/settings/*"   element={<SettingsModule />} />
-                  <Route path="/ai/*"         element={<AIModule />} />
-                  <Route path="*"             element={<Navigate to="/tasks" replace />} />
-                </Routes>
-              </ErrorBoundary>
-            </div>
+        <div className="flex flex-col flex-1 min-w-0 overflow-hidden bg-background">
+          <div className="flex flex-1 min-w-0 overflow-hidden relative">
+            <ErrorBoundary name="module">
+              <Routes>
+                <Route path="/"             element={<Navigate to="/tasks" replace />} />
+                <Route path="/tasks/*"      element={<TasksModule />} />
+                <Route path="/projects/*"   element={<ProjectsModule />} />
+                <Route path="/planner/*"    element={<PlannerModule />} />
+                <Route path="/calendar/*"   element={<CalendarModule />} />
+                <Route path="/habits/*"     element={<HabitsModule />} />
+                <Route path="/goals/*"      element={<GoalsModule />} />
+                <Route path="/focus/*"      element={<FocusModule />} />
+                <Route path="/time/*"       element={<TimeTrackingModule />} />
+                <Route path="/settings/*"   element={<SettingsModule />} />
+                <Route path="/ai/*"         element={<AIModule />} />
+                <Route path="*"             element={<Navigate to="/tasks" replace />} />
+              </Routes>
+            </ErrorBoundary>
           </div>
           <StatusBar />
         </div>

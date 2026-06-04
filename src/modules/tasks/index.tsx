@@ -61,7 +61,7 @@ export function TasksModule() {
     <main className="w-full h-full overflow-y-auto overflow-x-hidden bg-background text-foreground pb-32">
       
       {/* Top Glass Navigation */}
-      <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 p-2 bg-card/70 backdrop-blur-xl border border-border/50 rounded-full shadow-2xl">
+      <div className="sticky top-6 mx-auto w-fit z-50 flex items-center gap-2 p-2 bg-card/70 backdrop-blur-xl border border-border/50 rounded-full shadow-2xl mb-8">
         <button
           onClick={() => setActiveView("bento")}
           className={cn(
