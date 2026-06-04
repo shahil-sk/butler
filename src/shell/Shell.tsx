@@ -55,7 +55,7 @@ export function Shell() {
         <Topbar />
 
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden bg-background">
-          <div className="flex flex-1 min-w-0 overflow-hidden relative">
+          <div className="flex-1 min-w-0 overflow-hidden relative">
             <ErrorBoundary name="module">
               <Routes>
                 <Route path="/"             element={<Navigate to="/tasks" replace />} />
