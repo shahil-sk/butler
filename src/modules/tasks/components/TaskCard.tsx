@@ -150,7 +150,10 @@ export function TaskCard({ task, onOpen, onToggleComplete, onPriorityClick }: Pr
           </div>
         )}
         {task.dependencies && task.dependencies.length > 0 && (
-          <div className="flex items-center gap-1.5 text-orange-500/70">
+          <div 
+            className="flex items-center gap-1.5 text-orange-500/70 cursor-help"
+            title={`Blocked by:\n${task.dependencies.map(id => allTasks.find(t => t.id === id)?.title || "Unknown Task").join("\n")}`}
+          >
             <Network size={14} />
             <span>{task.dependencies.length} Blockers</span>
           </div>
