@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { Sidebar } from "./components/Sidebar";
-import { TabBar } from "./components/TabBar";
 import { CommandPalette } from "./components/CommandPalette";
 import { GlobalSearch } from "./components/GlobalSearch";
 import { Notifications } from "./components/Notifications";
@@ -14,7 +13,6 @@ import { IntegrationLayer } from "./IntegrationLayer";
 import { QuickAdd } from "@/modules/tasks/components/QuickAdd";
 import { TaskDetail } from "@/modules/tasks/components/TaskDetail";
 import { useTaskStore } from "@/modules/tasks/store";
-import { cn } from "@/shared/utils";
 import { ErrorBoundary } from "@/shared/ErrorBoundary";
 
 import { TasksModule }       from "@/modules/tasks";
@@ -34,7 +32,7 @@ import AIModule              from "@/modules/ai";
 export function Shell() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { panels, activePanelId, setActivePanel, onNavigate } = useShellStore();
+  const { onNavigate } = useShellStore();
 
   useAutosave();
 
@@ -57,37 +55,25 @@ export function Shell() {
         <Sidebar />
 
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden bg-background">
-          <div className="flex flex-1 min-w-0 overflow-hidden p-2 gap-2">
-            {panels.map((panel, idx) => (
-              <div
-                key={panel.id}
-                onClick={() => setActivePanel(panel.id)}
-                className={cn(
-                  "flex flex-col flex-1 min-w-0 overflow-hidden rounded-xl border border-border/80 shadow-sm bg-background transition-shadow",
-                  activePanelId === panel.id && panels.length > 1 && "ring-2 ring-primary/20 shadow-md"
-                )}
-              >
-                <TabBar panel={panel} />
-                <div className="flex-1 overflow-hidden relative">
-                  <ErrorBoundary name="module">
-                    <Routes>
-                      <Route path="/"             element={<Navigate to="/tasks" replace />} />
-                      <Route path="/tasks/*"      element={<TasksModule />} />
-                      <Route path="/projects/*"   element={<ProjectsModule />} />
-                      <Route path="/planner/*"    element={<PlannerModule />} />
-                      <Route path="/calendar/*"   element={<CalendarModule />} />
-                      <Route path="/habits/*"     element={<HabitsModule />} />
-                      <Route path="/goals/*"      element={<GoalsModule />} />
-                      <Route path="/focus/*"      element={<FocusModule />} />
-                      <Route path="/time/*"       element={<TimeTrackingModule />} />
-                      <Route path="/settings/*"   element={<SettingsModule />} />
-                      <Route path="/ai/*"         element={<AIModule />} />
-                      <Route path="*"             element={<Navigate to="/tasks" replace />} />
-                    </Routes>
-                  </ErrorBoundary>
-                </div>
-              </div>
-            ))}
+          <div className="flex flex-1 min-w-0 overflow-hidden p-2 pl-0 gap-2">
+            <div className="flex flex-col flex-1 min-w-0 overflow-hidden rounded-xl border border-border/80 shadow-sm bg-card relative">
+              <ErrorBoundary name="module">
+                <Routes>
+                  <Route path="/"             element={<Navigate to="/tasks" replace />} />
+                  <Route path="/tasks/*"      element={<TasksModule />} />
+                  <Route path="/projects/*"   element={<ProjectsModule />} />
+                  <Route path="/planner/*"    element={<PlannerModule />} />
+                  <Route path="/calendar/*"   element={<CalendarModule />} />
+                  <Route path="/habits/*"     element={<HabitsModule />} />
+                  <Route path="/goals/*"      element={<GoalsModule />} />
+                  <Route path="/focus/*"      element={<FocusModule />} />
+                  <Route path="/time/*"       element={<TimeTrackingModule />} />
+                  <Route path="/settings/*"   element={<SettingsModule />} />
+                  <Route path="/ai/*"         element={<AIModule />} />
+                  <Route path="*"             element={<Navigate to="/tasks" replace />} />
+                </Routes>
+              </ErrorBoundary>
+            </div>
           </div>
           <StatusBar />
         </div>
