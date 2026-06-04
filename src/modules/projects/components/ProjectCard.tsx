@@ -95,7 +95,7 @@ export function ProjectCard({
       className={cn(
         "group relative flex flex-col justify-between overflow-hidden cursor-pointer",
         "bg-card/50 backdrop-blur-md border border-border hover:border-primary/50",
-        "p-6 transition-all duration-700 ease-out h-full min-h-0 rounded-[1.25rem]",
+        "p-6 transition-all duration-700 ease-out h-full min-h-0",
         "hover:shadow-2xl hover:-translate-y-1",
         isWide ? "col-span-1 md:col-span-2 row-span-1 min-h-[220px]" : "col-span-1 row-span-1 min-h-[220px]",
         project.status === "completed" && "opacity-50 grayscale hover:grayscale-0"

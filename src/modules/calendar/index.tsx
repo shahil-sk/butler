@@ -53,7 +53,7 @@ function CalendarHeroHeader({ anchor, eventsCount }: { anchor: Date, eventsCount
         {format(anchor, "EEEE, MMMM do")}
       </p>
       
-      <h1 className="hero-text text-5xl md:text-[5rem] font-black tracking-tighter leading-[0.9] text-foreground max-w-5xl mx-auto flex flex-wrap justify-center items-center gap-x-4 gap-y-2">
+      <h1 className="hero-text text-5xl md:text-[5rem] font-black tracking-tighter leading-[0.9] text-foreground w-full mx-auto flex flex-wrap justify-center items-center gap-x-4 gap-y-2">
         <span>You have</span>
         <span className="relative inline-block px-6 py-2 bg-primary text-primary-foreground rounded-full -rotate-2 transform hover:rotate-0 transition-transform duration-500 shadow-2xl">
           {eventsCount} events
@@ -197,7 +197,7 @@ export function CalendarModule() {
       </div>
 
       {/* Main content area */}
-      <div className="flex flex-col flex-1 min-h-[800px] max-w-[1400px] w-full mx-auto px-4 md:px-8 pb-32 animate-slide-in" style={{ animationDelay: '400ms', animationFillMode: 'both' }}>
+      <div className="flex flex-col flex-1 min-h-[800px] w-full mx-auto px-4 md:px-6 pb-32 animate-slide-in" style={{ animationDelay: '400ms', animationFillMode: 'both' }}>
         <div className="flex flex-1 rounded-[2rem] border border-border/50 bg-card/30 backdrop-blur-xl shadow-2xl overflow-hidden relative">
           <div className="flex flex-col flex-1 min-w-0 overflow-hidden bg-background/50">
             {(view === "month" || view === "week") && (
