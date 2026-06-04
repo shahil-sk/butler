@@ -107,37 +107,6 @@ function useFocusSound() {
 }
 
 // ─────────────────────────────────────────────────────────────
-// SEGMENT CONTROL
-// ─────────────────────────────────────────────────────────────
-
-type Tab = "focus" | "tracker" | "reports" | "analytics";
-const TABS: { id: Tab; label: string; Icon: any }[] = [
-  { id: "focus",     label: "Focus",     Icon: Target },
-  { id: "tracker",   label: "Tracker",   Icon: Clock },
-  { id: "reports",   label: "Reports",   Icon: BarChart2 },
-  { id: "analytics", label: "Analytics", Icon: TrendingUp },
-];
-
-function SegmentControl({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
-  return (
-    <div className="flex items-center gap-1 p-0.5 bg-muted/40 dark:bg-muted/25 border border-border/30 rounded-xl">
-      {TABS.map(({ id, label, Icon }) => (
-        <button key={id} onClick={() => onChange(id)}
-          className={cn(
-            "flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[12px] font-bold transition-all duration-200 select-none",
-            active === id
-              ? "bg-background text-foreground shadow-sm shadow-black/5 border border-border/20"
-              : "text-muted-foreground hover:text-foreground hover:bg-accent/40"
-          )}>
-          <Icon size={12} />
-          {label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
 // LIVE DURATION HOOK
 // ─────────────────────────────────────────────────────────────
 
@@ -1275,34 +1244,400 @@ function ReportsTab() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ROOT MODULE
-// ─────────────────────────────────────────────────────────────────────────────
-
 export default function FocusModule() {
-  const [tab, setTab] = useState<Tab>("focus");
-
   return (
     <div className="flex flex-col h-full overflow-hidden bg-background">
       {/* Active timer banner (cross-tab) */}
-      <ActiveTimerBanner onJump={() => setTab("tracker")} />
+      <ActiveTimerBanner onJump={() => {}} />
 
       {/* Header */}
       <div className="flex items-center justify-between px-6 pt-6 pb-3 border-b border-border/40 shrink-0 gap-4 flex-wrap md:flex-nowrap bg-background">
         <div>
-          <h1 className="text-[20px] font-bold leading-tight tracking-tight text-gradient">Focus Mode</h1>
-          <p className="text-[12px] text-muted-foreground mt-0.5 leading-tight font-medium">Mindful sessions & pomodoro tracker</p>
+          <h1 className="text-[20px] font-bold leading-tight tracking-tight text-gradient">Time & Focus Dashboard</h1>
+          <p className="text-[12px] text-muted-foreground mt-0.5 leading-tight font-medium">All your time tracking and pomodoro sessions in one place</p>
         </div>
-        <SegmentControl active={tab} onChange={setTab} />
       </div>
 
-      {/* Tab content */}
-      <div className="flex-1 overflow-hidden bg-background">
-        {tab === "focus"     && <FocusTab />}
-        {tab === "tracker"   && <TrackerTab />}
-        {tab === "reports"   && <ReportsTab />}
-        {tab === "analytics" && <SessionStatsView />}
+      <div className="flex-1 overflow-hidden bg-background flex flex-col lg:flex-row">
+        {/* Left Sidebar (Focus History) */}
+        <div className="hidden lg:block border-r border-border/40 h-full w-[250px] shrink-0">
+          <FocusTabHistoryOnly />
+        </div>
+
+        {/* Main Dashboard Content */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 space-y-8">
+          
+          {/* Top Row: Focus + Time Tracker Quick View */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+            
+            {/* Focus Control Panel */}
+            <div className="rounded-xl border border-border/50 bg-card shadow-sm overflow-hidden flex flex-col" style={{ minHeight: '500px' }}>
+              <div className="px-4 py-3 border-b border-border/40 bg-muted/20">
+                <h2 className="text-sm font-semibold flex items-center gap-2">
+                  <Target size={14} className="text-primary" />
+                  Focus Session
+                </h2>
+              </div>
+              <div className="flex-1 p-4 relative overflow-y-auto flex items-center justify-center">
+                <FocusTabCoreOnly />
+              </div>
+            </div>
+
+            {/* Time Tracker Panel */}
+            <div className="rounded-xl border border-border/50 bg-card shadow-sm overflow-hidden flex flex-col" style={{ minHeight: '500px' }}>
+              <div className="px-4 py-3 border-b border-border/40 bg-muted/20">
+                <h2 className="text-sm font-semibold flex items-center gap-2">
+                  <Clock size={14} className="text-emerald-500" />
+                  Time Tracker
+                </h2>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                <TrackerTab />
+              </div>
+            </div>
+
+          </div>
+
+          {/* Bottom Row: Reports */}
+          <div className="rounded-xl border border-border/50 bg-card shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-border/40 bg-muted/20">
+              <h2 className="text-sm font-semibold flex items-center gap-2">
+                <BarChart2 size={14} className="text-blue-500" />
+                Reports & Analytics
+              </h2>
+            </div>
+            <div className="h-[400px]">
+              <ReportsTab />
+            </div>
+          </div>
+          
+        </div>
       </div>
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SPLIT FOCUS TAB HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Extracts just the history sidebar from FocusTab
+function FocusTabHistoryOnly() {
+  const load        = useFocusStore((s) => s.load);
+  const sessions    = useFocusStore((s) => s.sessions);
+  
+  useEffect(() => { void load(); }, [load]);
+  
+  return <FocusHistorySidebar sessions={sessions} />;
+}
+
+// Extracts the main active timer content from FocusTab without the sidebar wrapper
+function FocusTabCoreOnly() {
+  const load        = useFocusStore((s) => s.load);
+  const sessions    = useFocusStore((s) => s.sessions);
+  const active      = useFocusStore((s) => s.activeSession);
+  const secsLeft    = useFocusStore((s) => s.secondsLeft);
+  const doneCount   = useFocusStore((s) => s.completedFocusCount);
+  const lastDone    = useFocusStore((s) => s.lastCompletedSession);
+  const pendingGoal = useFocusStore((s) => s.pendingGoal);
+  const stats       = useFocusStore((s) => s.stats);
+  const startFocus  = useFocusStore((s) => s.startFocus);
+  const pause       = useFocusStore((s) => s.pause);
+  const resume      = useFocusStore((s) => s.resume);
+  const cancel      = useFocusStore((s) => s.cancel);
+  const startBreak  = useFocusStore((s) => s.startBreak);
+  const skipBreak   = useFocusStore((s) => s.skipBreak);
+  const setTaskId   = useFocusStore((s) => s.setTaskId);
+  const setProjectId = useFocusStore((s) => s.setProjectId);
+  const setGoal     = useFocusStore((s) => s.setGoal);
+  const setNotes    = useFocusStore((s) => s.setSessionNotes);
+  const incrementInterrupt = useFocusStore((s) => s.incrementInterrupt);
+  const clearLast   = useFocusStore((s) => s.clearLastCompleted);
+
+  const tasks        = useTaskStore((s) => s.tasks);
+  const loadTasks    = useTaskStore((s) => s.loadTasks);
+  const projects     = useProjectStore((s) => s.projects);
+  const loadProjects = useProjectStore((s) => s.loadProjects);
+  const settings     = useShellStore((s) => s.settings);
+
+  const [focusMins,      setFocusMins]      = useState(() => settings?.focusModePomodoroMinutes   ?? 25);
+  const [shortBreakMins, setShortBreakMins] = useState(() => settings?.focusModeShortBreakMinutes ?? 5);
+  const [longBreakMins,  setLongBreakMins]  = useState(() => settings?.focusModeLongBreakMinutes  ?? 15);
+  const sessionsBeforeLong = settings?.focusModeSessionsBeforeLongBreak ?? 4;
+  const dailyGoalMins = 120; // 2h default; could come from settings
+
+  const [selTask,    setSelTask]    = useState("");
+  const [selProject, setSelProject] = useState("");
+  const [showConfig, setShowConfig] = useState(false);
+  const { sound, setSound } = useFocusSound();
+
+  useEffect(() => { void load(); void loadTasks(); void loadProjects(); }, [load, loadTasks, loadProjects]);
+  useEffect(() => {
+    if (active?.taskId)    setSelTask(active.taskId);
+    if (active?.projectId) setSelProject(active.projectId);
+  }, [active?.taskId, active?.projectId]);
+
+  // Space bar = pause / resume during active session
+  useEffect(() => {
+    const state = active?.state;
+    if (!state || state === "break") return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.code === "Space" && !(
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        (e.target as HTMLElement)?.contentEditable === "true"
+      )) {
+        e.preventDefault();
+        if (state === "focusing") pause();
+        else if (state === "paused") resume();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [active?.state, pause, resume]);
+
+  const state      = active?.state ?? "idle";
+  const isIdle     = !active || state === "idle";
+  const isFocusing = state === "focusing";
+  const isPaused   = state === "paused";
+  const isBreak    = state === "break";
+  const activeDuration = active?.plannedMinutes ?? active?.plannedDuration ?? focusMins;
+  const totalSecs = active ? activeDuration * 60 : focusMins * 60;
+  const dispSecs   = isIdle ? focusMins * 60 : secsLeft;
+
+  const showBreakOffer = !!lastDone && lastDone.type === "focus" && isIdle;
+  const showMoodRater  = !!lastDone && lastDone.type !== "focus" && isIdle;
+
+  // Today's completed focus minutes
+  const todayFocusMins = sessions
+    .filter((s) => s.type === "focus" && s.completedAt && (s.startedAt ?? s.createdAt).startsWith(today()))
+    .reduce((a, s) => a + (s.actualMinutes ?? 0), 0);
+
+  const openTasks = tasks
+    .filter((t) => t.status !== "done" && t.status !== "archived" && t.status !== "cancelled")
+    .sort((a, b) => {
+      if (isOverdue(a) !== isOverdue(b)) return isOverdue(a) ? -1 : 1;
+      const w: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3, none: 4 };
+      return (w[a.priority] ?? 4) - (w[b.priority] ?? 4);
+    });
+
+  function handleTaskChange(id: string) {
+    setSelTask(id);
+    if (active) setTaskId(id || undefined);
+    const t = id ? tasks.find((x) => x.id === id) : null;
+    const pid = t?.projectId ?? "";
+    setSelProject(pid);
+    if (active) setProjectId(pid || undefined);
+  }
+
+  function handleStart() {
+    void startFocus({
+      taskId:    selTask    || undefined,
+      projectId: selProject || undefined,
+      config: { focusMinutes: focusMins, shortBreakMinutes: shortBreakMins, longBreakMinutes: longBreakMins, sessionsBeforeLongBreak: sessionsBeforeLong },
+    });
+  }
+
+  function handleBreakAfterFocus() {
+    const isLong = doneCount > 0 && (doneCount % sessionsBeforeLong) === 0;
+    if (isLong) startBreak("long_break", longBreakMins);
+    else        startBreak("short_break", shortBreakMins);
+  }
+
+  return (
+      <div className="flex-1 flex flex-col items-center justify-start py-2 px-6 gap-5 w-full">
+
+        {/* Stats chips */}
+        <div className="flex items-center gap-4 flex-wrap justify-center">
+          {[
+            { label: "Today",    value: `${stats.todayMinutes}m`,                  chip: stats.todaySessions > 0 ? `${stats.todaySessions} sessions` : undefined },
+            { label: "Streak",   value: `${stats.currentStreak}d`,                chip: undefined, accent: stats.currentStreak >= 3 },
+          ].map(({ label, value, chip, accent }) => (
+            <div key={label} className="flex items-baseline gap-1.5">
+              <span className={cn("text-base font-semibold tabular-nums", accent && "text-primary")}>{value}</span>
+              <span className="text-xs text-muted-foreground">{label}</span>
+              {chip && <span className="text-[10px] text-muted-foreground/60">({chip})</span>}
+            </div>
+          ))}
+        </div>
+
+        {/* Ring timer */}
+        <RingTimer secondsLeft={dispSecs} totalSeconds={totalSecs} state={state} />
+
+        {/* Pomodoro dots */}
+        <div className="flex gap-2">
+          {Array.from({ length: sessionsBeforeLong }).map((_, i) => (
+            <div key={i} className={cn("w-2 h-2 rounded-full transition-colors",
+              i < (doneCount % sessionsBeforeLong) ? "bg-primary" : "bg-border"
+            )} />
+          ))}
+        </div>
+
+        {/* Daily goal bar (always visible) */}
+        <DailyGoalBar todayMins={todayFocusMins} goalMins={dailyGoalMins} />
+
+        {/* ── IDLE ── */}
+        {isIdle && !showBreakOffer && !showMoodRater && (
+          <div className="flex flex-col items-center gap-4 w-full max-w-sm">
+            <input
+              value={pendingGoal ?? ""}
+              onChange={(e) => setGoal(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleStart()}
+              placeholder="What's your intention for this session?"
+              className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
+            />
+            <div className="grid grid-cols-2 gap-2 w-full">
+              <select value={selTask} onChange={(e) => handleTaskChange(e.target.value)}
+                className="bg-background border border-border rounded-lg px-2 py-2 text-sm focus:outline-none truncate">
+                <option value="">— No task —</option>
+                {openTasks.map((t) => <option key={t.id} value={t.id}>{isOverdue(t) ? "⚠ " : ""}{t.title}</option>)}
+              </select>
+              <select value={selProject} onChange={(e) => setSelProject(e.target.value)}
+                className="bg-background border border-border rounded-lg px-2 py-2 text-sm focus:outline-none truncate">
+                <option value="">— No project —</option>
+                {projects.filter((p) => p.status === "active").map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+
+            {/* Ambient sound selector */}
+            <div className="flex items-center gap-2 w-full">
+              <Volume2 size={12} className="text-muted-foreground shrink-0" />
+              <div className="flex gap-1 flex-wrap">
+                {SOUNDS.map((s) => (
+                  <button key={s.id} onClick={() => setSound(s.id)}
+                    className={cn(
+                      "px-2 py-1 rounded-full text-[11px] font-medium transition-colors border",
+                      sound === s.id
+                        ? "bg-primary text-primary-foreground border-transparent"
+                        : "border-border text-muted-foreground hover:text-foreground bg-background"
+                    )}>
+                    {s.emoji} {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button onClick={() => setShowConfig((v) => !v)}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors self-start">
+              {showConfig ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              Timer settings
+            </button>
+            {showConfig && (
+              <div className="flex flex-col gap-3 w-full p-3 rounded-xl border" style={{ background: "hsl(var(--muted) / 0.3)", borderColor: "hsl(var(--border))" }}>
+                <PillButtons label="Focus"       value={focusMins}      options={[15,20,25,30,45,60]} onChange={setFocusMins}      disabled={false} />
+                <PillButtons label="Short break" value={shortBreakMins} options={[3,5,10]}            onChange={setShortBreakMins} disabled={false} />
+                <PillButtons label="Long break"  value={longBreakMins}  options={[10,15,20,30]}       onChange={setLongBreakMins}  disabled={false} />
+              </div>
+            )}
+            <button onClick={handleStart}
+              className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 transition-opacity">
+              Start Focus
+            </button>
+          </div>
+        )}
+
+        {/* ── FOCUSING ── */}
+        {isFocusing && (
+          <div className="flex flex-col items-center gap-4 w-full max-w-sm">
+            {active?.goal && <p className="text-sm text-muted-foreground italic text-center">"{active.goal}"</p>}
+            {(active?.interruptCount ?? 0) > 0 && (
+              <p className="text-xs text-amber-500">{active!.interruptCount} interruption{(active!.interruptCount ?? 0) > 1 ? "s" : ""}</p>
+            )}
+            <div className="w-full">
+              <label className="text-xs text-muted-foreground mb-1 block">Session notes</label>
+              <RichEditor
+                content={active?.notes ?? ""}
+                onChange={(v) => setNotes(v)}
+                placeholder="Capture thoughts mid-session…"
+                className="min-h-[60px] text-sm"
+              />
+            </div>
+            <div className="flex gap-2 w-full">
+              <button onClick={() => pause()}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border border-border hover:bg-muted transition-colors text-sm font-medium">
+                <Pause size={13} /> Pause
+                <kbd className="ml-1 text-[10px] text-muted-foreground/50 font-mono">Space</kbd>
+              </button>
+              {/* Interrupt counter */}
+              <button
+                onClick={() => incrementInterrupt?.()}
+                title="Log an interruption"
+                className="flex items-center justify-center gap-1 px-3 py-2.5 rounded-lg border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 transition-colors text-sm"
+              >
+                <AlertCircle size={13} />
+                {(active?.interruptCount ?? 0) > 0 && (
+                  <span className="text-xs font-semibold">{active!.interruptCount}</span>
+                )}
+              </button>
+              <button onClick={() => void cancel()}
+                className="flex-1 py-2.5 rounded-lg border text-sm font-medium hover:bg-destructive/10 transition-colors"
+                style={{ borderColor: "hsl(var(--destructive) / 0.4)", color: "hsl(var(--destructive))" }}>
+                Stop
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── PAUSED ── */}
+        {isPaused && (
+          <div className="flex flex-col items-center gap-3 w-full max-w-sm">
+            {active?.notes && stripHtml(active.notes) && (
+              <div className="w-full rounded-lg p-3 text-xs" style={{ background: "hsl(var(--muted) / 0.5)" }}>
+                <p className="text-muted-foreground mb-1 text-[10px] uppercase tracking-wider">Notes so far</p>
+                <div dangerouslySetInnerHTML={{ __html: active.notes }} className="prose prose-xs max-w-none line-clamp-4" />
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground/60">Press <kbd className="font-mono">Space</kbd> to resume</p>
+            <div className="flex gap-2 w-full">
+              <button onClick={resume}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
+                <Play size={13} /> Resume
+              </button>
+              <button onClick={() => void cancel()}
+                className="flex-1 py-2.5 rounded-xl border text-sm font-medium hover:bg-destructive/10 transition-colors"
+                style={{ borderColor: "hsl(var(--destructive) / 0.4)", color: "hsl(var(--destructive))" }}>
+                Stop
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── BREAK ── */}
+        {isBreak && (
+          <div className="flex flex-col items-center gap-3">
+            <p className="text-sm text-muted-foreground">
+              {active?.type === "long_break" ? "☕ Long break — you earned it" : "🍃 Short break"}
+            </p>
+            <button onClick={skipBreak}
+              className="px-6 py-2 rounded-lg border border-border hover:bg-muted transition-colors text-sm">
+              Skip break
+            </button>
+          </div>
+        )}
+
+        {/* ── POST-FOCUS: break offer ── */}
+        {showBreakOffer && (
+          <div className="flex flex-col items-center gap-3 p-5 rounded-2xl border w-full max-w-xs text-center"
+            style={{ background: "hsl(var(--card))", borderColor: "hsl(var(--border))" }}>
+            <p className="font-semibold">Session complete 🎉</p>
+            <p className="text-xs text-muted-foreground">
+              {doneCount > 0 && (doneCount % sessionsBeforeLong) === 0 ? "You've earned a long break" : "Take a short break"}
+            </p>
+            <div className="flex gap-2 w-full">
+              <button onClick={handleBreakAfterFocus}
+                className="flex-1 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
+                Start break
+              </button>
+              <button onClick={clearLast}
+                className="flex-1 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors">
+                Skip
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── POST-BREAK: mood ── */}
+        {showMoodRater && lastDone && <MoodCard sessionId={lastDone.id} mood={lastDone.mood} />}
+      </div>
   );
 }

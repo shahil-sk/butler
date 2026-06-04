@@ -36,7 +36,7 @@ function ProjectsHeroHeader({ activeCount, doneTasks }: { activeCount: number, d
   }, { scope: container });
 
   return (
-    <div ref={container} className="relative w-full px-4 md:px-8 mx-auto py-24 md:py-25 flex flex-col items-center text-center">
+    <div ref={container} className="relative w-full px-4 md:px-8 mx-auto pt-6 pb-8 md:py-25 flex flex-col items-center text-center">
       {/* Background radial gradient */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/20 blur-[120px] rounded-full pointer-events-none -z-10" />
       

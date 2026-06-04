@@ -25,7 +25,7 @@ import FocusModule           from "@/modules/focus";
 import { FocusHUD }          from "@/modules/focus/components/FocusHUD";
 import { BreakScreen }       from "@/modules/focus/components/BreakScreen";
 import { PostSessionReview } from "@/modules/focus/components/PostSessionReview";
-import TimeTrackingModule    from "@/modules/time-tracking";
+
 import { SettingsModule }    from "@/modules/settings";
 import AIModule              from "@/modules/ai";
 
@@ -66,7 +66,6 @@ export function Shell() {
                 <Route path="/habits/*"     element={<HabitsModule />} />
                 <Route path="/goals/*"      element={<GoalsModule />} />
                 <Route path="/focus/*"      element={<FocusModule />} />
-                <Route path="/time/*"       element={<TimeTrackingModule />} />
                 <Route path="/settings/*"   element={<SettingsModule />} />
                 <Route path="/ai/*"         element={<AIModule />} />
                 <Route path="*"             element={<Navigate to="/tasks" replace />} />

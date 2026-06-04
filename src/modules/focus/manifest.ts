@@ -6,10 +6,10 @@ import type { ModuleManifest } from "@/shared/types";
 
 export const focusManifest: ModuleManifest = {
   id:   "focus",
-  name: "Focus",
+  name: "Time & Focus",
   icon: "Timer",
   routes: [
-    { path: "/focus", label: "Focus" },
+    { path: "/focus", label: "Time & Focus" },
   ],
   commands: [
     {
@@ -35,9 +35,28 @@ export const focusManifest: ModuleManifest = {
       id:    "focus:start-on-task",
       label: "Focus on Selected Task",
       group: "Focus",
-      // emits focus:start-requested — handled in events.ts
       action: "focus:start-requested",
     },
+    {
+      id: "time:start-timer",
+      label: "Start Timer",
+      shortcut: "t s",
+      group: "Time",
+      action: "time:timer-started",
+    },
+    {
+      id: "time:stop-timer",
+      label: "Stop Timer",
+      shortcut: "t x",
+      group: "Time",
+      action: "time:timer-stopped",
+    },
+    {
+      id: "time:new-entry",
+      label: "Add Time Entry",
+      group: "Time",
+      action: "time:new-entry-requested",
+    }
   ],
   shortcuts: [
     {
@@ -51,6 +70,18 @@ export const focusManifest: ModuleManifest = {
       action:      "focus:session-paused",
       description: "Pause / resume active focus session",
       global:      true,
+    },
+    {
+      keys: "t s",
+      action: "time:timer-started",
+      description: "Start timer",
+      global: true,
+    },
+    {
+      keys: "t x",
+      action: "time:timer-stopped",
+      description: "Stop timer",
+      global: true,
     },
   ],
   sidebarOrder: 6,
