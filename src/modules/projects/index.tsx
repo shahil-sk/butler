@@ -29,7 +29,8 @@ function ProjectsHeroHeader({ count, doneTasks, statusFilter, onStatusFilter }: 
   const statuses = [
     { value: "active", label: "Active", dot: "bg-emerald-500", active: "bg-emerald-500/15 text-emerald-500 border-emerald-500/40 shadow-emerald-500/20", hover: "hover:bg-emerald-500/10 hover:text-emerald-500" },
     { value: "on_hold", label: "On Hold", dot: "bg-amber-500", active: "bg-amber-500/15 text-amber-500 border-amber-500/40 shadow-amber-500/20", hover: "hover:bg-amber-500/10 hover:text-amber-500" },
-    { value: "completed", label: "Completed", dot: "bg-blue-500", active: "bg-blue-500/15 text-blue-500 border-blue-500/40 shadow-blue-500/20", hover: "hover:bg-blue-500/10 hover:text-blue-500" }
+    { value: "completed", label: "Completed", dot: "bg-blue-500", active: "bg-blue-500/15 text-blue-500 border-blue-500/40 shadow-blue-500/20", hover: "hover:bg-blue-500/10 hover:text-blue-500" },
+    { value: "archived", label: "Archived", dot: "bg-gray-500", active: "bg-gray-500/15 text-gray-500 border-gray-500/40 shadow-gray-500/20", hover: "hover:bg-gray-500/10 hover:text-gray-500" }
   ];
   const PILL_STYLES: Record<string, { bg: string; text: string }> = {
     active: { bg: "bg-emerald-500", text: "text-white" },
@@ -292,6 +293,13 @@ export function ProjectsModule() {
 
   useEffect(() => { localStorage.setItem("projects_view", activeView); }, [activeView]);
   useEffect(() => { if (statusFilter) localStorage.setItem("projects_status_filter", statusFilter); else localStorage.removeItem("projects_status_filter"); }, [statusFilter]);
+
+  // Reset status filter when switching to non-grid views
+  useEffect(() => {
+    if (activeView !== "grid" && statusFilter) {
+      setStatusFilter(null);
+    }
+  }, [activeView]);
 
   useEffect(() => {
     void loadProjects();
