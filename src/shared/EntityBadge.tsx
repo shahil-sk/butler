@@ -1,9 +1,10 @@
 import { useTaskStore } from "@/modules/tasks/store";
 import { useProjectStore } from "@/modules/projects/store";
-import { useNoteStore } from "@/modules/notes/store";
 import { bus } from "@/kernel/event-bus";
 import { CheckSquare, FolderKanban, FileText, HelpCircle } from "lucide-react";
 import { cn } from "@/shared/utils";
+
+const note: any = undefined;
 
 interface EntityBadgeProps {
   type: "task" | "note" | "project";
@@ -15,7 +16,6 @@ export function EntityBadge({ type, id, className }: EntityBadgeProps) {
   // Select state safely
   const task = useTaskStore((s) => type === "task" ? s.getTaskById(id) : undefined);
   const project = useProjectStore((s) => type === "project" ? s.getProjectById(id) : undefined);
-  const note = useNoteStore((s) => type === "note" ? s.getNoteById(id) : undefined);
 
   let title = "";
   let icon = HelpCircle;

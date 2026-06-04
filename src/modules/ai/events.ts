@@ -2,8 +2,6 @@ import { bus } from "@/kernel/event-bus";
 import { AIService } from "./service";
 import { useTaskStore } from "@/modules/tasks/store";
 import { useShellStore } from "@/shell/store";
-import { useNoteStore } from "@/modules/notes/store";
-
 export function setupAIEventListeners() {
   const unsubs: Array<() => void> = [];
 
@@ -59,13 +57,7 @@ export function setupAIEventListeners() {
           linkedNoteIds: [noteId],
         });
         
-        // Link task to note
-        const note = useNoteStore.getState().getNoteById(noteId);
-        if (note && !note.linkedTaskIds.includes(task.id)) {
-          await useNoteStore.getState().updateNote(noteId, {
-            linkedTaskIds: [...note.linkedTaskIds, task.id]
-          });
-        }
+        // Removed note linking
         
         count++;
       }

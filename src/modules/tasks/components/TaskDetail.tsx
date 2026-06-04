@@ -7,9 +7,10 @@ import {
 } from "lucide-react";
 import { useTaskStore } from "../store";
 import { useProjectStore } from "@/modules/projects/store";
-import { useNoteStore } from "@/modules/notes/store";
 import type { Task, Priority, RecurrenceRule } from "@/shared/types";
 import { cn, getNextRecurrenceDate, today } from "@/shared/utils";
+
+const notes: any[] = [];
 
 export function TaskDetail() {
   const { 
@@ -18,7 +19,6 @@ export function TaskDetail() {
   } = useTaskStore();
 
   const projects = useProjectStore(s => s.projects);
-  const notes = useNoteStore(s => s.notes);
 
   const isCreating = quickAddOpen;
   const task = tasks.find(t => t.id === openTaskId);

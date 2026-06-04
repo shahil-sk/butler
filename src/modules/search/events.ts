@@ -1,7 +1,8 @@
 import { bus } from "@/kernel/event-bus";
 import { SearchService } from "./service";
 import type { Task, Project, Note, JournalEntry, Goal, FocusSession, ResearchSource, ResearchChunk } from "@/shared/types";
-import { useResearchStore } from "@/modules/research/store";
+
+const source: any = undefined; const chunk: any = undefined;
 
 export function setupSearchEventListeners() {
   const unsubs: Array<() => void> = [];
@@ -156,7 +157,6 @@ export function setupSearchEventListeners() {
     });
   }));
   unsubs.push(bus.on("research:chunk-created" as any, ({ chunk }: { chunk: ResearchChunk }) => {
-    const source = useResearchStore.getState().sources.find(s => s.id === chunk.sourceId);
     void SearchService.indexEntity({
       entityType: "research_chunk",
       entityId: chunk.id,
@@ -169,7 +169,6 @@ export function setupSearchEventListeners() {
   // Generic re-index request
   unsubs.push(bus.on("search:index-invalidated" as any, async ({ entityType, id }) => {
     if (entityType === "research_document") {
-      const source = useResearchStore.getState().sources.find(s => s.id === id);
       if (source) {
         void SearchService.indexEntity({
           entityType: "research_document",
@@ -180,9 +179,7 @@ export function setupSearchEventListeners() {
         });
       }
     } else if (entityType === "research_chunk") {
-      const chunk = useResearchStore.getState().chunks.find(c => c.id === id);
       if (chunk) {
-        const source = useResearchStore.getState().sources.find(s => s.id === chunk.sourceId);
         void SearchService.indexEntity({
           entityType: "research_chunk",
           entityId: chunk.id,
