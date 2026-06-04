@@ -23,7 +23,7 @@ const STATUS_OPTIONS: { value: ProjectStatus; label: string }[] = [
   { value: "archived",  label: "Archived" },
 ];
 
-function ProjectsHeroHeader({ activeCount, doneTasks, statusFilter, onStatusFilter }: { activeCount: number, doneTasks: number, statusFilter: string | null, onStatusFilter: (s: string) => void }) {
+function ProjectsHeroHeader({ count, doneTasks, statusFilter, onStatusFilter }: { count: number, doneTasks: number, statusFilter: string | null, onStatusFilter: (s: string) => void }) {
   const container = useRef<HTMLDivElement>(null);
   
   const statuses = [
@@ -53,17 +53,17 @@ function ProjectsHeroHeader({ activeCount, doneTasks, statusFilter, onStatusFilt
       <h1 className="hero-text text-5xl md:text-7xl lg:text-[5rem] font-black tracking-tighter leading-[0.9] text-foreground max-w-5xl mx-auto flex flex-wrap justify-center items-center gap-x-4 gap-y-2">
         <span>You are driving</span>
         <span className="relative inline-block px-6 py-2 bg-emerald-500 text-white rounded-full -rotate-2 transform hover:rotate-0 transition-transform duration-500 shadow-2xl">
-          {activeCount} active
+          {count} {statusFilter ? (STATUS_OPTIONS.find(s => s.value === statusFilter)?.label ?? statusFilter) : 'Active'}
         </span>
         <span>projects.</span>
       </h1>
 
-      <div className="hero-text mt-8 flex flex-wrap justify-center items-center gap-8 text-sm">
+      {/* <div className="hero-text mt-8 flex flex-wrap justify-center items-center gap-8 text-sm">
         <div className="flex flex-col items-center">
           <span className="text-3xl font-black text-blue-500">{doneTasks}</span>
           <span className="text-muted-foreground uppercase tracking-widest font-semibold text-[10px]">Tasks Completed</span>
         </div>
-      </div>
+      </div> */}
 
       {/* Status Filters */}
       <div className="hero-text mt-8 flex flex-wrap justify-center items-center gap-3">
@@ -289,10 +289,11 @@ export function ProjectsModule() {
     void loadTasks();
   }, [loadProjects, loadTasks]);
 
-  const projects = getFilteredProjects().filter(p => statusFilter ? p.status === statusFilter : true);
+  const baseProjects = getFilteredProjects();
+  const projects = baseProjects.filter(p => statusFilter ? p.status === statusFilter : true);
 
-  const doneTasks   = allTasks.filter((t) => t.projectId != null && t.status === "done").length;
-  const activeCount = projects.filter((p) => p.status === "active").length;
+  const doneTasks = allTasks.filter((t) => t.projectId != null && t.status === "done").length;
+  const displayCount = statusFilter ? baseProjects.filter((p) => p.status === statusFilter).length : baseProjects.filter((p) => p.status === "active").length;
 
   return (
     <main className="w-full h-full overflow-y-auto overflow-x-hidden bg-background text-foreground pb-32">
@@ -339,7 +340,7 @@ export function ProjectsModule() {
 
       {activeView === "grid" && (
         <ProjectsHeroHeader 
-          activeCount={activeCount} 
+          count={displayCount}
           doneTasks={doneTasks}
           statusFilter={statusFilter}
           onStatusFilter={(s) => setStatusFilter(prev => prev === s ? null : s)} 

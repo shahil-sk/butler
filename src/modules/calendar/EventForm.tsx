@@ -86,6 +86,21 @@ export function EventForm() {
     }
   }, [open]);
 
+  const container = useRef<HTMLDivElement>(null);
+
+  useGSAP(() => {
+    if (open && !editingId?.startsWith("task:")) {
+      gsap.from(".modal-overlay", { opacity: 0, duration: 0.3, ease: "power2.out" });
+      gsap.from(".modal-content", {
+        y: 40,
+        opacity: 0,
+        scale: 0.95,
+        duration: 0.4,
+        ease: "back.out(1.1)"
+      });
+    }
+  }, [open, editingId]);
+
   if (!open) return null;
 
   if (editingId?.startsWith("task:")) {
@@ -142,21 +157,6 @@ export function EventForm() {
     .slice(0, 8);
 
   const linkCount = linkedTasks.length + linkedNotes.length;
-
-  const container = useRef<HTMLDivElement>(null);
-  
-  useGSAP(() => {
-    if (open && !editingId?.startsWith("task:")) {
-      gsap.from(".modal-overlay", { opacity: 0, duration: 0.3, ease: "power2.out" });
-      gsap.from(".modal-content", {
-        y: 40,
-        opacity: 0,
-        scale: 0.95,
-        duration: 0.4,
-        ease: "back.out(1.1)"
-      });
-    }
-  }, [open, editingId]);
 
   return (
     <div ref={container} className="fixed inset-0 z-[100] flex items-center justify-center p-4">
