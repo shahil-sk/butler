@@ -197,6 +197,15 @@ export const useTaskStore = create<TaskState & TaskActions>()((set, get) => ({
   loadTasks: async () => {
     set({ loading: true, error: null });
     try {
+      // Auto-archive tasks completed more than 24 hours ago
+      await db.execute(`
+        UPDATE tasks 
+        SET status = 'archived' 
+        WHERE status = 'done' 
+        AND completed_at IS NOT NULL 
+        AND (julianday('now') - julianday(completed_at)) >= 1
+      `);
+
       const rows = await db.select<Record<string, unknown>>(
         "SELECT * FROM tasks WHERE status != 'archived' ORDER BY sort_order ASC, created_at DESC"
       );
