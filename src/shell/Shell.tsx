@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { Topbar } from "./components/Topbar";
 import { CommandPalette } from "./components/CommandPalette";
@@ -14,6 +14,7 @@ import { QuickAdd } from "@/modules/tasks/components/QuickAdd";
 import { TaskDetail } from "@/modules/tasks/components/TaskDetail";
 import { useTaskStore } from "@/modules/tasks/store";
 import { ErrorBoundary } from "@/shared/ErrorBoundary";
+import { TriageModal } from "./components/TriageModal";
 
 import { TasksModule }       from "@/modules/tasks";
 import { ProjectsModule }    from "@/modules/projects";
@@ -80,6 +81,7 @@ export function Shell() {
         <Notifications />
         <GlobalQuickAdd />
         <GlobalTaskDetail />
+        <GlobalTriageModal />
         <FocusHUD />
         <BreakScreen />
         <PostSessionReview />
@@ -101,4 +103,10 @@ function GlobalTaskDetail() {
   const openTaskId = useTaskStore((s) => s.openTaskId);
   if (!openTaskId) return null;
   return <TaskDetail />;
+}
+
+function GlobalTriageModal() {
+  const [isOpen, setIsOpen] = useState(false);
+  useBusEvent("triage:open", () => setIsOpen(true));
+  return <TriageModal isOpen={isOpen} onClose={() => setIsOpen(false)} />;
 }

@@ -224,6 +224,9 @@ export interface ButlerEventMap {
   // ── Global Today Panel ─────────────────────────────────
   "today:panel-open":          void;
   "today:panel-close":         void;
+  
+  // ── Global Triage Modal ─────────────────────────────────
+  "triage:open":               void;
 
   // ── AI hooks ─────────────────────────────────────────
   "ai:context-update":         { context: Record<string, unknown> };

@@ -4,7 +4,7 @@ import { cn } from "@/shared/utils";
 import { useShellStore } from "@/shell/store";
 import { useTheme } from "@/shell/components/ThemeProvider";
 import { bus } from "@/kernel/event-bus";
-import { CheckSquare, FolderKanban, CalendarDays, Target, Activity, Focus, Timer, Bot, Search, Plus, Settings, Sun, Moon } from "lucide-react";
+import { CheckSquare, FolderKanban, CalendarDays, Target, Activity, Focus, Timer, Bot, Search, Plus, Settings, Sun, Moon, Inbox } from "lucide-react";
 
 const appIcon = new URL("../../../src-tauri/icons/64x64.png", import.meta.url).href;
 
@@ -98,6 +98,14 @@ export function Topbar() {
             <Plus size={14} strokeWidth={3} />
             <span className="hidden sm:inline">Add Task</span>
             <span className="inline sm:hidden">Add</span>
+          </button>
+
+          <button 
+            onClick={() => bus.emit("triage:open")} 
+            className="p-2 rounded-full text-muted-foreground hover:bg-red-500/10 hover:text-red-500 border border-transparent hover:border-red-500/30 transition-all duration-200 ml-1" 
+            title="Triage Missed Items"
+          >
+            <Inbox size={16} className="sm:w-[18px] sm:h-[18px]" strokeWidth={2.5} />
           </button>
 
           <div className="w-px h-5 bg-border/50 mx-1 hidden sm:block" />
