@@ -21,7 +21,7 @@ export function SessionStatsView() {
   sessions.forEach(s => {
     if (s.status === "completed" && s.startedAt) {
       const day = s.startedAt.slice(0, 10);
-      heatmapData.set(day, (heatmapData.get(day) || 0) + (s.workDuration || s.actualDuration || 0));
+      heatmapData.set(day, (heatmapData.get(day) || 0) + (s.actualMinutes || 0));
     }
   });
 
@@ -39,7 +39,7 @@ export function SessionStatsView() {
   sessions.forEach(s => {
     if (s.status === "completed" && s.startedAt) {
       const hour = new Date(s.startedAt).getHours();
-      hourlyData[hour] += (s.workDuration || s.actualDuration || 0);
+      hourlyData[hour] += (s.actualMinutes || 0);
     }
   });
   

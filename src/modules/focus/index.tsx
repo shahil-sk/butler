@@ -3,9 +3,12 @@ import { useEffect } from "react";
 import { Flame, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { today } from "@/shared/utils";
+import { SessionStatsView } from "./components/SessionStatsView";
+import { useTaskStore } from "@/modules/tasks/store";
 
 export default function FocusDashboard() {
   const { load, sessions } = useFocusStore();
+  const { tasks } = useTaskStore();
 
   useEffect(() => {
     load();
@@ -40,13 +43,15 @@ export default function FocusDashboard() {
           </div>
         </div>
 
+        <SessionStatsView />
+
         <div className="space-y-6">
           <h2 className="text-2xl font-bold tracking-tight">Recent Flow Sessions</h2>
           <div className="space-y-3">
             {completedSessions.slice(0, 20).map(s => (
               <div key={s.id} className="flex items-center justify-between p-5 rounded-2xl bg-muted/20 border border-border/40 hover:bg-muted/40 transition-colors">
                 <div className="flex flex-col gap-1">
-                  <span className="font-semibold text-foreground">{s.goal || "Deep Work"}</span>
+                  <span className="font-semibold text-foreground">{tasks.find(t => t.id === s.taskId)?.title || s.goal || "Deep Work"}</span>
                   <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{format(new Date(s.startedAt), "MMM d, yyyy 'at' h:mm a")}</span>
                 </div>
                 <div className="text-lg font-black font-mono text-primary bg-primary/10 px-4 py-1.5 rounded-full tracking-tighter">

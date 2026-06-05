@@ -64,7 +64,7 @@ function ProjectsHeroHeader({ count, doneTasks, statusFilter, onStatusFilter }: 
        
       
       <h1 className="hero-text text-5xl md:text-7xl lg:text-[5rem] font-black tracking-tighter leading-[0.9] text-foreground max-w-5xl mx-auto flex flex-wrap justify-center items-center gap-x-4 gap-y-2">
-        <span>You have</span>
+        <span>You have</span><br></br>
         <span className={pillClass}>
           {count} {statusLabelText}
         </span>
