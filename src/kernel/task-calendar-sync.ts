@@ -25,9 +25,9 @@ function shadowId(taskId: string) {
   return `task:${taskId}`;
 }
 
-/** Determine the effective date for a task (scheduledDate wins over dueDate) */
 function taskDate(task: Task): string | undefined {
-  return task.scheduledDate ?? task.dueDate;
+  const d = task.scheduledAt ?? task.scheduledDate ?? task.dueDate;
+  return d ? d.slice(0, 10) : undefined;
 }
 
 /** Pick a colour based on task urgency */

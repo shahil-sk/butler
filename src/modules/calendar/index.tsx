@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, parseISO, isToday } from "date-fns";
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, parseISO, isToday, isValid } from "date-fns";
 import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Target, CheckSquare, Clock } from "lucide-react";
 import { cn, today } from "@/shared/utils";
 import { useTaskStore } from "@/modules/tasks/store";
@@ -9,6 +9,18 @@ import { manifest as calendarManifest } from "./manifest";
 import { bus } from "@/kernel/event-bus";
 
 registry.register(calendarManifest);
+
+function getLocalTaskDateStr(d: string | undefined): string | null {
+  if (!d) return null;
+  if (d.length === 10) return d;
+  try {
+    const parsed = new Date(d);
+    if (!isValid(parsed)) return d.slice(0, 10);
+    return format(parsed, "yyyy-MM-dd");
+  } catch {
+    return d.slice(0, 10);
+  }
+}
 
 export function CalendarModule() {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -44,13 +56,13 @@ export function CalendarModule() {
   const itemsForSelectedDate = useMemo(() => {
     const t = tasks.filter(task => {
       const d = task.scheduledAt || task.scheduledDate || task.dueDate;
-      return d && d.slice(0, 10) === selectedDateStr;
+      return getLocalTaskDateStr(d) === selectedDateStr;
     }).sort((a, b) => {
       const aTime = (a.scheduledAt || "").includes("T") ? a.scheduledAt! : "Z";
       const bTime = (b.scheduledAt || "").includes("T") ? b.scheduledAt! : "Z";
       return aTime.localeCompare(bTime);
     });
-    const e = events.filter(evt => evt.startDatetime.slice(0, 10) === selectedDateStr && !evt.taskId);
+    const e = events.filter(evt => getLocalTaskDateStr(evt.startDatetime) === selectedDateStr && !evt.taskId);
     return { tasks: t, events: e };
   }, [tasks, events, selectedDateStr]);
 
@@ -104,13 +116,13 @@ export function CalendarModule() {
               
               const dayTasks = tasks.filter(t => {
                 const d = t.scheduledAt || t.scheduledDate || t.dueDate;
-                return d && d.slice(0, 10) === dateStr;
+                return getLocalTaskDateStr(d) === dateStr;
               }).sort((a, b) => {
                 const aTime = [a.scheduledAt, a.scheduledDate, a.dueDate].find(d => d?.includes("T")) || "Z";
                 const bTime = [b.scheduledAt, b.scheduledDate, b.dueDate].find(d => d?.includes("T")) || "Z";
                 return aTime.localeCompare(bTime);
               });
-              const dayEvents = events.filter(e => e.startDatetime.slice(0, 10) === dateStr && !e.taskId);
+              const dayEvents = events.filter(e => getLocalTaskDateStr(e.startDatetime) === dateStr && !e.taskId);
               
               const totalItems = dayTasks.length + dayEvents.length;
 
