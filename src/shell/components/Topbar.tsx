@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { cn } from "@/shared/utils";
+import { cn, today } from "@/shared/utils";
 import { useShellStore } from "@/shell/store";
+import { useTaskStore } from "@/modules/tasks/store";
 import { useTheme } from "@/shell/components/ThemeProvider";
 import { bus } from "@/kernel/event-bus";
 import { CheckSquare, FolderKanban, CalendarDays, Target, Activity, Focus, Timer, Bot, Search, Plus, Settings, Sun, Moon, Inbox } from "lucide-react";
@@ -21,6 +22,15 @@ const NAV_ITEMS = [
 export function Topbar() {
   const { activeSidebarItem, onNavigate, openCommandPalette } = useShellStore();
   const { theme, setTheme } = useTheme();
+  
+  const tasks = useTaskStore((s) => s.tasks);
+  const tDay = today();
+  const overdueCount = tasks.filter(t => {
+    if (t.status === "done" || t.status === "archived") return false;
+    const date = t.scheduledAt || t.scheduledDate || t.dueDate;
+    if (!date) return false;
+    return date.slice(0, 10) < tDay;
+  }).length;
 
   const [timeStr, setTimeStr] = useState("");
   useEffect(() => {
@@ -102,10 +112,15 @@ export function Topbar() {
 
           <button 
             onClick={() => bus.emit("triage:open")} 
-            className="p-2 rounded-full text-muted-foreground hover:bg-red-500/10 hover:text-red-500 border border-transparent hover:border-red-500/30 transition-all duration-200 ml-1" 
+            className="relative p-2 rounded-full text-muted-foreground hover:bg-red-500/10 hover:text-red-500 border border-transparent hover:border-red-500/30 transition-all duration-200 ml-1 group" 
             title="Triage Missed Items"
           >
             <Inbox size={16} className="sm:w-[18px] sm:h-[18px]" strokeWidth={2.5} />
+            {overdueCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-[3px] text-[9px] font-bold text-white shadow-sm ring-2 ring-background group-hover:scale-110 transition-transform">
+                {overdueCount > 99 ? "99+" : overdueCount}
+              </span>
+            )}
           </button>
 
           <div className="w-px h-5 bg-border/50 mx-1 hidden sm:block" />
