@@ -106,8 +106,8 @@ export function CalendarModule() {
                 const d = t.scheduledAt || t.scheduledDate || t.dueDate;
                 return d && d.slice(0, 10) === dateStr;
               }).sort((a, b) => {
-                const aTime = (a.scheduledAt || "").includes("T") ? a.scheduledAt! : "Z";
-                const bTime = (b.scheduledAt || "").includes("T") ? b.scheduledAt! : "Z";
+                const aTime = [a.scheduledAt, a.scheduledDate, a.dueDate].find(d => d?.includes("T")) || "Z";
+                const bTime = [b.scheduledAt, b.scheduledDate, b.dueDate].find(d => d?.includes("T")) || "Z";
                 return aTime.localeCompare(bTime);
               });
               const dayEvents = events.filter(e => e.startDatetime.slice(0, 10) === dateStr && !e.taskId);
@@ -156,11 +156,15 @@ export function CalendarModule() {
                       )}>
                         <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", t.status === "done" ? "bg-muted-foreground" : "bg-blue-500")} />
                         <span className="truncate">{t.title}</span>
-                        {t.scheduledAt?.includes("T") && (
-                          <span className="ml-auto text-[9px] opacity-70 shrink-0 font-medium tracking-tighter">
-                            {format(parseISO(t.scheduledAt), "h:mm")}
-                          </span>
-                        )}
+                        {(() => {
+                          const timeStr = [t.scheduledAt, t.scheduledDate, t.dueDate].find(d => d?.includes("T"));
+                          if (!timeStr) return null;
+                          return (
+                            <span className="ml-auto text-[9px] opacity-70 shrink-0 font-medium tracking-tighter">
+                              {format(parseISO(timeStr), "h:mm")}
+                            </span>
+                          );
+                        })()}
                       </div>
                     ))}
                     {totalItems > 3 && (
@@ -237,12 +241,16 @@ export function CalendarModule() {
                         />
                         <div className="flex flex-col gap-1">
                           <span className={cn("font-bold text-sm", t.status === "done" && "line-through text-muted-foreground")}>{t.title}</span>
-                          {t.scheduledAt && t.scheduledAt.includes("T") && (
-                            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-bold">
-                              <Clock size={12} />
-                              {format(parseISO(t.scheduledAt), "h:mm a")}
-                            </div>
-                          )}
+                          {(() => {
+                            const timeStr = [t.scheduledAt, t.scheduledDate, t.dueDate].find(d => d?.includes("T"));
+                            if (!timeStr) return null;
+                            return (
+                              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-bold">
+                                <Clock size={12} />
+                                {format(parseISO(timeStr), "h:mm a")}
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     </div>

@@ -26,7 +26,7 @@ export function Topbar() {
   const tasks = useTaskStore((s) => s.tasks);
   const tDay = today();
   const overdueCount = tasks.filter(t => {
-    if (t.status === "done" || t.status === "archived" || t.status === "cancelled") return false;
+    if (t.status === "done" || t.status === "archived") return false;
     const date = t.scheduledAt || t.scheduledDate || t.dueDate;
     if (!date) return false;
     return date.slice(0, 10) < tDay;
@@ -105,13 +105,13 @@ export function Topbar() {
             className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 transition-all duration-300 font-bold text-xs tracking-wider uppercase"
             title="New Task (⌘N)"
           >
-            <Plus size={18} strokeWidth={2} />
-            <span className="hidden sm:inline"></span>
-            <span className="inline sm:hidden"></span>
+            <Plus size={14} strokeWidth={3} />
+            <span className="hidden sm:inline">Add Task</span>
+            <span className="inline sm:hidden">Add</span>
           </button>
 
           <button 
-            onClick={() => bus.emit("triage:open")} 
+            onClick={() => bus.emit("triage:open", undefined)} 
             className="relative p-2 rounded-full text-muted-foreground hover:bg-red-500/10 hover:text-red-500 border border-transparent hover:border-red-500/30 transition-all duration-200 ml-1 group" 
             title="Triage Missed Items"
           >
