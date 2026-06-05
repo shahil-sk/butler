@@ -18,7 +18,7 @@ export function TriageModal({ isOpen, onClose }: { isOpen: boolean; onClose: () 
   const tDay = today();
 
   const overdueTasks = tasks.filter(t => {
-    if (t.status === "done" || t.status === "archived") return false;
+    if (t.status === "done" || t.status === "archived" || t.status === "cancelled") return false;
     const date = t.scheduledAt || t.scheduledDate || t.dueDate;
     if (!date) return false;
     return date.slice(0, 10) < tDay;
