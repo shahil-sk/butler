@@ -59,14 +59,14 @@ function RingTimer({
       {/* Decorative ambient glow */}
       {(isFocusing || isBreak) && (
         <div 
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] rounded-full blur-[100px] opacity-20 pointer-events-none -z-10 transition-colors duration-1000"
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[240px] h-[240px] md:w-[300px] md:h-[300px] rounded-full blur-[80px] opacity-20 pointer-events-none -z-10 transition-colors duration-1000"
           style={{ backgroundColor: ringColor }}
         />
       )}
 
       {/* The Ring */}
-      <div className="relative flex flex-col items-center justify-center" style={{ width: 360, height: 360 }}>
-        <svg className="absolute inset-0 -rotate-90 drop-shadow-2xl" viewBox="0 0 360 360">
+      <div className="relative flex flex-col items-center justify-center w-[220px] h-[220px] md:w-[280px] md:h-[280px] lg:w-[320px] lg:h-[320px] shrink-0">
+        <svg className="absolute inset-0 -rotate-90 drop-shadow-2xl w-full h-full" viewBox="0 0 360 360">
           <circle cx="180" cy="180" r={r} fill="none" strokeWidth="4" stroke="hsl(var(--border))" strokeOpacity="0.2" />
           <circle
             cx="180" cy="180" r={r} fill="none" strokeWidth="12"
@@ -79,11 +79,11 @@ function RingTimer({
           />
         </svg>
 
-        <div className="flex flex-col items-center select-none z-10 w-full px-12 text-center">
-          <span className="text-[12px] font-bold tracking-[0.3em] uppercase text-muted-foreground mb-4 opacity-70">
+        <div className="flex flex-col items-center select-none z-10 w-full px-8 text-center">
+          <span className="text-[10px] md:text-[12px] font-bold tracking-[0.3em] uppercase text-muted-foreground mb-2 md:mb-4 opacity-70">
             {stateLabel}
           </span>
-          <span className="text-7xl lg:text-[6.5rem] font-mono font-black tabular-nums tracking-tighter leading-none text-foreground drop-shadow-md">
+          <span className="text-5xl md:text-6xl lg:text-7xl font-mono font-black tabular-nums tracking-tighter leading-none text-foreground drop-shadow-md">
             {formatSecs(secondsLeft)}
           </span>
           
@@ -95,7 +95,7 @@ function RingTimer({
           )}
 
           {/* Pomodoro Session Dots */}
-          <div className="flex gap-2.5 mt-8 items-center justify-center">
+          <div className="flex gap-2.5 mt-4 md:mt-8 items-center justify-center">
             {Array.from({ length: sessionsBeforeLong }).map((_, i) => (
               <div key={i} className={cn(
                 "w-2 h-2 rounded-full transition-all duration-500",
@@ -303,10 +303,10 @@ export default function FocusModule() {
 
       {/* Cinematic Hero AIDA Attention */}
       <section className="reveal-item w-full flex flex-col items-center text-center shrink-0">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 text-[10px] font-black tracking-[0.2em] uppercase mb-2 shadow-[0_0_20px_rgba(var(--primary)/0.15)]">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 text-[9px] md:text-[10px] font-black tracking-[0.2em] uppercase mb-1 md:mb-2 shadow-[0_0_20px_rgba(var(--primary)/0.15)]">
           <Brain size={12} /> Cognitive Engine
         </div>
-        <h1 className="text-3xl md:text-4xl font-black tracking-tighter text-foreground leading-[1.05]">
+        <h1 className="text-2xl md:text-3xl lg:text-4xl font-black tracking-tighter text-foreground leading-[1.05]">
           Engineer Your <span className="text-transparent bg-clip-text bg-gradient-to-br from-primary to-primary/60 inline-block align-bottom pb-1">Focus.</span>
         </h1>
       </section>
@@ -329,8 +329,8 @@ export default function FocusModule() {
       </section>
 
       {/* Gapless Bento Grid (Desire) */}
-      <section className="w-full max-w-5xl mx-auto shrink-0 h-[220px] lg:h-[260px]">
-        <div className="grid grid-cols-1 lg:grid-cols-12 h-full gap-4 grid-flow-dense">
+      <section className="w-full max-w-5xl mx-auto shrink-0 h-[200px] lg:h-[220px]">
+        <div className="grid grid-cols-1 lg:grid-cols-12 h-full gap-3 md:gap-4 grid-flow-dense">
           
           {/* Main Stat Block */}
           <div className="reveal-item lg:col-span-7 bg-surface-1/40 backdrop-blur-2xl border border-border/40 rounded-3xl p-6 flex flex-col justify-between group overflow-hidden relative shadow-xl hover:shadow-2xl transition-all duration-700">
