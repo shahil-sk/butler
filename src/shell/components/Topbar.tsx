@@ -36,65 +36,68 @@ export function Topbar() {
   };
 
   return (
-    <header className="w-full flex justify-center items-center p-4 pb-0 shrink-0 z-50 bg-transparent">
-      <div className="w-full max-w-[1600px] h-16 bg-background/60 backdrop-blur-2xl border border-border/40 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.1)] flex items-center justify-between px-4 relative">
+    <header className="w-full flex justify-center items-center p-2 sm:p-4 pb-0 shrink-0 z-50 bg-transparent">
+      <div className="w-full max-w-[1600px] bg-background/60 backdrop-blur-2xl border border-border/40 rounded-3xl sm:rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.1)] flex flex-wrap xl:flex-nowrap items-center justify-between px-3 sm:px-4 py-2 sm:py-0 sm:min-h-[4rem] relative gap-y-3 z-50">
         
         {/* Subtle inner glow */}
-        <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-primary/5 rounded-[2rem] pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-primary/5 rounded-3xl sm:rounded-[2rem] pointer-events-none" />
         
         {/* Left Side: Brand & Time */}
-        <div className="flex items-center gap-4 z-10 w-[280px]">
+        <div className="flex items-center gap-4 z-10 w-auto xl:w-[280px] shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-1.5 bg-background shadow-sm border border-border/40 rounded-xl transition-transform hover:scale-105 cursor-default">
-              <img src={appIcon} alt="Butler" width={24} height={24} className="rounded-lg" draggable={false} />
+              <img src={appIcon} alt="Butler" width={24} height={24} className="rounded-lg w-5 h-5 sm:w-6 sm:h-6" draggable={false} />
             </div>
-            <span className="text-[15px] font-bold tracking-tight text-foreground hidden sm:block">Butler</span>
+            <span className="text-[15px] font-bold tracking-tight text-foreground">Butler</span>
           </div>
-          <div className="hidden xl:block w-px h-5 bg-border/50" />
-          <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-muted-foreground hidden xl:block bg-muted/40 px-3 py-1.5 rounded-full border border-border/30 backdrop-blur-md">
+          <div className="hidden 2xl:block w-px h-5 bg-border/50" />
+          <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-muted-foreground hidden 2xl:block bg-muted/40 px-3 py-1.5 rounded-full border border-border/30 backdrop-blur-md">
             {timeStr}
           </span>
         </div>
 
         {/* Center: Navigation Pill */}
-        <nav className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1 p-1 bg-muted/20 border border-border/30 rounded-full backdrop-blur-xl z-20">
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeSidebarItem === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => navigate(item)}
-                title={item.label}
-                className={cn(
-                  "relative flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-semibold transition-all duration-300 ease-out group",
-                  isActive
-                    ? "text-primary shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {isActive && (
-                  <span className="absolute inset-0 bg-background dark:bg-muted/80 rounded-full -z-10 shadow-sm border border-border/50" />
-                )}
-                {!isActive && (
-                  <span className="absolute inset-0 bg-muted/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 -z-10" />
-                )}
-                <Icon size={16} strokeWidth={isActive ? 2.5 : 2} className={cn("transition-transform duration-300", isActive ? "scale-110" : "")} />
-                <span className="hidden lg:inline tracking-wide">{item.label}</span>
-              </button>
-            );
-          })}
+        <nav className="order-last xl:order-none w-full xl:w-auto flex justify-start sm:justify-center overflow-x-auto scrollbar-none z-20 pb-1 sm:pb-0">
+          <div className="flex items-center gap-1 p-1 bg-muted/20 border border-border/30 rounded-full backdrop-blur-xl shrink-0 min-w-min mx-auto xl:mx-0">
+            {NAV_ITEMS.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeSidebarItem === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => navigate(item)}
+                  title={item.label}
+                  className={cn(
+                    "relative flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full text-[13px] font-semibold transition-all duration-300 ease-out group shrink-0",
+                    isActive
+                      ? "text-primary shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {isActive && (
+                    <span className="absolute inset-0 bg-background dark:bg-muted/80 rounded-full -z-10 shadow-sm border border-border/50" />
+                  )}
+                  {!isActive && (
+                    <span className="absolute inset-0 bg-muted/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 -z-10" />
+                  )}
+                  <Icon size={16} strokeWidth={isActive ? 2.5 : 2} className={cn("transition-transform duration-300", isActive ? "scale-110" : "")} />
+                  <span className="hidden md:inline tracking-wide">{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </nav>
 
         {/* Right Side: Quick Actions */}
-        <div className="flex items-center justify-end gap-2 z-10 w-[280px]">
+        <div className="flex items-center justify-end gap-1 sm:gap-2 z-10 w-auto xl:w-[280px] shrink-0">
           <button 
             onClick={() => bus.emit("task:quick-add", {})} 
-            className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 transition-all duration-300 font-bold text-xs tracking-wider uppercase"
+            className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 transition-all duration-300 font-bold text-xs tracking-wider uppercase"
             title="New Task (⌘N)"
           >
             <Plus size={14} strokeWidth={3} />
             <span className="hidden sm:inline">Add Task</span>
+            <span className="inline sm:hidden">Add</span>
           </button>
 
           <div className="w-px h-5 bg-border/50 mx-1 hidden sm:block" />
@@ -104,7 +107,7 @@ export function Topbar() {
             className="p-2 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground border border-transparent hover:border-border/50 transition-all duration-200" 
             title="Search (⌘K)"
           >
-            <Search size={18} strokeWidth={2.5} />
+            <Search size={16} className="sm:w-[18px] sm:h-[18px]" strokeWidth={2.5} />
           </button>
           
           <button 
@@ -112,7 +115,7 @@ export function Topbar() {
             className="p-2 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground border border-transparent hover:border-border/50 transition-all duration-200" 
             title="Toggle Theme"
           >
-            {theme === 'dark' ? <Sun size={18} strokeWidth={2.5} /> : <Moon size={18} strokeWidth={2.5} />}
+            {theme === 'dark' ? <Sun size={16} className="sm:w-[18px] sm:h-[18px]" strokeWidth={2.5} /> : <Moon size={16} className="sm:w-[18px] sm:h-[18px]" strokeWidth={2.5} />}
           </button>
           
           <button 
@@ -120,7 +123,7 @@ export function Topbar() {
             className="p-2 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground border border-transparent hover:border-border/50 transition-all duration-200"
             title="Settings"
           >
-            <Settings size={18} strokeWidth={2.5} />
+            <Settings size={16} className="sm:w-[18px] sm:h-[18px]" strokeWidth={2.5} />
           </button>
         </div>
         
