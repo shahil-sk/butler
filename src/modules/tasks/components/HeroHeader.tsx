@@ -1,8 +1,9 @@
 import { useTaskStore } from "../store";
+import { today } from "@/shared/utils";
+import { addDays, format } from "date-fns";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import { useRef } from "react";
-import { format } from "date-fns";
 import { cn } from "@/shared/utils";
 import type { Priority } from "@/shared/types";
 
@@ -44,7 +45,7 @@ export function HeroHeader({ priorityFilter, onPriorityFilter, dueFilter, onDueF
   const container = useRef<HTMLDivElement>(null);
   const tasks = useTaskStore((s) => s.tasks);
   
-  const tDay = new Date().toISOString().slice(0, 10);
+  const tDay = today();
   const activeTasks = tasks.filter(t => {
     if (t.parentTaskId) return false;
     if (t.status === "done" || t.status === "archived") return false;
@@ -85,9 +86,7 @@ export function HeroHeader({ priorityFilter, onPriorityFilter, dueFilter, onDueF
       const dStr = t.dueDate || t.scheduledDate;
       if (!dStr) return false;
       
-      const tmrwObj = new Date();
-      tmrwObj.setDate(tmrwObj.getDate() + 1);
-      const tmrw = tmrwObj.toISOString().slice(0, 10);
+      const tmrw = format(addDays(new Date(), 1), "yyyy-MM-dd");
       
       return dStr.slice(0, 10) === tmrw;
     }).length,

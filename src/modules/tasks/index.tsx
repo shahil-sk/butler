@@ -11,6 +11,7 @@ import { KanbanView } from "./components/KanbanView";
 import { ListView } from "./components/ListView";
 import { TimelineView } from "./components/TimelineView";
 import { cn, today } from "@/shared/utils";
+import { addDays, format } from "date-fns";
 import type { Priority } from "@/shared/types";
 
 registry.register(tasksManifest);
@@ -41,9 +42,7 @@ export function TasksModule() {
     const tDay = today();
     
     // Calculate tomorrow's date string
-    const tmrwObj = new Date();
-    tmrwObj.setDate(tmrwObj.getDate() + 1);
-    const tmrw = tmrwObj.toISOString().slice(0, 10); // Approximation, ideally format(..., "yyyy-MM-dd") but it's fine
+    const tmrw = format(addDays(new Date(), 1), "yyyy-MM-dd");
 
     return tasks
       .filter(t => {
