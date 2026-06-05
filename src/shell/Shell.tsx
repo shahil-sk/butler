@@ -22,10 +22,9 @@ import { PlannerModule }     from "@/modules/planner";
 import { CalendarModule }    from "@/modules/calendar";
 import HabitsModule          from "@/modules/habits";
 import GoalsModule           from "@/modules/goals";
+
 import FocusModule           from "@/modules/focus";
-import { FocusHUD }          from "@/modules/focus/components/FocusHUD";
-import { BreakScreen }       from "@/modules/focus/components/BreakScreen";
-import { PostSessionReview } from "@/modules/focus/components/PostSessionReview";
+import { FlowBar }           from "@/modules/focus/components/FlowBar";
 
 import { SettingsModule }    from "@/modules/settings";
 import AIModule              from "@/modules/ai";
@@ -82,9 +81,7 @@ export function Shell() {
         <GlobalQuickAdd />
         <GlobalTaskDetail />
         <GlobalTriageModal />
-        <FocusHUD />
-        <BreakScreen />
-        <PostSessionReview />
+        <FlowBar />
         <ErrorBoundary name="IntegrationLayer">
           <IntegrationLayer />
         </ErrorBoundary>

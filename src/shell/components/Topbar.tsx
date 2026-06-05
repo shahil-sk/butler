@@ -90,7 +90,7 @@ export function Topbar() {
                   {!isActive && (
                     <span className="absolute inset-0 bg-muted/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 -z-10" />
                   )}
-                  <Icon size={16} strokeWidth={isActive ? 2.5 : 2} className={cn("transition-transform duration-300", isActive ? "scale-110" : "")} />
+                  <Icon size={14} strokeWidth={isActive ? 2.5 : 2} className={cn("transition-transform duration-300", isActive ? "scale-110" : "")} />
                   <span className="hidden md:inline tracking-wide">{item.label}</span>
                 </button>
               );
@@ -106,7 +106,7 @@ export function Topbar() {
             title="New Task (⌘N)"
           >
             <Plus size={14} strokeWidth={3} />
-            <span className="hidden sm:inline"> </span>
+            <span className="hidden sm:inline">Add</span>
             <span className="inline sm:hidden">Add</span>
           </button>
 

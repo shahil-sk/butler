@@ -3,9 +3,10 @@ import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import { 
   X, Calendar as CalIcon, Tag, Clock, ArrowRight, Trash2, Copy, Inbox, Layout, 
-  Folder, Network, Repeat, Link as LinkIcon, GitBranch 
+  Folder, Network, Repeat, Link as LinkIcon, GitBranch, Play
 } from "lucide-react";
 import { useTaskStore } from "../store";
+import { useFocusStore } from "@/modules/focus/store";
 import { useProjectStore } from "@/modules/projects/store";
 import type { Task, Priority, RecurrenceRule } from "@/shared/types";
 import { cn, getNextRecurrenceDate, today } from "@/shared/utils";
@@ -18,6 +19,7 @@ export function TaskDetail() {
     quickAddOpen, closeQuickAdd, createTask, quickAddPrefill
   } = useTaskStore();
 
+  const startFocus = useFocusStore(s => s.startFocus);
   const projects = useProjectStore(s => s.projects);
 
   const isCreating = quickAddOpen;
@@ -210,7 +212,10 @@ export function TaskDetail() {
               <div className="flex items-center gap-2">
                 {!isCreating && (
                   <>
-                    <button onClick={handleDuplicate} className="p-2 text-muted-foreground hover:text-primary transition-colors rounded-full hover:bg-muted">
+                    <button onClick={() => { if (task) startFocus(task.id); handleClose(); }} className="px-3 py-1 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-primary hover:bg-primary/10 transition-colors rounded-full border border-primary/30 hover:border-primary">
+                      <Play size={14} fill="currentColor" /> Flow
+                    </button>
+                    <button onClick={handleDuplicate} className="p-2 text-muted-foreground hover:text-foreground transition-colors rounded-full hover:bg-muted ml-2">
                       <Copy size={20} />
                     </button>
                     <button onClick={handleDelete} className="p-2 text-muted-foreground hover:text-red-500 transition-colors rounded-full hover:bg-red-500/10">

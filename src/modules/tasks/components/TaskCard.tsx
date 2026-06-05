@@ -1,10 +1,11 @@
 import { useRef } from "react";
-import { CheckCircle2, Circle, Calendar, ArrowRight, Repeat, Link as LinkIcon, Network, GitBranch, Clock, Sun, CalendarDays, CalendarRange, AlertCircle } from "lucide-react";
+import { CheckCircle2, Circle, Calendar, ArrowRight, Repeat, Link as LinkIcon, Network, GitBranch, Clock, Sun, CalendarDays, CalendarRange, AlertCircle, Play } from "lucide-react";
 import { format, isValid } from "date-fns";
 import { cn } from "@/shared/utils";
 import type { Task } from "@/shared/types";
 import { useProjectStore } from "@/modules/projects/store";
 import { useTaskStore } from "../store";
+import { useFocusStore } from "@/modules/focus/store";
 
 function formatTaskDate(dateString: string) {
   try {
@@ -49,6 +50,7 @@ export function TaskCard({ task, onOpen, onToggleComplete, onPriorityClick }: Pr
   const projects = useProjectStore(s => s.projects);
   const project = task.projectId ? projects.find(p => p.id === task.projectId) : null;
   const allTasks = useTaskStore(s => s.tasks);
+  const startFocus = useFocusStore(s => s.startFocus);
   
   const subtasks = allTasks.filter(t => t.parentTaskId === task.id);
   const doneSubtasks = subtasks.filter(t => t.status === "done");
@@ -201,7 +203,14 @@ export function TaskCard({ task, onOpen, onToggleComplete, onPriorityClick }: Pr
         )}
       </div>
       
-      <div className="absolute bottom-6 right-6 opacity-0 translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-500 ease-out z-20">
+      <div className="absolute bottom-6 right-6 opacity-0 translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-500 ease-out z-20 flex items-center gap-2">
+        <button 
+          onClick={(e) => { e.stopPropagation(); startFocus(task.id); }}
+          className="w-10 h-10 rounded-full bg-background border border-primary text-primary flex items-center justify-center shadow-lg hover:bg-primary hover:text-primary-foreground transition-colors"
+          title="Start Flow"
+        >
+          <Play size={18} className="ml-0.5" fill="currentColor" />
+        </button>
         <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg">
           <ArrowRight size={18} />
         </div>
