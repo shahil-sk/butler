@@ -1,269 +1,241 @@
-// @ts-nocheck
-// ============================================================
-// CALENDAR — Module root  (v3 enhanced)
-// New in this revision:
-//   - JumpToDate overlay (Cmd/Ctrl+G)
-//   - MiniAgendaSidebar on month view
-//   - Deadline dots on month cells (via task store)
-//   - Event colour-picker in toolbar area shortcut
-// ============================================================
-
-import { useEffect, useState } from "react";
-import {
-  startOfMonth, endOfMonth, startOfWeek, endOfWeek,
-  format, parseISO,
-} from "date-fns";
-import { ChevronLeft, ChevronRight, Plus, Calendar, Layers, Search } from "lucide-react";
-import { useGSAP } from "@gsap/react";
-import gsap from "gsap";
-import { useRef } from "react";
-import { cn } from "@/shared/utils";
+import { useState, useMemo, useEffect } from "react";
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, parseISO, isToday } from "date-fns";
+import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Target, CheckSquare, Clock } from "lucide-react";
+import { cn, today } from "@/shared/utils";
+import { useTaskStore } from "@/modules/tasks/store";
 import { useCalendarStore } from "./store";
-import { MonthGrid }          from "./components/MonthGrid";
-import { WeekView }           from "./WeekView";
-import { DayView }            from "./DayView";
-import { AgendaView }         from "./AgendaView";
-import { EventForm }          from "./EventForm";
-import { MiniAgendaSidebar }  from "./MiniAgendaSidebar";
-import { JumpToDateOverlay, useJumpToDate } from "./JumpToDate";
-import { bus }                from "@/kernel/event-bus";
-import { useTaskStore }       from "@/modules/tasks/store";
-const loadNotes = () => {};
+import { registry } from "@/kernel/router";
+import { manifest as calendarManifest } from "./manifest";
+import { bus } from "@/kernel/event-bus";
 
-const VIEW_LABELS = { month: "Month", week: "Week", day: "Day", agenda: "Agenda" } as const;
-
-function CalendarHeroHeader({ anchor, eventsCount }: { anchor: Date, eventsCount: number }) {
-  const container = useRef<HTMLDivElement>(null);
-  
-  useGSAP(() => {
-    gsap.from(".hero-text", {
-      y: 30,
-      opacity: 0,
-      duration: 1,
-      stagger: 0.1,
-      ease: "power4.out"
-    });
-  }, { scope: container });
-
-  return (
-    <div ref={container} className="relative w-full px-4 md:px-8 mx-auto pt-4 pb-4 flex flex-col items-center text-center shrink-0">
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/20 blur-[120px] rounded-full pointer-events-none -z-10" />
-      
-
-      
-      <h1 className="hero-text text-3xl md:text-5xl font-black tracking-tighter leading-[0.9] text-foreground w-full mx-auto flex flex-wrap justify-center items-center gap-x-4 gap-y-2">
-        <span>You have</span>
-        <span className="relative inline-block px-4 py-1 bg-primary text-primary-foreground rounded-full -rotate-2 transform hover:rotate-0 transition-transform duration-500 shadow-xl">
-          {eventsCount} events
-        </span>
-        <span>this {format(anchor, "MMMM")}.</span>
-      </h1>
-    </div>
-  );
-}
+registry.register(calendarManifest);
 
 export function CalendarModule() {
-  const {
-    view, activeDate, showProjectsLayer, contextMenu,
-    loadCalendars, loadEvents,
-    setView, goNext, goPrev, goToday,
-    openEventForm, setShowProjectsLayer, closeContextMenu, deleteEvent
-  } = useCalendarStore();
-
-  const loadTasks = useTaskStore((s) => s.loadTasks);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   
-  const { open: jumpOpen, setOpen: setJumpOpen } = useJumpToDate();
-
-  const anchor = parseISO(activeDate);
-  const from   = startOfMonth(startOfWeek(anchor, { weekStartsOn: 1 }));
-  const to     = endOfMonth(endOfWeek(anchor, { weekStartsOn: 1 }));
+  const { tasks, loadTasks } = useTaskStore();
+  const { events, loadEvents, loadCalendars } = useCalendarStore();
 
   useEffect(() => {
+    void loadTasks();
     void loadCalendars();
-    void (loadTasks as (() => Promise<void>) | undefined)?.();
-    void (loadNotes as (() => Promise<void>) | undefined)?.();
   }, []);
+
+  const from = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 1 });
+  const to = endOfWeek(endOfMonth(currentDate), { weekStartsOn: 1 });
 
   useEffect(() => {
     void loadEvents(from.toISOString(), to.toISOString());
-  }, [activeDate, view]);
+  }, [currentDate]);
 
-  useEffect(() => {
-    const unsubs = [
-      bus.on("task:created",  () => void (loadTasks as any)?.()),
-      bus.on("task:updated",  () => void (loadTasks as any)?.()),
-      bus.on("task:deleted",  () => void (loadTasks as any)?.()),
-      bus.on("note:created",  () => void (loadNotes as any)?.()),
-      bus.on("note:updated",  () => void (loadNotes as any)?.()),
-      bus.on("note:deleted",  () => void (loadNotes as any)?.()),
-      bus.on("calendar:open-for-date", ({ date }: { date: string }) => {
-        useCalendarStore.getState().setActiveDate(date);
-        useCalendarStore.getState().setView("day");
-        openEventForm({ startAt: `${date}T09:00:00`, endAt: `${date}T10:00:00` });
-      }),
-    ];
-    return () => unsubs.forEach((u) => u());
-  }, []);
+  const days = eachDayOfInterval({ start: from, end: to });
 
-  const headerLabel = (() => {
-    if (view === "month") return format(anchor, "MMMM yyyy");
-    if (view === "week") {
-      const ws = startOfWeek(anchor, { weekStartsOn: 1 });
-      const we = endOfWeek(anchor, { weekStartsOn: 1 });
-      return `${format(ws, "MMM d")} \u2013 ${format(we, "MMM d, yyyy")}`;
-    }
-    if (view === "day") return format(anchor, "EEEE, MMMM d, yyyy");
-    return format(anchor, "MMMM yyyy");
-  })();
+  const handlePrevMonth = () => setCurrentDate(subMonths(currentDate, 1));
+  const handleNextMonth = () => setCurrentDate(addMonths(currentDate, 1));
+  const handleGoToday = () => {
+    const t = new Date();
+    setCurrentDate(t);
+    setSelectedDate(t);
+  };
 
-  const allEvents = useCalendarStore(s => s.events);
-  const eventsCount = allEvents.filter(e => e.startAt >= from.toISOString() && e.startAt <= to.toISOString()).length;
+  // Get items for selected date
+  const selectedDateStr = format(selectedDate, "yyyy-MM-dd");
+  const itemsForSelectedDate = useMemo(() => {
+    const t = tasks.filter(task => {
+      const d = task.scheduledDate || task.dueDate;
+      return d && d.slice(0, 10) === selectedDateStr;
+    });
+    const e = events.filter(evt => evt.startDatetime.slice(0, 10) === selectedDateStr);
+    return { tasks: t, events: e };
+  }, [tasks, events, selectedDateStr]);
 
   return (
-    <div className="flex flex-col h-full bg-background overflow-hidden relative">
-
-      {/* Glassmorphism Toolbar (View Selector) at the very top */}
-      <div className="sticky top-6 mx-auto w-fit z-[80] flex items-center gap-2 p-2 bg-card/70 backdrop-blur-xl border border-border/50 rounded-full shadow-2xl mb-8">
-          <div className="flex items-center gap-1 pl-2">
-            <button onClick={goPrev} className="p-1.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-fast" aria-label="Previous">
-              <ChevronLeft size={16} />
-            </button>
-            <button onClick={goNext} className="p-1.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-fast" aria-label="Next">
-              <ChevronRight size={16} />
-            </button>
-          </div>
-
-          <h2 onClick={goToday} className="text-sm font-semibold hover:text-primary transition-colors hover:cursor-pointer min-w-[120px] text-center">
-            {headerLabel}
-          </h2>
-          
-          <div className="w-[1px] h-6 bg-border/60 mx-1" />
-
-          {/* Jump-to-date button */}
-          <button
-            onClick={() => setJumpOpen(true)}
-            title="Jump to date (Ctrl+G)"
-            className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-fast"
-            aria-label="Jump to date"
-          >
-            <Search size={16} />
-          </button>
-
-          <div className="w-[1px] h-6 bg-border/60 mx-1" />
-
-          {(Object.keys(VIEW_LABELS) as (keyof typeof VIEW_LABELS)[]).map((v) => (
-            <button
-              key={v}
-              onClick={() => setView(v)}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all",
-                view === v
-                  ? "bg-foreground text-background shadow-md"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {VIEW_LABELS[v]}
-            </button>
-          ))}
-
-          <div className="w-[1px] h-6 bg-border/60 mx-1" />
-
-          <button
-            onClick={() => setShowProjectsLayer(!showProjectsLayer)}
-            className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all",
-              showProjectsLayer 
-                ? "bg-indigo-500/10 text-indigo-500"
-                : "text-muted-foreground hover:bg-muted"
-            )}
-            title="Toggle Projects layer (milestones)"
-          >
-            <Layers size={16} />
-            Projects
-          </button>
-        </div>
+    <div className="flex flex-col h-full w-full bg-background overflow-hidden selection:bg-primary/20">
       
-      {/* Hero Header */}
-      <CalendarHeroHeader anchor={anchor} eventsCount={eventsCount} />
-
-      {/* Floating Action CTA */}
-      <button 
-        onClick={() => openEventForm({ startAt: `${activeDate}T09:00:00`, endAt: `${activeDate}T10:00:00` })}
-        className="fixed bottom-8 right-8 z-[90] w-14 h-14 bg-primary text-primary-foreground rounded-full shadow-[0_8px_40px_-12px_rgba(0,0,0,0.5)] flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-300"
-        title="New Event"
-      >
-        <Plus size={28} />
-      </button>
-
-
-      {/* Main content area */}
-      <div className="flex flex-col flex-1 min-h-0 w-full mx-auto animate-slide-in" style={{ animationDelay: '400ms', animationFillMode: 'both' }}>
-        <div className="flex flex-1 border-t border-border/50 bg-card/30 backdrop-blur-xl overflow-hidden relative">
-          <div className="flex flex-col flex-1 min-w-0 overflow-hidden bg-background/50">
-            {(view === "month" || view === "week") && (
-              <div className="grid grid-cols-7 border-b border-border/50 shrink-0 bg-muted/20">
-                {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d) => (
-                  <div key={d} className="py-3 text-center text-xs font-bold tracking-widest uppercase text-muted-foreground/70">{d}</div>
-                ))}
-              </div>
-            )}
-
-            {view === "month"  && <MonthGrid />}
-            {view === "week"   && <WeekView />}
-            {view === "day"    && <DayView />}
-            {view === "agenda" && <AgendaView />}
+      {/* Header */}
+      <div className="flex-none px-8 py-6 flex items-center justify-between border-b border-border/40 shrink-0">
+        <div className="flex items-center gap-6">
+          <div className="flex flex-col">
+            <h1 className="text-4xl font-black tracking-tight text-foreground">{format(currentDate, "MMMM")}</h1>
+            <span className="text-muted-foreground font-semibold tracking-widest uppercase text-xs">{format(currentDate, "yyyy")}</span>
           </div>
+          
+          <div className="flex items-center gap-1 bg-muted/30 p-1 rounded-2xl border border-border/50">
+            <button onClick={handlePrevMonth} className="p-2 hover:bg-background rounded-xl transition-all hover:shadow-sm"><ChevronLeft size={20} /></button>
+            <button onClick={handleGoToday} className="px-4 py-2 text-sm font-bold text-foreground hover:bg-background rounded-xl transition-all hover:shadow-sm">Today</button>
+            <button onClick={handleNextMonth} className="p-2 hover:bg-background rounded-xl transition-all hover:shadow-sm"><ChevronRight size={20} /></button>
+          </div>
+        </div>
 
-          {/* Mini agenda sidebar — only on month view */}
-          {view === "month" && <MiniAgendaSidebar />}
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => bus.emit("task:quick-add", { prefill: { scheduledDate: selectedDateStr } })}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary text-primary-foreground font-bold text-sm tracking-wide shadow-lg shadow-primary/20 hover:scale-105 transition-transform"
+          >
+            <Plus size={16} strokeWidth={3} /> New Task
+          </button>
         </div>
       </div>
 
-      <EventForm />
-
-      {/* Jump-to-date overlay */}
-      {jumpOpen && <JumpToDateOverlay onClose={() => setJumpOpen(false)} />}
-      {/* Context Menu Overlay */}
-      {contextMenu && (
-        <>
-          <div
-            className="fixed inset-0 z-40"
-            onClick={closeContextMenu}
-            onContextMenu={(e) => { e.preventDefault(); closeContextMenu(); }}
-          />
-          <div
-            className="fixed z-50 bg-popover border border-border rounded-md shadow-md text-sm py-1 min-w-[160px] animate-in fade-in zoom-in-95 duration-100"
-            style={{
-              left: Math.min(contextMenu.x, window.innerWidth - 170),
-              top: Math.min(contextMenu.y, window.innerHeight - 100)
-            }}
-          >
-            <button
-              className="w-full text-left px-3 py-1.5 hover:bg-accent text-foreground transition-fast flex items-center gap-2 text-[13px]"
-              onClick={async () => {
-                const { event } = contextMenu;
-                closeContextMenu();
-                if (event.id.startsWith("task:")) return;
-                
-                const start = new Date(event.startAt).getTime();
-                const end = new Date(event.endAt).getTime();
-                const durationMins = Math.max((end - start) / 60000, 15);
-                
-                await useTaskStore.getState().createTask({
-                  title: event.title,
-                  description: event.description,
-                  scheduledDate: event.startAt.slice(0, 10),
-                  scheduledAt: event.startAt,
-                  scheduledDuration: durationMins,
-                });
-                await deleteEvent(event.id);
-              }}
-            >
-              Convert to Task
-            </button>
+      {/* Main Content */}
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        
+        {/* Calendar Grid */}
+        <div className="flex-1 flex flex-col p-8 overflow-y-auto">
+          <div className="grid grid-cols-7 gap-4 mb-4">
+            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(day => (
+              <div key={day} className="text-center text-[11px] font-bold tracking-widest uppercase text-muted-foreground">
+                {day}
+              </div>
+            ))}
           </div>
-        </>
-      )}
+
+          <div className="grid grid-cols-7 gap-3 auto-rows-[minmax(120px,1fr)]">
+            {days.map((day, i) => {
+              const dateStr = format(day, "yyyy-MM-dd");
+              const isCurrentMonth = isSameMonth(day, currentDate);
+              const isSelected = isSameDay(day, selectedDate);
+              const isTodayDate = isToday(day);
+              
+              const dayTasks = tasks.filter(t => {
+                const d = t.scheduledDate || t.dueDate;
+                return d && d.slice(0, 10) === dateStr;
+              });
+              const dayEvents = events.filter(e => e.startDatetime.slice(0, 10) === dateStr);
+              
+              const totalItems = dayTasks.length + dayEvents.length;
+
+              return (
+                <button
+                  key={day.toISOString()}
+                  onClick={() => setSelectedDate(day)}
+                  className={cn(
+                    "relative flex flex-col items-start p-3 rounded-3xl border transition-all duration-300 text-left overflow-hidden group",
+                    isSelected 
+                      ? "bg-primary/5 border-primary/30 shadow-[0_8px_30px_rgb(var(--primary)/0.1)] ring-1 ring-primary/20" 
+                      : "bg-surface-1/30 border-border/40 hover:bg-surface-2 hover:border-border/80",
+                    !isCurrentMonth && "opacity-40 grayscale-[0.5]"
+                  )}
+                >
+                  <div className="flex w-full justify-between items-start mb-2">
+                    <span className={cn(
+                      "text-lg font-black tracking-tighter w-8 h-8 flex items-center justify-center rounded-full transition-colors",
+                      isTodayDate ? "bg-primary text-primary-foreground" : isSelected ? "text-primary" : "text-foreground"
+                    )}>
+                      {format(day, "d")}
+                    </span>
+                    
+                    {totalItems > 0 && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 bg-muted rounded-full text-muted-foreground">
+                        {totalItems}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex-1 w-full flex flex-col gap-1 overflow-hidden">
+                    {dayEvents.slice(0, 2).map(e => (
+                      <div key={e.id} className="w-full truncate text-[11px] font-semibold px-2 py-1 bg-amber-500/10 text-amber-500 rounded-md border border-amber-500/20">
+                        {e.title}
+                      </div>
+                    ))}
+                    {dayTasks.slice(0, 3 - Math.min(dayEvents.length, 2)).map(t => (
+                      <div key={t.id} className={cn(
+                        "w-full truncate text-[11px] font-semibold px-2 py-1 rounded-md border transition-colors flex items-center gap-1.5",
+                        t.status === "done" 
+                          ? "bg-muted/30 text-muted-foreground border-transparent line-through"
+                          : "bg-blue-500/10 text-blue-500 border-blue-500/20"
+                      )}>
+                        <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", t.status === "done" ? "bg-muted-foreground" : "bg-blue-500")} />
+                        {t.title}
+                      </div>
+                    ))}
+                    {totalItems > 3 && (
+                      <div className="text-[10px] font-bold text-muted-foreground px-1 mt-1">
+                        + {totalItems - 3} more
+                      </div>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Sidebar Schedule */}
+        <div className="w-[400px] border-l border-border/40 bg-surface-1/20 flex flex-col shrink-0 overflow-hidden">
+          <div className="p-8 border-b border-border/40 bg-background/50 backdrop-blur-xl shrink-0">
+            <h2 className="text-2xl font-black tracking-tight">{format(selectedDate, "EEEE")}</h2>
+            <p className="text-muted-foreground font-medium tracking-wide">{format(selectedDate, "MMMM do, yyyy")}</p>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-6 space-y-8">
+            
+            {/* Events */}
+            {itemsForSelectedDate.events.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground flex items-center gap-2">
+                  <CalendarIcon size={14} /> Scheduled Events
+                </h3>
+                <div className="flex flex-col gap-2">
+                  {itemsForSelectedDate.events.map(e => (
+                    <div key={e.id} className="p-4 bg-background border border-border/50 rounded-2xl flex flex-col gap-1 shadow-sm hover:shadow-md transition-shadow">
+                      <span className="font-bold text-sm text-foreground">{e.title}</span>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
+                        <Clock size={12} />
+                        {e.isAllDay ? "All Day" : format(parseISO(e.startDatetime), "h:mm a")}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Tasks */}
+            <div className="space-y-3">
+              <h3 className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground flex items-center gap-2">
+                <CheckSquare size={14} /> Tasks Due
+              </h3>
+              {itemsForSelectedDate.tasks.length === 0 ? (
+                <div className="p-6 text-center border border-dashed border-border/50 rounded-2xl text-muted-foreground text-sm font-medium">
+                  No tasks scheduled.
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {itemsForSelectedDate.tasks.map(t => (
+                    <div 
+                      key={t.id} 
+                      onClick={() => bus.emit("task:open", { taskId: t.id })}
+                      className={cn(
+                        "p-4 bg-background border rounded-2xl flex flex-col gap-2 shadow-sm hover:shadow-md transition-all cursor-pointer group",
+                        t.status === "done" ? "border-transparent opacity-50 grayscale" : "border-border/50 hover:border-primary/30"
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={cn(
+                          "w-4 h-4 rounded-full border-2 mt-0.5 shrink-0 transition-colors",
+                          t.status === "done" ? "bg-primary border-primary" : "border-muted-foreground group-hover:border-primary"
+                        )} />
+                        <div className="flex flex-col gap-1">
+                          <span className={cn("font-bold text-sm", t.status === "done" && "line-through text-muted-foreground")}>{t.title}</span>
+                          {t.scheduledDate && t.scheduledDate.includes("T") && (
+                            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-bold">
+                              <Clock size={12} />
+                              {format(parseISO(t.scheduledDate), "h:mm a")}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+          </div>
+        </div>
+
+      </div>
     </div>
   );
 }
