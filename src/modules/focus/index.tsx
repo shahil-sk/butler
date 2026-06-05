@@ -3,7 +3,7 @@ import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import {
   Play, Pause, Square, AlertCircle,
-  Target, Clock, Flame, Activity, Timer, ZapOff, Sparkles, Brain, Compass, ArrowRight
+  Target, Clock, Flame, Activity, Timer, ZapOff, Sparkles, Brain, Compass, ArrowRight, X
 } from "lucide-react";
 
 import { focusManifest }               from "./manifest";
@@ -32,200 +32,6 @@ function fmtMins(m: number) {
   return h === 0 ? `${r}m` : r === 0 ? `${h}h` : `${h}h ${r}m`;
 }
 
-// ─────────────────────────────────────────────────────────────
-// RING TIMER
-// ─────────────────────────────────────────────────────────────
-function RingTimer({
-  secondsLeft, totalSeconds, state, goal, onGoalChange,
-  onStart, onPause, onResume, onCancel, onInterrupt, onSkipBreak,
-  interruptCount, tasks, selTask, onTaskChange, focusMins, onFocusMinsChange,
-  doneCount, sessionsBeforeLong
-}: any) {
-  const r = 160;
-  const circ = 2 * Math.PI * r;
-  const progress = totalSeconds > 0 ? (totalSeconds - secondsLeft) / totalSeconds : 0;
-  const offset = circ * (1 - progress);
-
-  const isIdle = state === "idle";
-  const isFocusing = state === "focusing";
-  const isPaused = state === "paused";
-  const isBreak = state === "break";
-
-  const ringColor = isFocusing ? "hsl(var(--primary))" : isBreak ? "#10b981" : isPaused ? "#f59e0b" : "hsl(var(--border))";
-  const stateLabel = isIdle ? "READY FOR DEEP WORK" : isFocusing ? "FLOW STATE ACTIVE" : isPaused ? "SESSION PAUSED" : "RESTING";
-
-  return (
-    <div className="flex flex-col items-center justify-center gap-6 w-full h-full relative z-10">
-      {/* Decorative ambient glow */}
-      {(isFocusing || isBreak) && (
-        <div 
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[240px] h-[240px] md:w-[300px] md:h-[300px] rounded-full blur-[80px] opacity-20 pointer-events-none -z-10 transition-colors duration-1000"
-          style={{ backgroundColor: ringColor }}
-        />
-      )}
-
-      {/* The Ring */}
-      <div className="relative flex flex-col items-center justify-center w-[220px] h-[220px] md:w-[280px] md:h-[280px] lg:w-[320px] lg:h-[320px] shrink-0">
-        <svg className="absolute inset-0 -rotate-90 drop-shadow-2xl w-full h-full" viewBox="0 0 360 360">
-          <circle cx="180" cy="180" r={r} fill="none" strokeWidth="4" stroke="hsl(var(--border))" strokeOpacity="0.2" />
-          <circle
-            cx="180" cy="180" r={r} fill="none" strokeWidth="12"
-            strokeLinecap="round"
-            strokeDasharray={circ}
-            strokeDashoffset={offset}
-            stroke={ringColor}
-            style={{ transition: "stroke-dashoffset 1s linear, stroke 0.5s ease" }}
-            className="drop-shadow-[0_0_12px_rgba(var(--primary)/0.5)]"
-          />
-        </svg>
-
-        <div className="flex flex-col items-center select-none z-10 w-full px-8 text-center">
-          <span className="text-[10px] md:text-[12px] font-bold tracking-[0.3em] uppercase text-muted-foreground mb-2 md:mb-4 opacity-70">
-            {stateLabel}
-          </span>
-          <span className="text-5xl md:text-6xl lg:text-7xl font-mono font-black tabular-nums tracking-tighter leading-none text-foreground drop-shadow-md">
-            {formatSecs(secondsLeft)}
-          </span>
-          
-          {/* Goal display when active */}
-          {(isFocusing || isPaused) && goal && (
-            <p className="mt-6 text-sm font-medium text-muted-foreground max-w-[220px] leading-snug line-clamp-2">
-              "{goal}"
-            </p>
-          )}
-
-          {/* Pomodoro Session Dots */}
-          <div className="flex gap-2.5 mt-4 md:mt-8 items-center justify-center">
-            {Array.from({ length: sessionsBeforeLong }).map((_, i) => (
-              <div key={i} className={cn(
-                "w-2 h-2 rounded-full transition-all duration-500",
-                i < (doneCount % sessionsBeforeLong) ? "bg-primary scale-125 shadow-[0_0_8px_hsl(var(--primary)/0.8)]" : "bg-border/60"
-              )} />
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Idle Configuration (Task, Goal, Duration) */}
-      {isIdle && (
-        <div className="flex flex-col items-center gap-4 w-full max-w-lg animate-in fade-in slide-in-from-bottom-4 duration-700 mt-2">
-          <div className="w-full bg-background/40 backdrop-blur-3xl border border-border/50 rounded-3xl p-4 shadow-xl flex flex-col gap-4 relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
-            
-            <input
-              value={goal}
-              onChange={(e) => onGoalChange(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && onStart()}
-              placeholder="Set a deep intention..."
-              className="w-full text-center bg-transparent text-lg font-medium text-foreground focus:outline-none placeholder:text-muted-foreground/40 transition-colors relative z-10"
-            />
-            
-            <div className="w-full h-px bg-border/40 relative z-10" />
-
-            <div className="flex items-center gap-2 w-full relative z-10">
-              <div className="flex-1 bg-background/50 border border-border/40 rounded-xl relative group hover:border-primary/30 transition-colors">
-                <Compass className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4 group-hover:text-primary transition-colors" />
-                <select
-                  value={selTask}
-                  onChange={(e) => onTaskChange(e.target.value)}
-                  className="w-full bg-transparent pl-9 pr-4 py-2 text-xs focus:outline-none appearance-none cursor-pointer font-medium text-foreground"
-                >
-                  <option value="">No specific task</option>
-                  {tasks.map((t: any) => <option key={t.id} value={t.id}>{t.title}</option>)}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/50 w-4 h-4 pointer-events-none" />
-              </div>
-
-              <div className="flex bg-background/50 border border-border/40 rounded-xl p-1 shrink-0">
-                {[25, 45, 60].map(m => (
-                  <button
-                    key={m}
-                    onClick={() => onFocusMinsChange(m)}
-                    className={cn(
-                      "px-2 py-1.5 rounded-lg text-[11px] font-bold transition-all duration-300",
-                      focusMins === m ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                    )}
-                  >{m}m</button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Controls */}
-      <div className="flex items-center justify-center gap-5 z-20 shrink-0">
-        {isIdle && (
-          <button
-            onClick={onStart}
-            className="group relative flex items-center gap-3 px-10 py-4 rounded-full bg-foreground text-background font-black tracking-wider uppercase overflow-hidden hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl"
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-            <Play fill="currentColor" size={16} />
-            <span className="text-xs relative z-10">Engage Focus</span>
-          </button>
-        )}
-
-        {isFocusing && (
-          <>
-            <button
-              onClick={onPause}
-              className="flex items-center justify-center w-16 h-16 rounded-full bg-background/80 backdrop-blur-xl border border-border/60 hover:bg-muted text-foreground transition-all hover:scale-110 shadow-xl"
-            >
-              <Pause fill="currentColor" size={22} />
-            </button>
-            <button
-              onClick={onInterrupt}
-              title="Log Distraction"
-              className="relative flex items-center justify-center w-16 h-16 rounded-full bg-background/80 backdrop-blur-xl border border-amber-500/40 text-amber-500 hover:bg-amber-500/10 transition-all hover:scale-110 shadow-xl"
-            >
-              <AlertCircle size={22} />
-              {interruptCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-amber-500 text-background text-[11px] font-black w-6 h-6 flex items-center justify-center rounded-full border-2 border-background">
-                  {interruptCount}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={onCancel}
-              className="flex items-center justify-center w-16 h-16 rounded-full bg-background/80 backdrop-blur-xl border border-red-500/40 text-red-500 hover:bg-red-500/10 transition-all hover:scale-110 shadow-xl"
-            >
-              <Square fill="currentColor" size={20} />
-            </button>
-          </>
-        )}
-
-        {isPaused && (
-          <>
-            <button
-              onClick={onResume}
-              className="flex items-center gap-3 px-10 py-5 rounded-full bg-primary text-primary-foreground font-black tracking-wider uppercase hover:scale-[1.02] active:scale-[0.98] transition-all shadow-[0_8px_32px_-8px_hsl(var(--primary)/0.6)]"
-            >
-              <Play fill="currentColor" size={18} />
-              <span className="text-[13px]">Resume</span>
-            </button>
-            <button
-              onClick={onCancel}
-              className="flex items-center justify-center w-16 h-16 rounded-full bg-background/80 backdrop-blur-xl border border-red-500/40 text-red-500 hover:bg-red-500/10 transition-all hover:scale-110 shadow-xl"
-            >
-              <Square fill="currentColor" size={20} />
-            </button>
-          </>
-        )}
-
-        {isBreak && (
-          <button
-            onClick={onSkipBreak}
-            className="flex items-center gap-2 px-8 py-4 rounded-full bg-background/60 backdrop-blur-xl border border-border/60 hover:bg-muted text-foreground font-bold tracking-wide transition-all hover:scale-[1.02]"
-          >
-            Skip Break <ArrowRight size={16} />
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function ChevronDown(props: any) {
   return <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="m6 9 6 6 6-6"/></svg>;
 }
@@ -244,10 +50,13 @@ export default function FocusModule() {
     setupTimeEventListeners();
   }, []);
 
-  // GSAP Entrance
+  // GSAP HUD Entrance
   useGSAP(() => {
-    gsap.from(".reveal-item", {
-      y: 30, opacity: 0, duration: 1, stagger: 0.1, ease: "power4.out", clearProps: "all"
+    gsap.from(".hud-panel", {
+      scale: 0.95, opacity: 0, duration: 0.8, stagger: 0.1, ease: "power3.out", clearProps: "all"
+    });
+    gsap.from(".hud-ring", {
+      scale: 0.8, opacity: 0, duration: 1.2, ease: "expo.out", delay: 0.2, clearProps: "all"
     });
   }, { scope: containerRef });
 
@@ -270,11 +79,19 @@ export default function FocusModule() {
     if (config && fMins !== config.pomodoroWorkMin) setFMins(config.pomodoroWorkMin);
   }, [config?.pomodoroWorkMin]);
 
-  // Derived state that was previously hardcoded
   const state = activeSession ? activeSession.state : "idle";
   const totalSeconds = (activeSession?.plannedMinutes || fMins) * 60;
   const goal = activeSession?.goal || pendingGoal;
   const interruptCount = activeSession?.interruptCount || 0;
+  const doneCount = fStore.completedFocusCount;
+
+  const isIdle = state === "idle";
+  const isFocusing = state === "focusing";
+  const isPaused = state === "paused";
+  const isBreak = state === "break";
+
+  const ringColor = isFocusing ? "hsl(var(--primary))" : isBreak ? "#10b981" : isPaused ? "#f59e0b" : "hsl(var(--border))";
+  const stateLabel = isIdle ? "SYSTEM STANDBY" : isFocusing ? "FLOW ENGAGED" : isPaused ? "SYSTEM PAUSED" : "REST PERIOD";
 
   // Compute 14-day streak for dots
   const streakDays = useMemo(() => {
@@ -288,129 +105,332 @@ export default function FocusModule() {
     return days;
   }, [sessions]);
 
-  // Recent focus history
   const recentSessions = useMemo(() => {
     return sessions
       .filter(s => s.type === "focus" && s.completedAt)
       .sort((a, b) => (b.startedAt ?? b.createdAt).localeCompare(a.startedAt ?? a.createdAt))
-      .slice(0, 5);
+      .slice(0, 8);
   }, [sessions]);
 
+  const r = 160;
+  const circ = 2 * Math.PI * r;
+  const progress = totalSeconds > 0 ? (totalSeconds - secondsLeft) / totalSeconds : 0;
+  const offset = circ * (1 - progress);
+
   return (
-    <main ref={containerRef} className="relative w-full h-full overflow-hidden bg-background flex flex-col p-6 lg:p-8 gap-4">
-      {/* Background Ambience */}
-      <div className="fixed inset-0 pointer-events-none -z-10 bg-[radial-gradient(ellipse_at_top_right,rgba(var(--primary)/0.03),transparent_50%)]" />
+    <main ref={containerRef} className="relative w-full h-full overflow-hidden bg-background p-4 lg:p-6 text-foreground font-sans">
+      {/* HUD Background Ambience */}
+      <div className="fixed inset-0 pointer-events-none -z-10 bg-[radial-gradient(circle_at_center,rgba(var(--primary)/0.03)_0%,transparent_70%)]" />
+      <div className="absolute top-0 left-0 w-full h-full pointer-events-none -z-10 bg-[linear-gradient(to_bottom,transparent_0%,rgba(0,0,0,0.1)_100%)] opacity-20" />
 
-      {/* Cinematic Hero AIDA Attention */}
-      <section className="reveal-item w-full flex flex-col items-center text-center shrink-0">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 text-[9px] md:text-[10px] font-black tracking-[0.2em] uppercase mb-1 md:mb-2 shadow-[0_0_20px_rgba(var(--primary)/0.15)]">
-          <Brain size={12} /> Cognitive Engine
-        </div>
-        <h1 className="text-2xl md:text-3xl lg:text-4xl font-black tracking-tighter text-foreground leading-[1.05]">
-          Engineer Your <span className="text-transparent bg-clip-text bg-gradient-to-br from-primary to-primary/60 inline-block align-bottom pb-1">Focus.</span>
-        </h1>
-      </section>
+      {/* Jarvis HUD Layout: 3 Columns */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 h-full gap-6">
 
-      {/* Primary Timer Engine (Interest) */}
-      <section className="reveal-item flex-1 min-h-0 w-full max-w-5xl mx-auto flex justify-center items-center">
-        <RingTimer
-          secondsLeft={secondsLeft} totalSeconds={totalSeconds} state={state}
-          goal={goal} onGoalChange={fStore.setGoal}
-          onStart={() => fStore.startFocus({ taskId: selTask || undefined, config: { focusMinutes: fMins } })}
-          onPause={fStore.pause} onResume={fStore.resume}
-          onCancel={fStore.cancel} onInterrupt={fStore.incrementInterrupt}
-          onSkipBreak={fStore.skipBreak}
-          interruptCount={interruptCount}
-          tasks={tasks} selTask={selTask} onTaskChange={setSelTask}
-          focusMins={fMins} onFocusMinsChange={setFMins}
-          doneCount={fStore.completedFocusCount}
-          sessionsBeforeLong={sessionsBeforeLong}
-        />
-      </section>
-
-      {/* Gapless Bento Grid (Desire) */}
-      <section className="w-full max-w-5xl mx-auto shrink-0 h-[200px] lg:h-[220px]">
-        <div className="grid grid-cols-1 lg:grid-cols-12 h-full gap-3 md:gap-4 grid-flow-dense">
-          
-          {/* Main Stat Block */}
-          <div className="reveal-item lg:col-span-7 bg-surface-1/40 backdrop-blur-2xl border border-border/40 rounded-3xl p-6 flex flex-col justify-between group overflow-hidden relative shadow-xl hover:shadow-2xl transition-all duration-700">
-            <div className="absolute top-0 right-0 w-48 h-48 bg-primary/5 rounded-full blur-[60px] group-hover:bg-primary/10 transition-colors duration-700 pointer-events-none" />
-            
-            <div className="flex items-center gap-2 mb-4 relative z-10">
-              <div className="p-2 bg-primary/10 rounded-xl text-primary"><Flame size={20} strokeWidth={2.5} /></div>
-              <h3 className="text-sm font-black tracking-wide uppercase text-foreground">Performance</h3>
+        {/* ── LEFT PANEL: CONFIG & LOG ── */}
+        <section className="hud-panel hidden lg:flex lg:col-span-3 flex-col gap-6 h-full">
+          {/* Header Branding */}
+          <div className="bg-surface-1/40 backdrop-blur-md border border-border/40 rounded-3xl p-6 shadow-lg shrink-0">
+            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 text-[10px] font-black tracking-[0.2em] uppercase mb-3 shadow-[0_0_15px_rgba(var(--primary)/0.15)]">
+              <Brain size={12} /> J.A.R.V.I.S. Core
             </div>
-            
-            <div className="grid grid-cols-4 gap-4 w-full mt-auto relative z-10">
-              <div>
-                <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-0.5">Today</p>
-                <p className="text-2xl font-black tabular-nums text-foreground">{fmtMins(stats.todayMinutes)}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-0.5">Sessions</p>
-                <p className="text-2xl font-black tabular-nums text-foreground">{stats.todaySessions}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-0.5">Week</p>
-                <p className="text-2xl font-black tabular-nums text-foreground">{fmtMins(stats.weekMinutes)}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-0.5">Streak</p>
-                <div className="flex items-baseline gap-1">
-                  <p className="text-2xl font-black tabular-nums text-primary">{stats.currentStreak}d</p>
-                  {stats.currentStreak > 2 && <Sparkles size={12} className="text-primary animate-pulse" />}
-                </div>
-              </div>
-            </div>
+            <h1 className="text-2xl font-black tracking-tighter text-foreground leading-[1.1]">
+              Engineer Your <br/><span className="text-transparent bg-clip-text bg-gradient-to-br from-primary to-primary/60">Focus.</span>
+            </h1>
+          </div>
 
-            {/* Streak Tracker */}
-            <div className="w-full mt-6 p-3 bg-background/50 rounded-xl border border-border/50 flex items-center justify-between gap-1 relative z-10">
-              {streakDays.map((d, i) => (
-                <div key={i} title={d.d} className="flex-1 flex justify-center">
-                  <div className={cn(
-                    "w-full max-w-[16px] h-1.5 rounded-full transition-all duration-500",
-                    d.has ? "bg-primary shadow-[0_0_8px_rgba(var(--primary)/0.5)]" : "bg-border/40"
-                  )} />
-                </div>
+          {/* Configuration (Only when idle) */}
+          <div className={cn(
+            "bg-surface-1/40 backdrop-blur-md border border-border/40 rounded-3xl p-5 shadow-lg shrink-0 transition-all duration-500",
+            isIdle ? "opacity-100 h-auto" : "opacity-50 h-[80px] overflow-hidden grayscale pointer-events-none"
+          )}>
+            <div className="flex items-center gap-2 mb-4">
+              <Compass className="text-primary w-4 h-4" />
+              <h3 className="text-xs font-black tracking-widest uppercase">Target Vector</h3>
+            </div>
+            <input
+              value={goal}
+              onChange={(e) => fStore.setGoal(e.target.value)}
+              placeholder="Set operational intent..."
+              className="w-full bg-background/50 border border-border/40 rounded-xl px-4 py-2.5 text-sm font-medium text-foreground focus:outline-none focus:border-primary/50 transition-colors mb-3"
+            />
+            <div className="relative mb-3">
+              <select
+                value={selTask}
+                onChange={(e) => setSelTask(e.target.value)}
+                className="w-full bg-background/50 border border-border/40 rounded-xl pl-4 pr-10 py-2.5 text-xs focus:outline-none appearance-none cursor-pointer font-medium text-foreground hover:border-primary/30 transition-colors"
+              >
+                <option value="">No linked task</option>
+                {tasks.map((t: any) => <option key={t.id} value={t.id}>{t.title}</option>)}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/50 w-4 h-4 pointer-events-none" />
+            </div>
+            <div className="flex gap-2 bg-background/50 border border-border/40 rounded-xl p-1">
+              {[25, 45, 60].map(m => (
+                <button
+                  key={m}
+                  onClick={() => setFMins(m)}
+                  className={cn(
+                    "flex-1 py-1.5 rounded-lg text-[11px] font-bold transition-all duration-300",
+                    fMins === m ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                  )}
+                >{m}m</button>
               ))}
             </div>
           </div>
 
-          {/* History / Log Block */}
-          <div className="reveal-item lg:col-span-5 bg-surface-1/40 backdrop-blur-2xl border border-border/40 rounded-3xl p-6 flex flex-col shadow-xl hover:shadow-2xl transition-all duration-700 relative z-10 overflow-hidden">
-            <div className="flex items-center gap-2 mb-4 shrink-0">
-              <div className="p-2 bg-muted rounded-xl text-foreground"><Activity size={20} strokeWidth={2.5} /></div>
-              <h3 className="text-sm font-black tracking-wide uppercase text-foreground">Recent Flow</h3>
+          {/* Recent Flow (Log) */}
+          <div className="bg-surface-1/40 backdrop-blur-md border border-border/40 rounded-3xl p-5 shadow-lg flex-1 min-h-0 flex flex-col relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-[40px] pointer-events-none" />
+            <div className="flex items-center gap-2 mb-4 shrink-0 relative z-10">
+              <Activity className="text-foreground w-4 h-4" />
+              <h3 className="text-xs font-black tracking-widest uppercase">Telemetry Log</h3>
             </div>
             
-            <div className="flex flex-col gap-2 flex-1 overflow-y-auto pr-2 scrollbar-hide">
+            <div className="flex flex-col gap-2 flex-1 overflow-y-auto pr-2 scrollbar-hide relative z-10">
               {recentSessions.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-center opacity-50 h-full min-h-[100px]">
-                  <Target size={24} className="mb-2 text-muted-foreground" />
-                  <p className="text-xs font-medium">No sessions recorded yet.</p>
+                <div className="flex-1 flex flex-col items-center justify-center text-center opacity-40">
+                  <Target size={20} className="mb-2" />
+                  <p className="text-[10px] font-bold uppercase tracking-widest">No telemetry data</p>
                 </div>
               ) : (
                 recentSessions.map(s => (
-                  <div key={s.id} className="group relative flex items-start gap-3 p-3 rounded-xl bg-background/40 hover:bg-background/80 border border-transparent hover:border-border/50 transition-all shrink-0">
-                    <div className="mt-1 w-2 h-2 rounded-full bg-primary shrink-0 shadow-[0_0_8px_rgba(var(--primary)/0.6)]" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-foreground truncate">{s.goal || "Deep Work"}</p>
-                      <div className="flex items-center gap-3 mt-1 opacity-70 group-hover:opacity-100 transition-opacity">
-                        <span className="text-[10px] font-semibold flex items-center gap-1"><Clock size={10} /> {s.actualMinutes}m</span>
-                        <span className="text-[10px] font-medium flex items-center gap-1"><Timer size={10} /> {format(parseISO(s.startedAt!), "h:mm")}</span>
-                        {(s.interruptCount ?? 0) > 0 && (
-                          <span className="text-[10px] font-bold text-amber-500 flex items-center gap-1 bg-amber-500/10 px-1.5 py-0.5 rounded"><ZapOff size={10} /> {s.interruptCount}</span>
-                        )}
-                      </div>
+                  <div key={s.id} className="group flex items-center justify-between p-3 rounded-xl bg-background/40 border border-border/30 hover:border-border/60 transition-colors shrink-0">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_5px_rgba(var(--primary)/0.8)] shrink-0" />
+                      <p className="text-[11px] font-bold truncate pr-2">{s.goal || "Deep Work"}</p>
+                    </div>
+                    <div className="flex items-center gap-2 opacity-60 text-[9px] font-mono tracking-wider shrink-0">
+                      <span className="flex items-center gap-1"><Clock size={9} /> {s.actualMinutes}m</span>
                     </div>
                   </div>
                 ))
               )}
             </div>
           </div>
+        </section>
 
-        </div>
-      </section>
+        {/* ── CENTER PANEL: THE ENGINE ── */}
+        <section className="col-span-1 lg:col-span-6 flex flex-col items-center justify-center relative h-full min-h-0">
+          
+          {/* Ambient Engine Glow */}
+          {(isFocusing || isBreak) && (
+            <div 
+              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] md:w-[450px] md:h-[450px] rounded-full blur-[100px] opacity-15 pointer-events-none -z-10 transition-colors duration-1000"
+              style={{ backgroundColor: ringColor }}
+            />
+          )}
+
+          {/* Central Ring */}
+          <div className="hud-ring relative flex flex-col items-center justify-center w-full max-w-[360px] aspect-square shrink-0 mb-8">
+            <svg className="absolute inset-0 w-full h-full -rotate-90 drop-shadow-2xl" viewBox="0 0 360 360">
+              {/* Outer decorative track */}
+              <circle cx="180" cy="180" r={r + 12} fill="none" strokeWidth="1" stroke="hsl(var(--border))" strokeOpacity="0.3" strokeDasharray="4 4" />
+              {/* Inner track */}
+              <circle cx="180" cy="180" r={r} fill="none" strokeWidth="2" stroke="hsl(var(--border))" strokeOpacity="0.2" />
+              {/* Main active ring */}
+              <circle
+                cx="180" cy="180" r={r} fill="none" strokeWidth="10"
+                strokeLinecap="butt"
+                strokeDasharray={circ}
+                strokeDashoffset={offset}
+                stroke={ringColor}
+                style={{ transition: "stroke-dashoffset 1s linear, stroke 0.5s ease" }}
+                className="drop-shadow-[0_0_15px_rgba(var(--primary)/0.6)]"
+              />
+            </svg>
+
+            <div className="absolute inset-0 flex flex-col items-center justify-center select-none text-center px-4">
+              <span className="text-[10px] md:text-[11px] font-bold tracking-[0.4em] uppercase mb-2 opacity-60" style={{ color: ringColor }}>
+                {stateLabel}
+              </span>
+              <span className="text-6xl md:text-7xl lg:text-[7rem] font-mono font-black tabular-nums tracking-tighter leading-none text-foreground drop-shadow-lg">
+                {formatSecs(secondsLeft)}
+              </span>
+
+              {/* Target Display for Central HUD */}
+              {(isFocusing || isPaused) && goal && (
+                <div className="mt-6 bg-background/60 backdrop-blur-md border border-border/50 px-4 py-1.5 rounded-full">
+                  <p className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase line-clamp-1 max-w-[180px]">
+                    TGT: {goal}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Command Controls */}
+          <div className="hud-ring flex items-center justify-center gap-4 z-20 shrink-0">
+            {isIdle && (
+              <button
+                onClick={() => fStore.startFocus({ taskId: selTask || undefined, config: { pomodoroWorkMin: fMins } as any })}
+                className="group relative flex items-center gap-3 px-10 py-3.5 rounded-full bg-foreground text-background font-black tracking-[0.2em] uppercase overflow-hidden hover:scale-[1.02] active:scale-[0.98] transition-all shadow-[0_0_30px_rgba(255,255,255,0.1)]"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-primary/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                <Play fill="currentColor" size={14} />
+                <span className="text-[11px] relative z-10">Initialize</span>
+              </button>
+            )}
+
+            {isFocusing && (
+              <>
+                <button
+                  onClick={() => fStore.pause()}
+                  className="flex items-center justify-center w-14 h-14 rounded-full bg-background/80 backdrop-blur-xl border border-border/60 hover:bg-muted text-foreground transition-all hover:scale-110 shadow-lg"
+                >
+                  <Pause fill="currentColor" size={20} />
+                </button>
+                <button
+                  onClick={() => fStore.incrementInterrupt()}
+                  title="Log Anomaly"
+                  className="relative flex items-center justify-center w-14 h-14 rounded-full bg-background/80 backdrop-blur-xl border border-amber-500/40 text-amber-500 hover:bg-amber-500/10 transition-all hover:scale-110 shadow-lg"
+                >
+                  <AlertCircle size={20} />
+                  {interruptCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-amber-500 text-background text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full border border-background">
+                      {interruptCount}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => fStore.cancel()}
+                  className="flex items-center justify-center w-14 h-14 rounded-full bg-background/80 backdrop-blur-xl border border-red-500/40 text-red-500 hover:bg-red-500/10 transition-all hover:scale-110 shadow-lg"
+                >
+                  <X strokeWidth={3} size={20} />
+                </button>
+              </>
+            )}
+
+            {isPaused && (
+              <>
+                <button
+                  onClick={() => fStore.resume()}
+                  className="flex items-center gap-3 px-8 py-3.5 rounded-full bg-primary text-primary-foreground font-black tracking-[0.2em] uppercase hover:scale-[1.02] active:scale-[0.98] transition-all shadow-[0_0_20px_hsl(var(--primary)/0.5)]"
+                >
+                  <Play fill="currentColor" size={14} />
+                  <span className="text-[11px]">Resume</span>
+                </button>
+                <button
+                  onClick={() => fStore.cancel()}
+                  className="flex items-center justify-center w-14 h-14 rounded-full bg-background/80 backdrop-blur-xl border border-red-500/40 text-red-500 hover:bg-red-500/10 transition-all hover:scale-110 shadow-lg"
+                >
+                  <X strokeWidth={3} size={20} />
+                </button>
+              </>
+            )}
+
+            {isBreak && (
+              <button
+                onClick={() => fStore.skipBreak()}
+                className="flex items-center gap-2 px-8 py-3.5 rounded-full bg-background/60 backdrop-blur-xl border border-border/60 hover:bg-muted text-foreground font-bold tracking-[0.1em] text-[11px] transition-all hover:scale-[1.02]"
+              >
+                OVERRIDE REST <ArrowRight size={14} />
+              </button>
+            )}
+          </div>
+
+          {/* Mobile Settings Fallback (only visible on small screens) */}
+          {isIdle && (
+            <div className="mt-8 w-full max-w-sm lg:hidden bg-surface-1/40 backdrop-blur-md border border-border/40 rounded-3xl p-5 shadow-lg">
+               <input
+                value={goal}
+                onChange={(e) => fStore.setGoal(e.target.value)}
+                placeholder="Target Vector..."
+                className="w-full bg-background/50 border border-border/40 rounded-xl px-4 py-2 text-sm text-center font-medium text-foreground focus:outline-none mb-3"
+              />
+              <div className="flex gap-2">
+                 <select
+                  value={selTask}
+                  onChange={(e) => setSelTask(e.target.value)}
+                  className="flex-1 bg-background/50 border border-border/40 rounded-xl px-3 py-2 text-xs focus:outline-none appearance-none"
+                >
+                  <option value="">No task</option>
+                  {tasks.map((t: any) => <option key={t.id} value={t.id}>{t.title}</option>)}
+                </select>
+                <select
+                  value={fMins}
+                  onChange={(e) => setFMins(Number(e.target.value))}
+                  className="w-20 bg-background/50 border border-border/40 rounded-xl px-2 py-2 text-xs font-bold text-center focus:outline-none appearance-none"
+                >
+                  <option value={25}>25m</option>
+                  <option value={45}>45m</option>
+                  <option value={60}>60m</option>
+                </select>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* ── RIGHT PANEL: SYSTEM DIAGNOSTICS ── */}
+        <section className="hud-panel hidden lg:flex lg:col-span-3 flex-col gap-6 h-full">
+          {/* Main Diagnostics */}
+          <div className="bg-surface-1/40 backdrop-blur-md border border-border/40 rounded-3xl p-6 shadow-lg flex flex-col relative overflow-hidden shrink-0">
+            <div className="absolute top-0 right-0 w-48 h-48 bg-primary/5 rounded-full blur-[50px] pointer-events-none" />
+            
+            <div className="flex items-center gap-2 mb-6 relative z-10">
+              <Flame className="text-primary w-4 h-4" />
+              <h3 className="text-xs font-black tracking-widest uppercase">System Diagnostics</h3>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-y-6 gap-x-4 w-full relative z-10">
+              <div>
+                <p className="text-[9px] font-bold tracking-[0.2em] uppercase text-muted-foreground mb-1">Today Output</p>
+                <p className="text-2xl font-mono font-black tabular-nums text-foreground">{fmtMins(stats.todayMinutes)}</p>
+              </div>
+              <div>
+                <p className="text-[9px] font-bold tracking-[0.2em] uppercase text-muted-foreground mb-1">Cycles</p>
+                <p className="text-2xl font-mono font-black tabular-nums text-foreground">{stats.todaySessions}</p>
+              </div>
+              <div>
+                <p className="text-[9px] font-bold tracking-[0.2em] uppercase text-muted-foreground mb-1">Weekly Load</p>
+                <p className="text-2xl font-mono font-black tabular-nums text-foreground">{fmtMins(stats.weekMinutes)}</p>
+              </div>
+              <div>
+                <p className="text-[9px] font-bold tracking-[0.2em] uppercase text-muted-foreground mb-1">Flow Streak</p>
+                <div className="flex items-baseline gap-1">
+                  <p className="text-2xl font-mono font-black tabular-nums text-primary">{stats.currentStreak}d</p>
+                  {stats.currentStreak > 2 && <Sparkles size={12} className="text-primary animate-pulse" />}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Pomodoro Tracker */}
+          <div className="bg-surface-1/40 backdrop-blur-md border border-border/40 rounded-3xl p-6 shadow-lg shrink-0">
+             <div className="flex items-center gap-2 mb-4">
+              <Timer className="text-foreground w-4 h-4" />
+              <h3 className="text-xs font-black tracking-widest uppercase">Cycle Progress</h3>
+            </div>
+            <div className="flex gap-2 items-center justify-between">
+              {Array.from({ length: sessionsBeforeLong }).map((_, i) => (
+                <div key={i} className={cn(
+                  "flex-1 h-1.5 rounded-full transition-all duration-500",
+                  i < (doneCount % sessionsBeforeLong) ? "bg-primary shadow-[0_0_8px_hsl(var(--primary)/0.8)]" : "bg-border/40"
+                )} />
+              ))}
+            </div>
+            <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground mt-3 text-right">
+              {doneCount % sessionsBeforeLong} / {sessionsBeforeLong} to full purge
+            </p>
+          </div>
+
+          {/* 14-Day Status Array */}
+          <div className="bg-surface-1/40 backdrop-blur-md border border-border/40 rounded-3xl p-6 shadow-lg flex-1 min-h-0 flex flex-col justify-end">
+            <h3 className="text-[9px] font-black tracking-widest uppercase text-muted-foreground mb-4">Array Status</h3>
+            <div className="grid grid-cols-7 gap-2">
+              {streakDays.map((d, i) => (
+                <div key={i} title={d.d} className="flex justify-center">
+                  <div className={cn(
+                    "w-full aspect-square rounded-sm transition-all duration-500",
+                    d.has ? "bg-primary shadow-[0_0_8px_rgba(var(--primary)/0.5)]" : "bg-border/30"
+                  )} />
+                </div>
+              ))}
+            </div>
+          </div>
+
+        </section>
+
+      </div>
     </main>
   );
 }
