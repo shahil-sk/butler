@@ -47,6 +47,7 @@ export function TasksModule() {
 
     return tasks
       .filter(t => {
+        if (t.parentTaskId) return false;
         const dateStr = t.scheduledDate || t.dueDate;
         
         if (dueFilter && dateStr) {

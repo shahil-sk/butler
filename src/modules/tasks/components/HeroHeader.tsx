@@ -46,6 +46,7 @@ export function HeroHeader({ priorityFilter, onPriorityFilter, dueFilter, onDueF
   
   const tDay = new Date().toISOString().slice(0, 10);
   const activeTasks = tasks.filter(t => {
+    if (t.parentTaskId) return false;
     if (t.status === "done" || t.status === "archived") return false;
     const date = t.scheduledDate || t.dueDate;
     if (!date) return true;
@@ -65,18 +66,21 @@ export function HeroHeader({ priorityFilter, onPriorityFilter, dueFilter, onDueF
 
   const dueCounts = {
     overdue: tasks.filter(t => {
+      if (t.parentTaskId) return false;
       if (t.status === "done" || t.status === "archived") return false;
       const dStr = t.dueDate || t.scheduledDate;
       if (!dStr) return false;
       return dStr.slice(0, 10) < tDay;
     }).length,
     today: tasks.filter(t => {
+      if (t.parentTaskId) return false;
       if (t.status === "done" || t.status === "archived") return false;
       const dStr = t.dueDate || t.scheduledDate;
       if (!dStr) return false;
       return dStr.slice(0, 10) === tDay;
     }).length,
     tomorrow: tasks.filter(t => {
+      if (t.parentTaskId) return false;
       if (t.status === "done" || t.status === "archived") return false;
       const dStr = t.dueDate || t.scheduledDate;
       if (!dStr) return false;

@@ -41,6 +41,9 @@ function ProjectsHeroHeader({ count, doneTasks, statusFilter, onStatusFilter }: 
 
   const currentPill = statusFilter ? (PILL_STYLES[statusFilter] ?? PILL_STYLES.active) : PILL_STYLES.active;
   const pillClass = `relative inline-block px-6 py-2 ${currentPill.bg} ${currentPill.text} rounded-full -rotate-2 transform hover:rotate-0 transition-transform duration-500 shadow-2xl`;
+  const statusLabel = statusFilter ? (STATUS_OPTIONS.find(s => s.value === statusFilter)?.label ?? statusFilter) : "Active";
+  const statusLabelText = statusLabel.toLowerCase();
+  const projectWord = count === 1 ? "project" : "projects";
   
   useGSAP(() => {
     gsap.from(".hero-text", {
@@ -63,9 +66,9 @@ function ProjectsHeroHeader({ count, doneTasks, statusFilter, onStatusFilter }: 
       <h1 className="hero-text text-5xl md:text-7xl lg:text-[5rem] font-black tracking-tighter leading-[0.9] text-foreground max-w-5xl mx-auto flex flex-wrap justify-center items-center gap-x-4 gap-y-2">
         <span>You have</span>
         <span className={pillClass}>
-          {count} {statusFilter ? (STATUS_OPTIONS.find(s => s.value === statusFilter)?.label ?? statusFilter)?.toLowerCase() : 'active'}
+          {count} {statusLabelText}
         </span>
-        <span>{count === 1 ? 'project' : 'projects'}.</span>
+        <span>{projectWord}.</span>
       </h1>
 
       {/* <div className="hero-text mt-8 flex flex-wrap justify-center items-center gap-8 text-sm">
