@@ -43,8 +43,12 @@ export function CalendarModule() {
   const selectedDateStr = format(selectedDate, "yyyy-MM-dd");
   const itemsForSelectedDate = useMemo(() => {
     const t = tasks.filter(task => {
-      const d = task.scheduledDate || task.dueDate;
+      const d = task.scheduledAt || task.scheduledDate || task.dueDate;
       return d && d.slice(0, 10) === selectedDateStr;
+    }).sort((a, b) => {
+      const aTime = (a.scheduledAt || "").includes("T") ? a.scheduledAt! : "Z";
+      const bTime = (b.scheduledAt || "").includes("T") ? b.scheduledAt! : "Z";
+      return aTime.localeCompare(bTime);
     });
     const e = events.filter(evt => evt.startDatetime.slice(0, 10) === selectedDateStr && !evt.taskId);
     return { tasks: t, events: e };
@@ -99,8 +103,12 @@ export function CalendarModule() {
               const isTodayDate = isToday(day);
               
               const dayTasks = tasks.filter(t => {
-                const d = t.scheduledDate || t.dueDate;
+                const d = t.scheduledAt || t.scheduledDate || t.dueDate;
                 return d && d.slice(0, 10) === dateStr;
+              }).sort((a, b) => {
+                const aTime = (a.scheduledAt || "").includes("T") ? a.scheduledAt! : "Z";
+                const bTime = (b.scheduledAt || "").includes("T") ? b.scheduledAt! : "Z";
+                return aTime.localeCompare(bTime);
               });
               const dayEvents = events.filter(e => e.startDatetime.slice(0, 10) === dateStr && !e.taskId);
               
@@ -147,7 +155,12 @@ export function CalendarModule() {
                           : "bg-blue-500/10 text-blue-500 border-blue-500/20"
                       )}>
                         <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", t.status === "done" ? "bg-muted-foreground" : "bg-blue-500")} />
-                        {t.title}
+                        <span className="truncate">{t.title}</span>
+                        {t.scheduledAt?.includes("T") && (
+                          <span className="ml-auto text-[9px] opacity-70 shrink-0 font-medium tracking-tighter">
+                            {format(parseISO(t.scheduledAt), "h:mm")}
+                          </span>
+                        )}
                       </div>
                     ))}
                     {totalItems > 3 && (
@@ -224,10 +237,10 @@ export function CalendarModule() {
                         />
                         <div className="flex flex-col gap-1">
                           <span className={cn("font-bold text-sm", t.status === "done" && "line-through text-muted-foreground")}>{t.title}</span>
-                          {t.scheduledDate && t.scheduledDate.includes("T") && (
+                          {t.scheduledAt && t.scheduledAt.includes("T") && (
                             <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-bold">
                               <Clock size={12} />
-                              {format(parseISO(t.scheduledDate), "h:mm a")}
+                              {format(parseISO(t.scheduledAt), "h:mm a")}
                             </div>
                           )}
                         </div>
