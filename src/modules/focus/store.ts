@@ -9,7 +9,7 @@ interface FocusStore {
   sessions: FocusSession[];
   isLoaded: boolean;
   load: () => Promise<void>;
-  startFocus: (taskId: string, goal?: string) => Promise<void>;
+  startFocus: (taskId?: string, goal?: string) => Promise<void>;
   stopFocus: () => Promise<void>;
   cancelFocus: () => Promise<void>;
   // Internal
@@ -32,10 +32,10 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     set({ sessions, isLoaded: true });
   },
 
-  startFocus: async (taskId: string, goal?: string) => {
+  startFocus: async (taskId?: string, goal?: string) => {
     const { activeSession, stopFocus } = get();
     if (activeSession) {
-      if (activeSession.taskId === taskId) return;
+      if (taskId && activeSession.taskId === taskId) return;
       await stopFocus();
     }
 

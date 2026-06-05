@@ -21,11 +21,21 @@ export default function FocusDashboard() {
   return (
     <div className="w-full h-full overflow-y-auto bg-background text-foreground">
       <div className="p-8 md:p-12 max-w-5xl mx-auto space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-32">
-        <div className="space-y-2">
-          <h1 className="text-4xl md:text-5xl font-black tracking-tight text-foreground">
-            Focus
-          </h1>
-          <p className="text-muted-foreground text-lg font-medium">Ambient flow state metrics and past sessions.</p>
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+          <div className="space-y-2">
+            <h1 className="text-4xl md:text-5xl font-black tracking-tight text-foreground">
+              Focus
+            </h1>
+            <p className="text-muted-foreground text-lg font-medium">Ambient flow state metrics and past sessions.</p>
+          </div>
+          <button
+            onClick={() => useFocusStore.getState().startFocus(undefined, "Deep Work")}
+            className="group relative flex items-center justify-center gap-3 px-8 py-4 bg-primary text-primary-foreground rounded-2xl font-black tracking-widest uppercase shadow-xl hover:shadow-primary/25 transition-all hover:scale-[1.02] active:scale-95 overflow-hidden"
+          >
+            <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out" />
+            <Flame size={20} className="relative z-10" />
+            <span className="relative z-10">Start Flow</span>
+          </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

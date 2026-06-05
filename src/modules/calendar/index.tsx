@@ -98,7 +98,7 @@ export function CalendarModule() {
       <div className="flex-1 flex min-h-0 overflow-hidden">
         
         {/* Calendar Grid */}
-        <div className="flex-1 flex flex-col p-8 overflow-y-auto">
+        <div className="flex-1 flex flex-col p-8 overflow-hidden">
           <div className="grid grid-cols-7 gap-4 mb-4">
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(day => (
               <div key={day} className="text-center text-[11px] font-bold tracking-widest uppercase text-muted-foreground">
@@ -107,7 +107,10 @@ export function CalendarModule() {
             ))}
           </div>
 
-          <div className="grid grid-cols-7 gap-3 auto-rows-[minmax(120px,1fr)]">
+          <div 
+            className="grid grid-cols-7 gap-3 flex-1 min-h-0"
+            style={{ gridTemplateRows: `repeat(${days.length / 7}, minmax(0, 1fr))` }}
+          >
             {days.map((day, i) => {
               const dateStr = format(day, "yyyy-MM-dd");
               const isCurrentMonth = isSameMonth(day, currentDate);
