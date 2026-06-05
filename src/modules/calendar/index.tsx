@@ -14,7 +14,7 @@ export function CalendarModule() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   
-  const { tasks, loadTasks } = useTaskStore();
+  const { tasks, loadTasks, updateTask } = useTaskStore();
   const { events, loadEvents, loadCalendars } = useCalendarStore();
 
   useEffect(() => {
@@ -46,7 +46,7 @@ export function CalendarModule() {
       const d = task.scheduledDate || task.dueDate;
       return d && d.slice(0, 10) === selectedDateStr;
     });
-    const e = events.filter(evt => evt.startDatetime.slice(0, 10) === selectedDateStr);
+    const e = events.filter(evt => evt.startDatetime.slice(0, 10) === selectedDateStr && !evt.taskId);
     return { tasks: t, events: e };
   }, [tasks, events, selectedDateStr]);
 
@@ -102,7 +102,7 @@ export function CalendarModule() {
                 const d = t.scheduledDate || t.dueDate;
                 return d && d.slice(0, 10) === dateStr;
               });
-              const dayEvents = events.filter(e => e.startDatetime.slice(0, 10) === dateStr);
+              const dayEvents = events.filter(e => e.startDatetime.slice(0, 10) === dateStr && !e.taskId);
               
               const totalItems = dayTasks.length + dayEvents.length;
 
@@ -212,10 +212,16 @@ export function CalendarModule() {
                       )}
                     >
                       <div className="flex items-start gap-3">
-                        <div className={cn(
-                          "w-4 h-4 rounded-full border-2 mt-0.5 shrink-0 transition-colors",
-                          t.status === "done" ? "bg-primary border-primary" : "border-muted-foreground group-hover:border-primary"
-                        )} />
+                        <div 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            updateTask(t.id, { status: t.status === "done" ? "todo" : "done" });
+                          }}
+                          className={cn(
+                            "w-4 h-4 rounded-full border-2 mt-0.5 shrink-0 transition-colors hover:scale-110",
+                            t.status === "done" ? "bg-primary border-primary" : "border-muted-foreground group-hover:border-primary"
+                          )} 
+                        />
                         <div className="flex flex-col gap-1">
                           <span className={cn("font-bold text-sm", t.status === "done" && "line-through text-muted-foreground")}>{t.title}</span>
                           {t.scheduledDate && t.scheduledDate.includes("T") && (

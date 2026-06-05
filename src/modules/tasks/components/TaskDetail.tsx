@@ -260,28 +260,28 @@ export function TaskDetail() {
 
           <div className="p-8">
             {activeTab === "general" && (
-              <div className="space-y-7 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 {/* Quick Actions / Metadata */}
-                <div className="flex flex-wrap gap-3 items-center">
+                <div className="flex flex-wrap gap-4">
                   {/* Priority picker */}
-                  <div className="flex items-center gap-1 p-1 rounded-full bg-muted/10">
+                  <div className="flex items-center gap-1.5 p-1 bg-muted/30 rounded-full border border-border/50">
                     {(["none", "low", "medium", "high", "urgent"] as Priority[]).map(p => {
                   const activeMap: Record<string, string> = {
                     none:   "bg-muted text-foreground",
-                    low:    "bg-blue-500/10 text-blue-400",
-                    medium: "bg-yellow-400/10 text-yellow-400",
-                    high:   "bg-orange-500/10 text-orange-400",
-                    urgent: "bg-red-500 text-white",
+                    low:    "bg-blue-500/20 text-blue-400 border border-blue-500/40",
+                    medium: "bg-yellow-400/20 text-yellow-400 border border-yellow-400/40",
+                    high:   "bg-orange-500/20 text-orange-400 border border-orange-500/40",
+                    urgent: "bg-red-500 text-white shadow-lg shadow-red-500/30",
                   };
                   return (
                     <button
                       key={p}
                       onClick={() => setPriority(p)}
                       className={cn(
-                        "px-3 py-1.5 rounded-full text-[11px] font-semibold uppercase tracking-[0.18em] transition-all duration-200",
+                        "px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all duration-200",
                         priority === p
                           ? activeMap[p]
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted/20"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted"
                       )}
                     >
                       {p}
@@ -291,23 +291,23 @@ export function TaskDetail() {
               </div>
               
               {/* Status picker */}
-              <div className="flex items-center gap-1 p-1 rounded-full bg-muted/10">
+              <div className="flex items-center gap-1.5 p-1 bg-muted/30 rounded-full border border-border/50">
                 {(["todo", "in_progress", "done", "cancelled"] as const).map(s => {
                   const statusMap: Record<string, string> = {
                     todo:        "bg-muted text-foreground",
-                    in_progress: "bg-blue-500/10 text-blue-400",
-                    done:        "bg-emerald-500/10 text-emerald-400",
-                    cancelled:   "bg-zinc-500/10 text-zinc-400",
+                    in_progress: "bg-blue-500/20 text-blue-400 border border-blue-500/40",
+                    done:        "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40",
+                    cancelled:   "bg-zinc-500/20 text-zinc-400 border border-zinc-500/40",
                   };
                   return (
                     <button
                       key={s}
                       onClick={() => setStatus(s)}
                       className={cn(
-                        "px-3 py-1.5 rounded-full text-[11px] font-semibold uppercase tracking-[0.18em] transition-all duration-200",
+                        "px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all duration-200",
                         status === s
                           ? statusMap[s]
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted/20"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted"
                       )}
                     >
                       {s.replace("_", " ")}
@@ -331,8 +331,8 @@ export function TaskDetail() {
                 </div>
 
                 {/* Project */}
-                <div className="p-5 bg-muted/10 rounded-2xl">
-                  <h4 className="text-[11px] font-semibold tracking-[0.24em] text-muted-foreground uppercase flex items-center gap-2">
+                <div className="p-6 bg-muted/20 border border-border/50 rounded-2xl space-y-3 hover:bg-muted/30 transition-colors">
+                  <h4 className="text-xs font-bold tracking-wider text-muted-foreground uppercase flex items-center gap-2">
                     <Folder size={14} /> Project Assignment
                   </h4>
                   <select
@@ -352,32 +352,32 @@ export function TaskDetail() {
             {activeTab === "schedule" && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 {/* Schedule */}
-                <div className="p-5 bg-muted/10 rounded-2xl">
-                <h4 className="text-[11px] font-semibold tracking-[0.24em] text-muted-foreground uppercase flex items-center gap-2">
+                <div className="p-6 bg-muted/20 border border-border/50 rounded-2xl space-y-4 hover:bg-muted/30 transition-colors">
+                <h4 className="text-xs font-bold tracking-wider text-muted-foreground uppercase flex items-center gap-2">
                   <Clock size={14} /> Schedule & Estimate
                 </h4>
-                <div className="flex flex-col gap-3 mt-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex flex-col gap-2">
+                  <div className="flex gap-2">
                     <input
                       type="date"
                       value={scheduledDate}
                       onChange={e => setScheduledDate(e.target.value)}
-                      className="w-full bg-background border border-border/50 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                      className="flex-1 bg-background border border-border/50 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
                     />
                     <input
                       type="time"
                       value={scheduledTime}
                       onChange={e => setScheduledTime(e.target.value)}
-                      className="w-full bg-background border border-border/50 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                      className="flex-1 bg-background border border-border/50 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
                     />
                   </div>
-                  <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-                    <button onClick={() => setScheduledDate(today())} className="px-2 py-1 rounded-lg bg-muted/20">Today</button>
+                  <div className="flex gap-2 mb-1">
+                    <button onClick={() => setScheduledDate(today())} className="px-2 py-1 bg-muted/50 rounded text-[10px] text-muted-foreground hover:bg-muted transition-colors">Today</button>
                     <button onClick={() => {
                       const tmrw = new Date(); tmrw.setDate(tmrw.getDate() + 1);
                       setScheduledDate(tmrw.toISOString().slice(0, 10));
-                    }} className="px-2 py-1 rounded-lg bg-muted/20">Tomorrow</button>
-                    <button onClick={() => { setScheduledDate(""); setScheduledTime(""); }} className="ml-auto px-2 py-1 rounded-lg bg-muted/20">Clear</button>
+                    }} className="px-2 py-1 bg-muted/50 rounded text-[10px] text-muted-foreground hover:bg-muted transition-colors">Tomorrow</button>
+                    <button onClick={() => { setScheduledDate(""); setScheduledTime(""); }} className="px-2 py-1 bg-muted/50 rounded text-[10px] text-muted-foreground hover:bg-muted transition-colors ml-auto">Clear</button>
                   </div>
                   <input
                     type="number"
@@ -386,6 +386,7 @@ export function TaskDetail() {
                     placeholder="Estimate (mins)"
                     className="w-full bg-background border border-border/50 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
                   />
+                  {/* Conflict detection */}
                   {scheduledDate && (() => {
                     const conflicts = tasks.filter(t => 
                       t.id !== openTaskId && 
@@ -395,10 +396,22 @@ export function TaskDetail() {
                     if (conflicts.length === 0) return null;
                     const sameTime = scheduledTime ? conflicts.filter(t => t.scheduledDate?.includes("T" + scheduledTime)) : [];
                     return (
-                      <div className="mt-2 rounded-xl bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-[11px] text-amber-500">
-                        {sameTime.length > 0
-                          ? `Conflict: ${sameTime.length} task(s) scheduled at this time.`
-                          : `Note: ${conflicts.length} task(s) are scheduled on this date.`}
+                      <div className="group relative mt-2 text-[11px] bg-amber-500/10 border border-amber-500/20 text-amber-500 px-3 py-2.5 rounded-xl cursor-default transition-colors hover:bg-amber-500/20">
+                        {sameTime.length > 0 
+                          ? <strong>Conflict: {sameTime.length} task(s) scheduled at exactly this time.</strong>
+                          : `Note: You have ${conflicts.length} other task(s) on this date.`}
+                          
+                        <div className="absolute top-full left-0 mt-2 hidden group-hover:block w-[280px] bg-card/95 backdrop-blur-xl border border-border/50 rounded-xl shadow-2xl p-3 z-50 animate-in fade-in zoom-in-95">
+                          <h5 className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase mb-2">Conflicting Tasks</h5>
+                          <ul className="space-y-1.5">
+                            {conflicts.map(c => (
+                              <li key={c.id} className="text-foreground text-xs font-medium flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                <span className="truncate">{c.title}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
                       </div>
                     );
                   })()}
@@ -406,8 +419,8 @@ export function TaskDetail() {
               </div>
 
               {/* Repetition */}
-              <div className="p-5 bg-muted/10 rounded-2xl space-y-4">
-                <h4 className="text-[11px] font-semibold tracking-[0.24em] text-muted-foreground uppercase flex items-center gap-2">
+              <div className="p-6 bg-muted/20 border border-border/50 rounded-2xl space-y-4 hover:bg-muted/30 transition-colors">
+                <h4 className="text-xs font-bold tracking-wider text-muted-foreground uppercase flex items-center gap-2">
                   <Repeat size={14} /> Recurrence
                 </h4>
                 <select
@@ -422,7 +435,7 @@ export function TaskDetail() {
                 </select>
 
                 {recurFreq === "weekly" && (
-                  <div className="grid grid-cols-7 gap-2 mt-3">
+                  <div className="flex justify-between items-center mt-2">
                     {["S", "M", "T", "W", "T", "F", "S"].map((dayLabel, idx) => (
                       <button
                         key={idx}
@@ -434,7 +447,7 @@ export function TaskDetail() {
                           }
                         }}
                         className={cn(
-                          "w-full h-8 rounded-full text-xs font-semibold transition-all border",
+                          "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all border",
                           recurDays.includes(idx) ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border/50 text-muted-foreground hover:border-primary/50"
                         )}
                       >
@@ -445,8 +458,8 @@ export function TaskDetail() {
                 )}
 
                 {recurFreq === "monthly" && (
-                  <div className="flex items-center gap-3 mt-3">
-                    <span className="text-xs font-medium text-muted-foreground">On day</span>
+                  <div className="flex items-center gap-3 mt-2">
+                    <span className="text-xs font-medium text-muted-foreground">On day:</span>
                     <input
                       type="number"
                       min="1"
