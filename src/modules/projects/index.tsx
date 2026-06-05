@@ -47,7 +47,7 @@ function ProjectsHeroHeader({ count, doneTasks, statusFilter, onStatusFilter }: 
       y: 40,
       opacity: 0,
       duration: 1,
-      stagger: 0.1,
+      stagger: 0.1, 
       ease: "power4.out"
     });
   }, { scope: container });
@@ -61,11 +61,11 @@ function ProjectsHeroHeader({ count, doneTasks, statusFilter, onStatusFilter }: 
        
       
       <h1 className="hero-text text-5xl md:text-7xl lg:text-[5rem] font-black tracking-tighter leading-[0.9] text-foreground max-w-5xl mx-auto flex flex-wrap justify-center items-center gap-x-4 gap-y-2">
-        <span>You are driving</span>
+        <span>You have</span>
         <span className={pillClass}>
-          {count} {statusFilter ? (STATUS_OPTIONS.find(s => s.value === statusFilter)?.label ?? statusFilter) : 'Active'}
+          {count} {statusFilter ? (STATUS_OPTIONS.find(s => s.value === statusFilter)?.label ?? statusFilter)?.toLowerCase() : 'active'}
         </span>
-        <span>projects.</span>
+        <span>{count === 1 ? 'project' : 'projects'}.</span>
       </h1>
 
       {/* <div className="hero-text mt-8 flex flex-wrap justify-center items-center gap-8 text-sm">

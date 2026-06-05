@@ -31,6 +31,7 @@ export function TaskDetail() {
   const [priority, setPriority] = useState<Priority>("none");
   const [status, setStatus] = useState<string>("todo");
   const [scheduledDate, setScheduledDate] = useState<string>("");
+  const [scheduledTime, setScheduledTime] = useState<string>("");
   const [projectId, setProjectId] = useState<string>("");
   const [dependencies, setDependencies] = useState<string[]>([]);
   const [linkedNoteIds, setLinkedNoteIds] = useState<string[]>([]);
@@ -50,7 +51,14 @@ export function TaskDetail() {
       setDescription(quickAddPrefill?.description || "");
       setPriority(quickAddPrefill?.priority || "none");
       setStatus(quickAddPrefill?.status || "todo");
-      setScheduledDate(quickAddPrefill?.scheduledDate || "");
+      if (quickAddPrefill?.scheduledDate) {
+        const parts = quickAddPrefill.scheduledDate.split("T");
+        setScheduledDate(parts[0]);
+        setScheduledTime(parts[1]?.slice(0, 5) || "");
+      } else {
+        setScheduledDate("");
+        setScheduledTime("");
+      }
       setProjectId(quickAddPrefill?.projectId || "");
       setDependencies([]);
       setLinkedNoteIds([]);
@@ -61,7 +69,14 @@ export function TaskDetail() {
       setDescription(task.description || "");
       setPriority(task.priority);
       setStatus(task.status);
-      setScheduledDate(task.scheduledDate || "");
+      if (task.scheduledDate) {
+        const parts = task.scheduledDate.split("T");
+        setScheduledDate(parts[0]);
+        setScheduledTime(parts[1]?.slice(0, 5) || "");
+      } else {
+        setScheduledDate("");
+        setScheduledTime("");
+      }
       setProjectId(task.projectId || "");
       setDependencies(task.dependencies || []);
       setLinkedNoteIds(task.linkedNoteIds || []);
@@ -111,8 +126,8 @@ export function TaskDetail() {
       };
     }
     const est = estimateMins ? Number(estimateMins) : undefined;
-    
-    let finalDate = scheduledDate || undefined;
+
+    let finalDate = scheduledDate ? (scheduledTime ? `${scheduledDate}T${scheduledTime}:00` : scheduledDate) : undefined;
     if (!finalDate && recurrenceObj) {
       finalDate = getNextRecurrenceDate(today(), recurrenceObj);
     }
@@ -295,12 +310,28 @@ export function TaskDetail() {
                   <Clock size={14} /> Schedule & Estimate
                 </h4>
                 <div className="flex flex-col gap-2">
-                  <input
-                    type="date"
-                    value={scheduledDate}
-                    onChange={e => setScheduledDate(e.target.value)}
-                    className="w-full bg-background border border-border/50 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="date"
+                      value={scheduledDate}
+                      onChange={e => setScheduledDate(e.target.value)}
+                      className="flex-1 bg-background border border-border/50 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    />
+                    <input
+                      type="time"
+                      value={scheduledTime}
+                      onChange={e => setScheduledTime(e.target.value)}
+                      className="flex-1 bg-background border border-border/50 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    />
+                  </div>
+                  <div className="flex gap-2 mb-1">
+                    <button onClick={() => setScheduledDate(today())} className="px-2 py-1 bg-muted/50 rounded text-[10px] text-muted-foreground hover:bg-muted transition-colors">Today</button>
+                    <button onClick={() => {
+                      const tmrw = new Date(); tmrw.setDate(tmrw.getDate() + 1);
+                      setScheduledDate(tmrw.toISOString().slice(0, 10));
+                    }} className="px-2 py-1 bg-muted/50 rounded text-[10px] text-muted-foreground hover:bg-muted transition-colors">Tomorrow</button>
+                    <button onClick={() => { setScheduledDate(""); setScheduledTime(""); }} className="px-2 py-1 bg-muted/50 rounded text-[10px] text-muted-foreground hover:bg-muted transition-colors ml-auto">Clear</button>
+                  </div>
                   <input
                     type="number"
                     value={estimateMins}
@@ -308,6 +339,23 @@ export function TaskDetail() {
                     placeholder="Estimate (mins)"
                     className="w-full bg-background border border-border/50 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
                   />
+                  {/* Conflict detection */}
+                  {scheduledDate && (() => {
+                    const conflicts = tasks.filter(t => 
+                      t.id !== openTaskId && 
+                      t.status !== "done" && 
+                      (t.scheduledDate?.startsWith(scheduledDate) || t.dueDate?.startsWith(scheduledDate))
+                    );
+                    if (conflicts.length === 0) return null;
+                    const sameTime = scheduledTime ? conflicts.filter(t => t.scheduledDate?.includes("T" + scheduledTime)) : [];
+                    return (
+                      <div className="mt-2 text-[10px] bg-amber-500/10 border border-amber-500/20 text-amber-500 p-2 rounded-lg">
+                        {sameTime.length > 0 
+                          ? <strong>Conflict: {sameTime.length} task(s) scheduled at exactly this time.</strong>
+                          : `Note: You have ${conflicts.length} other task(s) on this date.`}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 

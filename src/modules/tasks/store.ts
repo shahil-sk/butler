@@ -440,14 +440,24 @@ export const useTaskStore = create<TaskState & TaskActions>()((set, get) => ({
     const t = today();
     let result = tasks.filter((task) => task.parentTaskId == null);
 
+    const getDateStr = (task: any) => task.dueDate?.slice(0, 10) ?? task.scheduledDate?.slice(0, 10) ?? task.scheduledAt?.slice(0, 10);
+
     if (activeRoute === "today") {
       result = result.filter((task) =>
-        task.status !== "done" && (task.scheduledDate === t || task.dueDate === t)
+        task.status !== "done" && getDateStr(task) === t
       );
     } else if (activeRoute === "upcoming") {
-      result = result.filter((task) => task.status !== "done" && task.dueDate != null && task.dueDate > t);
+      result = result.filter((task) => {
+        if (task.status === "done") return false;
+        const d = getDateStr(task);
+        return d != null && d > t;
+      });
     } else if (activeRoute === "overdue") {
-      result = result.filter((task) => task.status !== "done" && task.dueDate != null && task.dueDate < t);
+      result = result.filter((task) => {
+        if (task.status === "done") return false;
+        const d = getDateStr(task);
+        return d != null && d < t;
+      });
     } else if (activeRoute === "inbox") {
       result = result.filter((task) => !task.projectId && task.status === "todo");
     }
@@ -485,15 +495,18 @@ export const useTaskStore = create<TaskState & TaskActions>()((set, get) => ({
   getTaskById:    (id) => get().tasks.find((t) => t.id === id),
   getTodayTasks:  () => {
     const t = today();
-    return get().tasks.filter((task) => task.status !== "done" && (task.scheduledDate === t || task.dueDate === t));
+    const getDateStr = (task: any) => task.dueDate?.slice(0, 10) ?? task.scheduledDate?.slice(0, 10) ?? task.scheduledAt?.slice(0, 10);
+    return get().tasks.filter((task) => task.status !== "done" && getDateStr(task) === t);
   },
   getUpcomingTasks: () => {
     const t = today();
-    return get().tasks.filter((task) => task.status !== "done" && task.dueDate != null && task.dueDate > t);
+    const getDateStr = (task: any) => task.dueDate?.slice(0, 10) ?? task.scheduledDate?.slice(0, 10) ?? task.scheduledAt?.slice(0, 10);
+    return get().tasks.filter((task) => task.status !== "done" && getDateStr(task) != null && getDateStr(task)! > t);
   },
   getOverdueTasks: () => {
     const t = today();
-    return get().tasks.filter((task) => task.status !== "done" && task.dueDate != null && task.dueDate < t);
+    const getDateStr = (task: any) => task.dueDate?.slice(0, 10) ?? task.scheduledDate?.slice(0, 10) ?? task.scheduledAt?.slice(0, 10);
+    return get().tasks.filter((task) => task.status !== "done" && getDateStr(task) != null && getDateStr(task)! < t);
   },
 
   parseAndCreateTask: async (raw) => {
