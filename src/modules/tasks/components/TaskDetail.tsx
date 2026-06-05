@@ -15,7 +15,7 @@ const notes: any[] = [];
 
 export function TaskDetail() {
   const { 
-    openTaskId, tasks, closeTask, updateTask, deleteTask, duplicateTask,
+    openTaskId, tasks, closeTask, updateTask, completeTask, restoreTask, deleteTask, duplicateTask,
     quickAddOpen, closeQuickAdd, createTask, quickAddPrefill
   } = useTaskStore();
 
@@ -48,8 +48,7 @@ export function TaskDetail() {
   const [newTag, setNewTag] = useState("");
   
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeTab, setActiveTab] = useState<"general" | "schedule" | "relations">("general");
-
+  
   const overlayRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -252,41 +251,11 @@ export function TaskDetail() {
               autoFocus
             />
 
-            {/* Tabs */}
-            <div className="flex items-center gap-6 border-b border-border/50 pb-2 mt-4">
-              {(
-                [
-                  { id: "general", label: "General", icon: <Layout size={16} /> },
-                  { id: "schedule", label: "Scheduling", icon: <Clock size={16} /> },
-                  { id: "relations", label: "Relations", icon: <Network size={16} /> }
-                ] as const
-              ).map(t => (
-                <button
-                  key={t.id}
-                  onClick={() => setActiveTab(t.id)}
-                  className={cn(
-                    "flex items-center gap-2 pb-2 text-sm font-semibold tracking-wider uppercase transition-colors relative",
-                    activeTab === t.id ? "text-primary" : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {t.icon}
-                  {t.label}
-                  {activeTab === t.id && (
-                    <span className="absolute -bottom-2.5 left-0 w-full h-0.5 bg-primary rounded-t-full" />
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
 
-          <div className="p-8">
-            {activeTab === "general" && (
-              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {/* Quick Actions / Metadata */}
-                <div className="flex flex-wrap gap-4">
-                  {/* Priority picker */}
-                  <div className="flex items-center gap-1.5 p-1 bg-muted/30 rounded-full border border-border/50">
-                    {(["none", "low", "medium", "high", "urgent"] as Priority[]).map(p => {
+            {/* Pickers (Status & Priority) */}
+            <div className="flex flex-wrap gap-4">
+              <div className="flex items-center gap-1.5 p-1 bg-muted/30 rounded-full border border-border/50">
+                {(["none", "low", "medium", "high", "urgent"] as any[]).map(p => {
                   const activeMap: Record<string, string> = {
                     none:   "bg-muted text-foreground",
                     low:    "bg-blue-500/20 text-blue-400 border border-blue-500/40",
@@ -295,25 +264,14 @@ export function TaskDetail() {
                     urgent: "bg-red-500 text-white shadow-lg shadow-red-500/30",
                   };
                   return (
-                    <button
-                      key={p}
-                      onClick={() => setPriority(p)}
-                      className={cn(
-                        "px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all duration-200",
-                        priority === p
-                          ? activeMap[p]
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                      )}
-                    >
+                    <button key={p} onClick={() => setPriority(p)} className={cn("px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all duration-200", priority === p ? activeMap[p] : "text-muted-foreground hover:text-foreground hover:bg-muted")}>
                       {p}
                     </button>
                   );
                 })}
               </div>
-              
-              {/* Status picker */}
               <div className="flex items-center gap-1.5 p-1 bg-muted/30 rounded-full border border-border/50">
-                {(["todo", "in_progress", "done", "cancelled"] as const).map(s => {
+                {(["todo", "in_progress", "done", "cancelled"] as any[]).map(s => {
                   const statusMap: Record<string, string> = {
                     todo:        "bg-muted text-foreground",
                     in_progress: "bg-blue-500/20 text-blue-400 border border-blue-500/40",
@@ -321,362 +279,164 @@ export function TaskDetail() {
                     cancelled:   "bg-zinc-500/20 text-zinc-400 border border-zinc-500/40",
                   };
                   return (
-                    <button
-                      key={s}
-                      onClick={() => setStatus(s)}
-                      className={cn(
-                        "px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all duration-200",
-                        status === s
-                          ? statusMap[s]
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                      )}
-                    >
+                    <button key={s} onClick={() => setStatus(s)} className={cn("px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all duration-200", status === s ? statusMap[s] : "text-muted-foreground hover:text-foreground hover:bg-muted")}>
                       {s.replace("_", " ")}
                     </button>
                   );
                 })}
               </div>
             </div>
+          </div>
 
-                {/* Description */}
-                <div className="space-y-4">
-                  <h4 className="text-sm font-semibold tracking-wider text-muted-foreground uppercase flex items-center gap-2">
-                    <Tag size={16} /> Details
-                  </h4>
-                  <textarea
-                    value={description}
-                    onChange={e => setDescription(e.target.value)}
-                    placeholder="Add rich details, context, or links here..."
-                    className="w-full min-h-[160px] bg-muted/10 border border-border/50 rounded-2xl p-6 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all resize-none leading-relaxed"
-                  />
-                </div>
+          <div className="flex-1 overflow-hidden p-8 pt-4 flex flex-col min-h-0">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full min-h-0">
+              
+              {/* LEFT COL: Description, Checklist, Tags */}
+              <div className="col-span-1 lg:col-span-5 flex flex-col gap-4 min-h-0">
+                <textarea
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  placeholder="Add rich details, context, or links here..."
+                  className="w-full h-[120px] shrink-0 bg-muted/10 border border-border/50 rounded-2xl p-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all resize-none leading-relaxed"
+                />
 
-                {/* Checklist */}
-                <div className="space-y-4 pt-4 border-t border-border/50">
-                  <h4 className="text-sm font-semibold tracking-wider text-muted-foreground uppercase flex items-center gap-2">
-                    <CheckSquare size={16} /> Checklist
+                <div className="flex-1 flex flex-col min-h-0 bg-muted/10 border border-border/50 rounded-2xl p-4 space-y-3">
+                  <h4 className="text-xs font-bold tracking-wider text-muted-foreground uppercase flex items-center gap-2 shrink-0">
+                    <CheckSquare size={14} /> Checklist
                   </h4>
-                  <div className="space-y-2">
+                  <div className="flex-1 overflow-y-auto space-y-2 pr-2">
                     {checklistItems.map(item => (
-                      <div key={item.id} className="flex items-center gap-3 bg-muted/20 border border-border/50 rounded-xl px-4 py-2 hover:bg-muted/40 transition-colors">
-                        <input 
-                          type="checkbox" 
-                          checked={item.checked} 
-                          onChange={() => setChecklistItems(checklistItems.map(i => i.id === item.id ? { ...i, checked: !i.checked } : i))}
-                          className="w-4 h-4 rounded border-border/50 text-primary focus:ring-primary/50"
-                        />
-                        <input 
-                          type="text" 
-                          value={item.text} 
-                          onChange={(e) => setChecklistItems(checklistItems.map(i => i.id === item.id ? { ...i, text: e.target.value } : i))}
-                          className="flex-1 bg-transparent text-sm text-foreground focus:outline-none"
-                        />
-                        <button onClick={() => setChecklistItems(checklistItems.filter(i => i.id !== item.id))} className="text-muted-foreground hover:text-red-500 transition-colors">
-                          <X size={14} />
-                        </button>
+                      <div key={item.id} className="flex items-center gap-3 bg-background/50 border border-border/50 rounded-xl px-3 py-2 hover:bg-muted/40 transition-colors">
+                        <input type="checkbox" checked={item.checked} onChange={() => setChecklistItems(checklistItems.map(i => i.id === item.id ? { ...i, checked: !i.checked } : i))} className="w-3 h-3 rounded border-border/50 text-primary" />
+                        <input type="text" value={item.text} onChange={(e) => setChecklistItems(checklistItems.map(i => i.id === item.id ? { ...i, text: e.target.value } : i))} className="flex-1 bg-transparent text-xs text-foreground focus:outline-none" />
+                        <button onClick={() => setChecklistItems(checklistItems.filter(i => i.id !== item.id))} className="text-muted-foreground hover:text-red-500"><X size={12} /></button>
                       </div>
                     ))}
-                    <div className="flex items-center gap-3">
-                      <input 
-                        type="text" 
-                        value={newChecklistItem}
-                        onChange={e => setNewChecklistItem(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter' && newChecklistItem.trim()) {
-                            e.preventDefault();
-                            setChecklistItems([...checklistItems, { id: Date.now().toString(), text: newChecklistItem.trim(), checked: false, order: checklistItems.length }]);
-                            setNewChecklistItem("");
-                          }
-                        }}
-                        placeholder="Add checklist item... (press Enter)"
-                        className="flex-1 bg-transparent border-b border-border/50 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 transition-colors"
-                      />
+                    <div className="flex items-center gap-3 mt-1">
+                      <input type="text" value={newChecklistItem} onChange={e => setNewChecklistItem(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && newChecklistItem.trim()) { e.preventDefault(); setChecklistItems([...checklistItems, { id: Date.now().toString(), text: newChecklistItem.trim(), checked: false, order: checklistItems.length }]); setNewChecklistItem(""); } }} placeholder="Add checklist item..." className="flex-1 bg-transparent border-b border-border/50 py-1 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50" />
                     </div>
                   </div>
                 </div>
 
-                {/* Tags */}
-                <div className="space-y-4 pt-4 border-t border-border/50">
-                  <h4 className="text-sm font-semibold tracking-wider text-muted-foreground uppercase flex items-center gap-2">
-                    <Hash size={16} /> Tags
+                <div className="shrink-0 bg-muted/10 border border-border/50 rounded-2xl p-4 space-y-3">
+                  <h4 className="text-xs font-bold tracking-wider text-muted-foreground uppercase flex items-center gap-2">
+                    <Hash size={14} /> Tags
                   </h4>
                   <div className="flex flex-wrap gap-2">
                     {tags.map(tag => (
-                      <span key={tag} className="flex items-center gap-1 bg-muted/30 border border-border/50 text-foreground px-3 py-1 rounded-full text-xs font-medium">
-                        #{tag}
-                        <button onClick={() => setTags(tags.filter(t => t !== tag))} className="text-muted-foreground hover:text-red-500"><X size={12} /></button>
+                      <span key={tag} className="flex items-center gap-1 bg-primary/10 border border-primary/20 text-primary px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider">
+                        {tag} <button onClick={() => setTags(tags.filter(t => t !== tag))} className="hover:text-red-500"><X size={10} /></button>
                       </span>
                     ))}
-                    <input 
-                      type="text" 
-                      value={newTag}
-                      onChange={e => setNewTag(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter' && newTag.trim()) {
-                          e.preventDefault();
-                          const t = newTag.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
-                          if (t && !tags.includes(t)) setTags([...tags, t]);
-                          setNewTag("");
-                        }
-                      }}
-                      placeholder="Add tag..."
-                      className="bg-transparent text-sm w-32 focus:outline-none placeholder:text-muted-foreground border-b border-transparent focus:border-primary/50 transition-colors px-1"
-                    />
+                    <input type="text" value={newTag} onChange={e => setNewTag(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && newTag.trim()) { e.preventDefault(); const t = newTag.trim().toLowerCase().replace(/[^a-z0-9-]/g, ''); if (t && !tags.includes(t)) setTags([...tags, t]); setNewTag(""); } }} placeholder="Add tag..." className="bg-transparent text-xs w-24 focus:outline-none border-b border-transparent focus:border-primary/50" />
                   </div>
                 </div>
+              </div>
 
-                {/* Project */}
-                <div className="p-6 bg-muted/20 border border-border/50 rounded-2xl space-y-3 hover:bg-muted/30 transition-colors">
+              {/* MIDDLE COL: Schedule, Project, Recurrence */}
+              <div className="col-span-1 lg:col-span-4 flex flex-col gap-4 overflow-y-auto pr-2">
+                <div className="bg-muted/10 border border-border/50 rounded-2xl p-4 space-y-3">
                   <h4 className="text-xs font-bold tracking-wider text-muted-foreground uppercase flex items-center gap-2">
-                    <Folder size={14} /> Project Assignment
+                    <Folder size={14} /> Project
                   </h4>
-                  <select
-                    value={projectId}
-                    onChange={e => setProjectId(e.target.value)}
-                    className="w-full bg-background border border-border/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
-                  >
+                  <select value={projectId} onChange={e => setProjectId(e.target.value)} className="w-full bg-background border border-border/50 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary/50">
                     <option value="">No Project</option>
-                    {projects.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
+                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
                 </div>
-              </div>
-            )}
 
-            {activeTab === "schedule" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {/* Schedule */}
-                <div className="p-6 bg-muted/20 border border-border/50 rounded-2xl space-y-4 hover:bg-muted/30 transition-colors">
-                <h4 className="text-xs font-bold tracking-wider text-muted-foreground uppercase flex items-center gap-2">
-                  <Clock size={14} /> Schedule & Estimate
-                </h4>
-                <div className="flex flex-col gap-2">
-                  <div className="flex gap-2">
-                    <input
-                      type="date"
-                      value={scheduledDate}
-                      onChange={e => setScheduledDate(e.target.value)}
-                      className="flex-1 bg-background border border-border/50 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
-                    />
-                    <input
-                      type="time"
-                      value={scheduledTime}
-                      onChange={e => setScheduledTime(e.target.value)}
-                      className="flex-1 bg-background border border-border/50 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
-                    />
-                  </div>
-                  <div className="flex gap-2 mb-1">
-                    <button onClick={() => setScheduledDate(today())} className="px-2 py-1 bg-muted/50 rounded text-[10px] text-muted-foreground hover:bg-muted transition-colors">Today</button>
-                    <button onClick={() => {
-                      const tmrw = new Date(); tmrw.setDate(tmrw.getDate() + 1);
-                      setScheduledDate(tmrw.toISOString().slice(0, 10));
-                    }} className="px-2 py-1 bg-muted/50 rounded text-[10px] text-muted-foreground hover:bg-muted transition-colors">Tomorrow</button>
-                    <button onClick={() => { setScheduledDate(""); setScheduledTime(""); }} className="px-2 py-1 bg-muted/50 rounded text-[10px] text-muted-foreground hover:bg-muted transition-colors ml-auto">Clear</button>
-                  </div>
-                  <input
-                    type="number"
-                    value={estimateMins}
-                    onChange={e => setEstimateMins(e.target.value)}
-                    placeholder="Estimate (mins)"
-                    className="w-full bg-background border border-border/50 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
-                  />
-                  {/* Conflict detection */}
-                  {scheduledDate && (() => {
-                    const conflicts = tasks.filter(t => 
-                      t.id !== openTaskId && 
-                      t.status !== "done" && 
-                      (t.scheduledDate?.startsWith(scheduledDate) || t.dueDate?.startsWith(scheduledDate))
-                    );
-                    if (conflicts.length === 0) return null;
-                    const sameTime = scheduledTime ? conflicts.filter(t => t.scheduledDate?.includes("T" + scheduledTime)) : [];
-                    return (
-                      <div className="group relative mt-2 text-[11px] bg-amber-500/10 border border-amber-500/20 text-amber-500 px-3 py-2.5 rounded-xl cursor-default transition-colors hover:bg-amber-500/20">
-                        {sameTime.length > 0 
-                          ? <strong>Conflict: {sameTime.length} task(s) scheduled at exactly this time.</strong>
-                          : `Note: You have ${conflicts.length} other task(s) on this date.`}
-                          
-                        <div className="absolute top-full left-0 mt-2 hidden group-hover:block w-[280px] bg-card/95 backdrop-blur-xl border border-border/50 rounded-xl shadow-2xl p-3 z-50 animate-in fade-in zoom-in-95">
-                          <h5 className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase mb-2">Conflicting Tasks</h5>
-                          <ul className="space-y-1.5">
-                            {conflicts.map(c => (
-                              <li key={c.id} className="text-foreground text-xs font-medium flex items-center gap-2">
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                                <span className="truncate">{c.title}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-
-              {/* Repetition */}
-              <div className="p-6 bg-muted/20 border border-border/50 rounded-2xl space-y-4 hover:bg-muted/30 transition-colors">
-                <h4 className="text-xs font-bold tracking-wider text-muted-foreground uppercase flex items-center gap-2">
-                  <Repeat size={14} /> Recurrence
-                </h4>
-                <select
-                  value={recurFreq}
-                  onChange={e => setRecurFreq(e.target.value)}
-                  className="w-full bg-background border border-border/50 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
-                >
-                  <option value="none">Does not repeat</option>
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                </select>
-
-                {recurFreq === "weekly" && (
-                  <div className="flex justify-between items-center mt-2">
-                    {["S", "M", "T", "W", "T", "F", "S"].map((dayLabel, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => {
-                          if (recurDays.includes(idx)) {
-                            setRecurDays(recurDays.filter(d => d !== idx));
-                          } else {
-                            setRecurDays([...recurDays, idx]);
-                          }
-                        }}
-                        className={cn(
-                          "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all border",
-                          recurDays.includes(idx) ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border/50 text-muted-foreground hover:border-primary/50"
-                        )}
-                      >
-                        {dayLabel}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {recurFreq === "monthly" && (
-                  <div className="flex items-center gap-3 mt-2">
-                    <span className="text-xs font-medium text-muted-foreground">On day:</span>
-                    <input
-                      type="number"
-                      min="1"
-                      max="31"
-                      value={recurDayOfMonth}
-                      onChange={e => setRecurDayOfMonth(parseInt(e.target.value) || 1)}
-                      className="w-16 bg-background border border-border/50 rounded-xl px-3 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-            )}
-
-            {activeTab === "relations" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {/* Dependencies */}
-                <div className="p-6 bg-muted/20 border border-border/50 rounded-2xl space-y-4 hover:bg-muted/30 transition-colors">
-                <h4 className="text-xs font-bold tracking-wider text-muted-foreground uppercase flex items-center gap-2">
-                  <Network size={14} /> Blockers (Dependencies)
-                </h4>
-                <div className="flex flex-col gap-2">
-                  {dependencies.map(depId => {
-                    const d = tasks.find(t => t.id === depId);
-                    if (!d) return null;
-                    return (
-                      <div key={d.id} className="flex items-center justify-between bg-background px-3 py-2 rounded-xl text-xs border border-border/50">
-                        <span className="truncate max-w-[150px]">{d.title}</span>
-                        <button onClick={() => setDependencies(dependencies.filter(id => id !== d.id))} className="text-red-500 hover:text-red-400"><X size={14} /></button>
-                      </div>
-                    );
-                  })}
-                  <select
-                    onChange={e => {
-                      if (e.target.value && !dependencies.includes(e.target.value)) {
-                        setDependencies([...dependencies, e.target.value]);
-                      }
-                      e.target.value = "";
-                    }}
-                    className="w-full bg-background border border-border/50 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 text-muted-foreground"
-                    value=""
-                  >
-                    <option value="">+ Add blocker...</option>
-                    {tasks.filter(t => t.id !== task?.id && t.status !== "done").map(t => (
-                      <option key={t.id} value={t.id}>{t.title}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Linked Notes */}
-              <div className="p-6 bg-muted/20 border border-border/50 rounded-2xl space-y-4 hover:bg-muted/30 transition-colors">
-                <h4 className="text-xs font-bold tracking-wider text-muted-foreground uppercase flex items-center gap-2">
-                  <LinkIcon size={14} /> Linked Notes
-                </h4>
-                <div className="flex flex-col gap-2">
-                  {linkedNoteIds.map(nid => {
-                    const n = notes.find(x => x.id === nid);
-                    if (!n) return null;
-                    return (
-                      <div key={n.id} className="flex items-center justify-between bg-background px-4 py-3 rounded-xl text-sm border border-border/50">
-                        <span className="truncate max-w-[150px]">{n.title}</span>
-                        <button onClick={() => setLinkedNoteIds(linkedNoteIds.filter(id => id !== n.id))} className="text-red-500 hover:text-red-400"><X size={14} /></button>
-                      </div>
-                    );
-                  })}
-                  <select
-                    onChange={e => {
-                      if (e.target.value && !linkedNoteIds.includes(e.target.value)) {
-                        setLinkedNoteIds([...linkedNoteIds, e.target.value]);
-                      }
-                      e.target.value = "";
-                    }}
-                    className="w-full bg-background border border-border/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
-                  >
-                    <option value="">Link a Note...</option>
-                    {notes.filter(n => !linkedNoteIds.includes(n.id)).map(n => (
-                      <option key={n.id} value={n.id}>{n.title}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Subtasks */}
-              {!isCreating && task && (
-                <div className="p-6 bg-muted/20 border border-border/50 rounded-2xl space-y-4 hover:bg-muted/30 transition-colors md:col-span-2">
+                <div className="bg-muted/10 border border-border/50 rounded-2xl p-4 space-y-3">
                   <h4 className="text-xs font-bold tracking-wider text-muted-foreground uppercase flex items-center gap-2">
-                    <GitBranch size={14} /> Subtasks
+                    <Clock size={14} /> Schedule & Estimate
                   </h4>
-                  <div className="flex flex-col gap-2">
-                    {tasks.filter(t => t.parentTaskId === task.id).map(sub => (
-                      <div key={sub.id} className="flex items-center gap-3 bg-background px-4 py-3 rounded-xl text-sm border border-border/50">
-                        <button 
-                          onClick={() => updateTask(sub.id, { status: sub.status === "done" ? "todo" : "done" })}
-                          className="text-muted-foreground hover:text-primary transition-colors"
-                        >
-                          {sub.status === "done" ? <CheckCircle2 size={16} className="text-emerald-500" /> : <Circle size={16} />}
-                        </button>
-                        <span className={cn("flex-1 truncate", sub.status === "done" && "line-through text-muted-foreground")}>{sub.title}</span>
-                        <button onClick={() => deleteTask(sub.id)} className="text-red-500 hover:text-red-400"><X size={14} /></button>
-                      </div>
-                    ))}
-                    <input 
-                      type="text" 
-                      placeholder="+ Add subtask... (press Enter)"
-                      onKeyDown={e => {
-                        if (e.key === 'Enter' && e.currentTarget.value.trim()) {
-                          e.preventDefault();
-                          createTask({ title: e.currentTarget.value.trim(), parentTaskId: task.id });
-                          e.currentTarget.value = "";
-                        }
-                      }}
-                      className="w-full bg-background border border-border/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all text-foreground placeholder:text-muted-foreground"
-                    />
+                  <div className="flex gap-2">
+                    <input type="date" value={scheduledDate} onChange={e => setScheduledDate(e.target.value)} className="flex-1 w-full bg-background border border-border/50 rounded-xl px-2 py-2 text-xs focus:outline-none" />
+                    <input type="time" value={scheduledTime} onChange={e => setScheduledTime(e.target.value)} className="flex-1 w-full bg-background border border-border/50 rounded-xl px-2 py-2 text-xs focus:outline-none" />
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => setScheduledDate(today())} className="px-2 py-1 bg-background border border-border/50 rounded-lg text-[10px] text-muted-foreground hover:bg-muted">Today</button>
+                    <button onClick={() => { const tmrw = new Date(); tmrw.setDate(tmrw.getDate() + 1); setScheduledDate(tmrw.toISOString().slice(0, 10)); }} className="px-2 py-1 bg-background border border-border/50 rounded-lg text-[10px] text-muted-foreground hover:bg-muted">Tomorrow</button>
+                    <button onClick={() => { setScheduledDate(""); setScheduledTime(""); }} className="px-2 py-1 bg-background border border-border/50 rounded-lg text-[10px] text-red-500/80 hover:bg-red-500/10 ml-auto">Clear</button>
+                  </div>
+                  <input type="number" value={estimateMins} onChange={e => setEstimateMins(e.target.value)} placeholder="Estimate (mins)" className="w-full bg-background border border-border/50 rounded-xl px-3 py-2 text-xs focus:outline-none" />
+                </div>
+
+                <div className="bg-muted/10 border border-border/50 rounded-2xl p-4 space-y-3">
+                  <h4 className="text-xs font-bold tracking-wider text-muted-foreground uppercase flex items-center gap-2">
+                    <Repeat size={14} /> Recurrence
+                  </h4>
+                  <select value={recurFreq} onChange={e => setRecurFreq(e.target.value)} className="w-full bg-background border border-border/50 rounded-xl px-3 py-2 text-xs focus:outline-none">
+                    <option value="none">Does not repeat</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                  {recurFreq === "weekly" && (
+                    <div className="flex justify-between mt-2">
+                      {["S", "M", "T", "W", "T", "F", "S"].map((dayLabel, idx) => (
+                        <button key={idx} onClick={() => recurDays.includes(idx) ? setRecurDays(recurDays.filter(d => d !== idx)) : setRecurDays([...recurDays, idx])} className={cn("w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border", recurDays.includes(idx) ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border/50 text-muted-foreground")}>{dayLabel}</button>
+                      ))}
+                    </div>
+                  )}
+                  {recurFreq === "monthly" && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="text-[10px] text-muted-foreground">Day:</span>
+                      <input type="number" min="1" max="31" value={recurDayOfMonth} onChange={e => setRecurDayOfMonth(parseInt(e.target.value) || 1)} className="w-16 bg-background border border-border/50 rounded-lg px-2 py-1 text-xs focus:outline-none" />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* RIGHT COL: Subtasks, Blockers */}
+              <div className="col-span-1 lg:col-span-3 flex flex-col gap-4 min-h-0">
+                {!isCreating && task && (
+                  <div className="flex-1 flex flex-col min-h-0 bg-muted/10 border border-border/50 rounded-2xl p-4 space-y-3">
+                    <h4 className="text-xs font-bold tracking-wider text-muted-foreground uppercase flex items-center gap-2 shrink-0">
+                      <GitBranch size={14} /> Subtasks
+                    </h4>
+                    <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+                      {tasks.filter(t => t.parentTaskId === task.id).map(sub => (
+                        <div key={sub.id} className="flex items-center gap-2 bg-background border border-border/50 rounded-lg px-2 py-1.5 text-xs">
+                          <button onClick={() => sub.status === "done" ? restoreTask(sub.id) : completeTask(sub.id)} className="text-muted-foreground hover:text-primary">
+                            {sub.status === "done" ? <CheckCircle2 size={12} className="text-emerald-500" /> : <Circle size={12} />}
+                          </button>
+                          <span className={cn("flex-1 truncate", sub.status === "done" && "line-through text-muted-foreground")}>{sub.title}</span>
+                          <button onClick={() => deleteTask(sub.id)} className="text-red-500 hover:text-red-400"><X size={10} /></button>
+                        </div>
+                      ))}
+                      <input type="text" placeholder="+ Add subtask..." onKeyDown={e => { if (e.key === 'Enter' && e.currentTarget.value.trim()) { e.preventDefault(); createTask({ title: e.currentTarget.value.trim(), parentTaskId: task.id }); e.currentTarget.value = ""; } }} className="w-full bg-transparent border-b border-border/50 py-1 text-xs focus:outline-none focus:border-primary/50" />
+                    </div>
+                  </div>
+                )}
+                
+                <div className={cn("flex flex-col min-h-0 bg-muted/10 border border-border/50 rounded-2xl p-4 space-y-3", isCreating || !task ? "flex-1" : "flex-1")}>
+                  <h4 className="text-xs font-bold tracking-wider text-muted-foreground uppercase flex items-center gap-2 shrink-0">
+                    <Network size={14} /> Blockers
+                  </h4>
+                  <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+                    {dependencies.map(depId => {
+                      const d = tasks.find(t => t.id === depId);
+                      if (!d) return null;
+                      return (
+                        <div key={d.id} className="flex items-center justify-between bg-background border border-border/50 rounded-lg px-2 py-1.5 text-xs">
+                          <span className="truncate max-w-[120px]">{d.title}</span>
+                          <button onClick={() => setDependencies(dependencies.filter(id => id !== d.id))} className="text-red-500"><X size={10} /></button>
+                        </div>
+                      );
+                    })}
+                    <select onChange={e => { if (e.target.value && !dependencies.includes(e.target.value)) setDependencies([...dependencies, e.target.value]); e.target.value = ""; }} className="w-full bg-background border border-border/50 rounded-lg px-2 py-1.5 text-xs focus:outline-none">
+                      <option value="">+ Add blocker...</option>
+                      {tasks.filter(t => t.id !== task?.id && t.status !== "done").map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
+                    </select>
                   </div>
                 </div>
-              )}
+              </div>
+
             </div>
-            )}
           </div>
         </div>
 
+        {/* Footer */}
         {/* Footer */}
         <div className="p-6 border-t border-border/50 bg-card/80 backdrop-blur-md">
           <button
