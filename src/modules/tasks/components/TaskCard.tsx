@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { CheckCircle2, Circle, Calendar, ArrowRight, Repeat, Link as LinkIcon, Network, GitBranch, Clock, Sun, CalendarDays, CalendarRange, AlertCircle, Play } from "lucide-react";
+import { CheckCircle2, Circle, Calendar, ArrowRight, Repeat, Link as LinkIcon, Network, GitBranch, Clock, Sun, CalendarDays, CalendarRange, AlertCircle, Play, CheckSquare } from "lucide-react";
 import { format, isValid } from "date-fns";
 import { cn } from "@/shared/utils";
 import type { Task } from "@/shared/types";
@@ -166,8 +166,19 @@ export function TaskCard({ task, onOpen, onToggleComplete, onPriorityClick }: Pr
 
       {/* Integration Meta Bar - smaller and less crowded */}
       <div className="relative z-10 flex flex-wrap items-center gap-3 text-xs text-muted-foreground/70 pr-10 shrink-0">
+        {task.tags && task.tags.length > 0 && (
+          <div className="flex items-center gap-1 text-primary/80">
+            {task.tags.map(t => <span key={t} className="bg-primary/10 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">#{t}</span>)}
+          </div>
+        )}
+        {task.checklistItems && task.checklistItems.length > 0 && (
+          <div className="flex items-center gap-1.5" title="Checklist">
+            <CheckSquare size={14} />
+            <span>{task.checklistItems.filter(i => i.checked).length}/{task.checklistItems.length}</span>
+          </div>
+        )}
         {subtasks.length > 0 && (
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5" title="Subtasks">
             <GitBranch size={14} />
             <span>{doneSubtasks.length}/{subtasks.length}</span>
           </div>
@@ -190,13 +201,13 @@ export function TaskCard({ task, onOpen, onToggleComplete, onPriorityClick }: Pr
           </div>
         )}
         {task.linkedNoteIds && task.linkedNoteIds.length > 0 && (
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5" title="Linked Notes">
             <LinkIcon size={14} />
             <span>{task.linkedNoteIds.length}</span>
           </div>
         )}
         {task.estimateMinutes && (
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5" title="Estimate">
             <Clock size={14} />
             <span>{task.estimateMinutes}m</span>
           </div>

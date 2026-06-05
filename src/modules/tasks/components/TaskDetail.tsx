@@ -3,7 +3,7 @@ import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import { 
   X, Calendar as CalIcon, Tag, Clock, ArrowRight, Trash2, Copy, Inbox, Layout, 
-  Folder, Network, Repeat, Link as LinkIcon, GitBranch, Play
+  Folder, Network, Repeat, Link as LinkIcon, GitBranch, Play, CheckSquare, Hash, CheckCircle2, Circle
 } from "lucide-react";
 import { useTaskStore } from "../store";
 import { useFocusStore } from "@/modules/focus/store";
@@ -41,6 +41,12 @@ export function TaskDetail() {
   const [recurDays, setRecurDays] = useState<number[]>([]);
   const [recurDayOfMonth, setRecurDayOfMonth] = useState<number>(1);
   const [estimateMins, setEstimateMins] = useState("");
+  
+  const [checklistItems, setChecklistItems] = useState<any[]>([]);
+  const [newChecklistItem, setNewChecklistItem] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+  const [newTag, setNewTag] = useState("");
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<"general" | "schedule" | "relations">("general");
 
@@ -67,6 +73,8 @@ export function TaskDetail() {
       setLinkedNoteIds([]);
       setRecurFreq("none");
       setEstimateMins("");
+      setChecklistItems(quickAddPrefill?.checklistItems || []);
+      setTags(quickAddPrefill?.tags || []);
     } else if (task) {
       setTitle(task.title);
       setDescription(task.description || "");
@@ -87,6 +95,8 @@ export function TaskDetail() {
       setRecurDays(task.recurrence?.daysOfWeek || []);
       setRecurDayOfMonth(task.recurrence?.dayOfMonth || 1);
       setEstimateMins(task.estimateMinutes ? String(task.estimateMinutes) : "");
+      setChecklistItems(task.checklistItems || []);
+      setTags(task.tags || []);
     }
   }, [task, isCreating, quickAddPrefill]);
 
@@ -149,7 +159,9 @@ export function TaskDetail() {
           dependencies,
           linkedNoteIds,
           recurrence: recurrenceObj,
-          estimateMinutes: est
+          estimateMinutes: est,
+          checklistItems,
+          tags
         });
       } else if (task) {
         await updateTask(task.id, {
@@ -163,7 +175,9 @@ export function TaskDetail() {
           dependencies,
           linkedNoteIds,
           recurrence: recurrenceObj,
-          estimateMinutes: est
+          estimateMinutes: est,
+          checklistItems,
+          tags
         });
       }
       handleClose();
@@ -335,6 +349,80 @@ export function TaskDetail() {
                     placeholder="Add rich details, context, or links here..."
                     className="w-full min-h-[160px] bg-muted/10 border border-border/50 rounded-2xl p-6 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all resize-none leading-relaxed"
                   />
+                </div>
+
+                {/* Checklist */}
+                <div className="space-y-4 pt-4 border-t border-border/50">
+                  <h4 className="text-sm font-semibold tracking-wider text-muted-foreground uppercase flex items-center gap-2">
+                    <CheckSquare size={16} /> Checklist
+                  </h4>
+                  <div className="space-y-2">
+                    {checklistItems.map(item => (
+                      <div key={item.id} className="flex items-center gap-3 bg-muted/20 border border-border/50 rounded-xl px-4 py-2 hover:bg-muted/40 transition-colors">
+                        <input 
+                          type="checkbox" 
+                          checked={item.checked} 
+                          onChange={() => setChecklistItems(checklistItems.map(i => i.id === item.id ? { ...i, checked: !i.checked } : i))}
+                          className="w-4 h-4 rounded border-border/50 text-primary focus:ring-primary/50"
+                        />
+                        <input 
+                          type="text" 
+                          value={item.text} 
+                          onChange={(e) => setChecklistItems(checklistItems.map(i => i.id === item.id ? { ...i, text: e.target.value } : i))}
+                          className="flex-1 bg-transparent text-sm text-foreground focus:outline-none"
+                        />
+                        <button onClick={() => setChecklistItems(checklistItems.filter(i => i.id !== item.id))} className="text-muted-foreground hover:text-red-500 transition-colors">
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                    <div className="flex items-center gap-3">
+                      <input 
+                        type="text" 
+                        value={newChecklistItem}
+                        onChange={e => setNewChecklistItem(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && newChecklistItem.trim()) {
+                            e.preventDefault();
+                            setChecklistItems([...checklistItems, { id: Date.now().toString(), text: newChecklistItem.trim(), checked: false, order: checklistItems.length }]);
+                            setNewChecklistItem("");
+                          }
+                        }}
+                        placeholder="Add checklist item... (press Enter)"
+                        className="flex-1 bg-transparent border-b border-border/50 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 transition-colors"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tags */}
+                <div className="space-y-4 pt-4 border-t border-border/50">
+                  <h4 className="text-sm font-semibold tracking-wider text-muted-foreground uppercase flex items-center gap-2">
+                    <Hash size={16} /> Tags
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {tags.map(tag => (
+                      <span key={tag} className="flex items-center gap-1 bg-muted/30 border border-border/50 text-foreground px-3 py-1 rounded-full text-xs font-medium">
+                        #{tag}
+                        <button onClick={() => setTags(tags.filter(t => t !== tag))} className="text-muted-foreground hover:text-red-500"><X size={12} /></button>
+                      </span>
+                    ))}
+                    <input 
+                      type="text" 
+                      value={newTag}
+                      onChange={e => setNewTag(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && newTag.trim()) {
+                          e.preventDefault();
+                          const t = newTag.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+                          if (t && !tags.includes(t)) setTags([...tags, t]);
+                          setNewTag("");
+                        }
+                      }}
+                      placeholder="Add tag..."
+                      className="bg-transparent text-sm w-32 focus:outline-none placeholder:text-muted-foreground border-b border-transparent focus:border-primary/50 transition-colors px-1"
+                    />
+                  </div>
                 </div>
 
                 {/* Project */}
@@ -549,6 +637,41 @@ export function TaskDetail() {
                   </select>
                 </div>
               </div>
+
+              {/* Subtasks */}
+              {!isCreating && task && (
+                <div className="p-6 bg-muted/20 border border-border/50 rounded-2xl space-y-4 hover:bg-muted/30 transition-colors md:col-span-2">
+                  <h4 className="text-xs font-bold tracking-wider text-muted-foreground uppercase flex items-center gap-2">
+                    <GitBranch size={14} /> Subtasks
+                  </h4>
+                  <div className="flex flex-col gap-2">
+                    {tasks.filter(t => t.parentTaskId === task.id).map(sub => (
+                      <div key={sub.id} className="flex items-center gap-3 bg-background px-4 py-3 rounded-xl text-sm border border-border/50">
+                        <button 
+                          onClick={() => updateTask(sub.id, { status: sub.status === "done" ? "todo" : "done" })}
+                          className="text-muted-foreground hover:text-primary transition-colors"
+                        >
+                          {sub.status === "done" ? <CheckCircle2 size={16} className="text-emerald-500" /> : <Circle size={16} />}
+                        </button>
+                        <span className={cn("flex-1 truncate", sub.status === "done" && "line-through text-muted-foreground")}>{sub.title}</span>
+                        <button onClick={() => deleteTask(sub.id)} className="text-red-500 hover:text-red-400"><X size={14} /></button>
+                      </div>
+                    ))}
+                    <input 
+                      type="text" 
+                      placeholder="+ Add subtask... (press Enter)"
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                          e.preventDefault();
+                          createTask({ title: e.currentTarget.value.trim(), parentTaskId: task.id });
+                          e.currentTarget.value = "";
+                        }
+                      }}
+                      className="w-full bg-background border border-border/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all text-foreground placeholder:text-muted-foreground"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
             )}
           </div>
