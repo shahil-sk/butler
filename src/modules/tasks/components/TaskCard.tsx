@@ -183,15 +183,22 @@ export function TaskCard({ task, onOpen, onToggleComplete, onPriorityClick }: Pr
             <span>{doneSubtasks.length}/{subtasks.length}</span>
           </div>
         )}
-        {task.dependencies && task.dependencies.length > 0 && (
-          <div 
-            className="flex items-center gap-1.5 text-orange-500/80 cursor-help"
-            title={`Blocked by:\n${task.dependencies.map(id => allTasks.find(t => t.id === id)?.title || "Unknown Task").join("\n")}`}
-          >
-            <Network size={14} />
-            <span>{task.dependencies.length}</span>
-          </div>
-        )}
+        {(() => {
+          const activeBlockers = (task.dependencies || []).filter(depId => {
+            const depTask = allTasks.find(t => t.id === depId);
+            return depTask && depTask.status !== "done" && depTask.status !== "archived";
+          });
+          if (activeBlockers.length === 0) return null;
+          return (
+            <div 
+              className="flex items-center gap-1.5 text-orange-500/80 cursor-help"
+              title={`Blocked by:\n${activeBlockers.map(id => allTasks.find(t => t.id === id)?.title || "Unknown Task").join("\n")}`}
+            >
+              <Network size={14} />
+              <span>{activeBlockers.length}</span>
+            </div>
+          );
+        })()}
         {task.recurrence && (
           <div className="flex items-center gap-1.5 text-blue-500/80" title={`Repeats ${task.recurrence.frequency}`}>
             {task.recurrence.frequency === 'daily' ? <Sun size={14} /> : 
