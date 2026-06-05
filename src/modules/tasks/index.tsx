@@ -25,7 +25,7 @@ export function TasksModule() {
   const [priorityFilter, setPriorityFilter] = useState<Priority | null>(() => {
     return (localStorage.getItem("tasks_priority_filter") as Priority) || null;
   });
-  const [dueFilter, setDueFilter] = useState<"overdue" | "today" | "tomorrow" | null>(() => {
+  const [dueFilter, setDueFilter] = useState<"overdue" | "today" | "tomorrow" | "upcoming" | null>(() => {
     return (localStorage.getItem("tasks_due_filter") as any) || null;
   });
 
@@ -47,6 +47,7 @@ export function TasksModule() {
     return tasks
       .filter(t => {
         if (t.parentTaskId) return false;
+        if (t.status === "done" || t.status === "archived" || t.status === "cancelled") return false;
         const dateStr = t.scheduledDate || t.dueDate;
         
         if (dueFilter && dateStr) {
@@ -55,6 +56,7 @@ export function TasksModule() {
           if (dueFilter === "overdue" && d >= tDay) return false;
           if (dueFilter === "today" && d !== tDay) return false;
           if (dueFilter === "tomorrow" && d !== tmrw) return false;
+          if (dueFilter === "upcoming" && d <= tmrw) return false;
         } else if (dueFilter && !dateStr) {
           return false;
         }
@@ -63,11 +65,6 @@ export function TasksModule() {
         return true;
       })
       .sort((a, b) => {
-        const aIsDone = a.status === "done" || a.status === "archived";
-        const bIsDone = b.status === "done" || b.status === "archived";
-        if (aIsDone && !bIsDone) return 1;
-        if (!aIsDone && bIsDone) return -1;
-
         const pA = a.priority ? pWeight[a.priority as keyof typeof pWeight] || 0 : 0;
         const pB = b.priority ? pWeight[b.priority as keyof typeof pWeight] || 0 : 0;
         if (pA !== pB) return pB - pA;
@@ -89,7 +86,7 @@ export function TasksModule() {
     setPriorityFilter(prev => prev === p ? null : p);
   }, []);
 
-  const handleDueFilter = useCallback((d: "overdue" | "today" | "tomorrow") => {
+  const handleDueFilter = useCallback((d: "overdue" | "today" | "tomorrow" | "upcoming") => {
     setDueFilter(prev => prev === d ? null : d);
   }, []);
 

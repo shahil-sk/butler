@@ -37,8 +37,8 @@ const PRIORITY_CONFIG: Record<string, { label: string; dot: string; active: stri
 interface HeroHeaderProps {
   priorityFilter: Priority | null;
   onPriorityFilter: (p: Priority) => void;
-  dueFilter: "overdue" | "today" | "tomorrow" | null;
-  onDueFilter: (d: "overdue" | "today" | "tomorrow") => void;
+  dueFilter: "overdue" | "today" | "tomorrow" | "upcoming" | null;
+  onDueFilter: (d: "overdue" | "today" | "tomorrow" | "upcoming") => void;
 }
 
 export function HeroHeader({ priorityFilter, onPriorityFilter, dueFilter, onDueFilter }: HeroHeaderProps) {
@@ -89,6 +89,15 @@ export function HeroHeader({ priorityFilter, onPriorityFilter, dueFilter, onDueF
       const tmrw = format(addDays(new Date(), 1), "yyyy-MM-dd");
       
       return dStr.slice(0, 10) === tmrw;
+    }).length,
+    upcoming: tasks.filter(t => {
+      if (t.parentTaskId) return false;
+      if (t.status === "done" || t.status === "archived" || t.status === "cancelled") return false;
+      const dStr = t.dueDate || t.scheduledDate;
+      if (!dStr) return false;
+      
+      const tmrw = format(addDays(new Date(), 1), "yyyy-MM-dd");
+      return dStr.slice(0, 10) > tmrw;
     }).length,
   };
 
@@ -161,13 +170,14 @@ export function HeroHeader({ priorityFilter, onPriorityFilter, dueFilter, onDueF
             <div className="w-px h-6 bg-border mx-1" />
           )}
 
-          {(["overdue", "today", "tomorrow"] as const).map(d => {
+          {(["overdue", "today", "tomorrow", "upcoming"] as const).map(d => {
           if (dueCounts[d] === 0) return null;
           
           let cfg = { label: "", dot: "", active: "", hover: "" };
           if (d === "overdue") cfg = { label: "Overdue", dot: "bg-red-500", active: "bg-red-500/15 text-red-500 border border-red-500/40 shadow-red-500/20 shadow-lg", hover: "hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30" };
           if (d === "today") cfg = { label: "Today", dot: "bg-orange-500", active: "bg-orange-500/15 text-orange-500 border border-orange-500/40 shadow-orange-500/20 shadow-lg", hover: "hover:bg-orange-500/10 hover:text-orange-400 hover:border-orange-500/30" };
           if (d === "tomorrow") cfg = { label: "Tomorrow", dot: "bg-amber-500", active: "bg-amber-500/15 text-amber-500 border border-amber-500/40 shadow-amber-500/20 shadow-lg", hover: "hover:bg-amber-500/10 hover:text-amber-400 hover:border-amber-500/30" };
+          if (d === "upcoming") cfg = { label: "Upcoming", dot: "bg-blue-500", active: "bg-blue-500/15 text-blue-500 border border-blue-500/40 shadow-blue-500/20 shadow-lg", hover: "hover:bg-blue-500/10 hover:text-blue-400 hover:border-blue-500/30" };
           
           const isActive = dueFilter === d;
           return (

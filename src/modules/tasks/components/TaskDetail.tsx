@@ -40,6 +40,7 @@ export function TaskDetail() {
   const [recurDayOfMonth, setRecurDayOfMonth] = useState<number>(1);
   const [estimateMins, setEstimateMins] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState<"general" | "schedule" | "relations">("general");
 
   const overlayRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -229,15 +230,42 @@ export function TaskDetail() {
               className="w-full bg-transparent text-4xl md:text-5xl font-bold tracking-tight text-foreground placeholder:text-muted focus:outline-none"
               autoFocus
             />
+
+            {/* Tabs */}
+            <div className="flex items-center gap-6 border-b border-border/50 pb-2 mt-4">
+              {(
+                [
+                  { id: "general", label: "General", icon: <Layout size={16} /> },
+                  { id: "schedule", label: "Scheduling", icon: <Clock size={16} /> },
+                  { id: "relations", label: "Relations", icon: <Network size={16} /> }
+                ] as const
+              ).map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => setActiveTab(t.id)}
+                  className={cn(
+                    "flex items-center gap-2 pb-2 text-sm font-semibold tracking-wider uppercase transition-colors relative",
+                    activeTab === t.id ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {t.icon}
+                  {t.label}
+                  {activeTab === t.id && (
+                    <span className="absolute -bottom-2.5 left-0 w-full h-0.5 bg-primary rounded-t-full" />
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="p-8 space-y-12">
-            
-            {/* Quick Actions / Metadata */}
-            <div className="flex flex-wrap gap-4">
-              {/* Priority picker */}
-              <div className="flex items-center gap-1.5 p-1 bg-muted/30 rounded-full border border-border/50">
-                {(["none", "low", "medium", "high", "urgent"] as Priority[]).map(p => {
+          <div className="p-8">
+            {activeTab === "general" && (
+              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                {/* Quick Actions / Metadata */}
+                <div className="flex flex-wrap gap-4">
+                  {/* Priority picker */}
+                  <div className="flex items-center gap-1.5 p-1 bg-muted/30 rounded-full border border-border/50">
+                    {(["none", "low", "medium", "high", "urgent"] as Priority[]).map(p => {
                   const activeMap: Record<string, string> = {
                     none:   "bg-muted text-foreground",
                     low:    "bg-blue-500/20 text-blue-400 border border-blue-500/40",
@@ -289,23 +317,42 @@ export function TaskDetail() {
               </div>
             </div>
 
-            {/* Description */}
-            <div className="space-y-4">
-              <h4 className="text-sm font-semibold tracking-wider text-muted-foreground uppercase flex items-center gap-2">
-                <Tag size={16} /> Details
-              </h4>
-              <textarea
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                placeholder="Add rich details, context, or links here..."
-                className="w-full min-h-[160px] bg-muted/10 border border-border/50 rounded-2xl p-6 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all resize-none leading-relaxed"
-              />
-            </div>
+                {/* Description */}
+                <div className="space-y-4">
+                  <h4 className="text-sm font-semibold tracking-wider text-muted-foreground uppercase flex items-center gap-2">
+                    <Tag size={16} /> Details
+                  </h4>
+                  <textarea
+                    value={description}
+                    onChange={e => setDescription(e.target.value)}
+                    placeholder="Add rich details, context, or links here..."
+                    className="w-full min-h-[160px] bg-muted/10 border border-border/50 rounded-2xl p-6 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all resize-none leading-relaxed"
+                  />
+                </div>
 
-            {/* Integration Grid (Bento Style) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Schedule */}
-              <div className="p-4 bg-muted/20 border border-border/50 rounded-2xl space-y-3 hover:bg-muted/30 transition-colors">
+                {/* Project */}
+                <div className="p-6 bg-muted/20 border border-border/50 rounded-2xl space-y-3 hover:bg-muted/30 transition-colors">
+                  <h4 className="text-xs font-bold tracking-wider text-muted-foreground uppercase flex items-center gap-2">
+                    <Folder size={14} /> Project Assignment
+                  </h4>
+                  <select
+                    value={projectId}
+                    onChange={e => setProjectId(e.target.value)}
+                    className="w-full bg-background border border-border/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
+                  >
+                    <option value="">No Project</option>
+                    {projects.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "schedule" && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                {/* Schedule */}
+                <div className="p-6 bg-muted/20 border border-border/50 rounded-2xl space-y-4 hover:bg-muted/30 transition-colors">
                 <h4 className="text-xs font-bold tracking-wider text-muted-foreground uppercase flex items-center gap-2">
                   <Clock size={14} /> Schedule & Estimate
                 </h4>
@@ -349,35 +396,30 @@ export function TaskDetail() {
                     if (conflicts.length === 0) return null;
                     const sameTime = scheduledTime ? conflicts.filter(t => t.scheduledDate?.includes("T" + scheduledTime)) : [];
                     return (
-                      <div className="mt-2 text-[10px] bg-amber-500/10 border border-amber-500/20 text-amber-500 p-2 rounded-lg">
+                      <div className="group relative mt-2 text-[11px] bg-amber-500/10 border border-amber-500/20 text-amber-500 px-3 py-2.5 rounded-xl cursor-default transition-colors hover:bg-amber-500/20">
                         {sameTime.length > 0 
                           ? <strong>Conflict: {sameTime.length} task(s) scheduled at exactly this time.</strong>
                           : `Note: You have ${conflicts.length} other task(s) on this date.`}
+                          
+                        <div className="absolute top-full left-0 mt-2 hidden group-hover:block w-[280px] bg-card/95 backdrop-blur-xl border border-border/50 rounded-xl shadow-2xl p-3 z-50 animate-in fade-in zoom-in-95">
+                          <h5 className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase mb-2">Conflicting Tasks</h5>
+                          <ul className="space-y-1.5">
+                            {conflicts.map(c => (
+                              <li key={c.id} className="text-foreground text-xs font-medium flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                <span className="truncate">{c.title}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
                       </div>
                     );
                   })()}
                 </div>
               </div>
 
-              {/* Project */}
-              <div className="p-4 bg-muted/20 border border-border/50 rounded-2xl space-y-3 hover:bg-muted/30 transition-colors">
-                <h4 className="text-xs font-bold tracking-wider text-muted-foreground uppercase flex items-center gap-2">
-                  <Folder size={14} /> Project Assignment
-                </h4>
-                <select
-                  value={projectId}
-                  onChange={e => setProjectId(e.target.value)}
-                  className="w-full bg-background border border-border/50 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
-                >
-                  <option value="">No Project</option>
-                  {projects.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              </div>
-
               {/* Repetition */}
-              <div className="p-4 bg-muted/20 border border-border/50 rounded-2xl space-y-3 hover:bg-muted/30 transition-colors">
+              <div className="p-6 bg-muted/20 border border-border/50 rounded-2xl space-y-4 hover:bg-muted/30 transition-colors">
                 <h4 className="text-xs font-bold tracking-wider text-muted-foreground uppercase flex items-center gap-2">
                   <Repeat size={14} /> Recurrence
                 </h4>
@@ -429,9 +471,13 @@ export function TaskDetail() {
                   </div>
                 )}
               </div>
+            </div>
+            )}
 
-              {/* Dependencies */}
-              <div className="p-4 bg-muted/20 border border-border/50 rounded-2xl space-y-3 hover:bg-muted/30 transition-colors">
+            {activeTab === "relations" && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                {/* Dependencies */}
+                <div className="p-6 bg-muted/20 border border-border/50 rounded-2xl space-y-4 hover:bg-muted/30 transition-colors">
                 <h4 className="text-xs font-bold tracking-wider text-muted-foreground uppercase flex items-center gap-2">
                   <Network size={14} /> Blockers (Dependencies)
                 </h4>
@@ -465,17 +511,17 @@ export function TaskDetail() {
               </div>
 
               {/* Linked Notes */}
-              <div className="p-4 md:col-span-2 bg-muted/20 border border-border/50 rounded-2xl space-y-3 hover:bg-muted/30 transition-colors">
+              <div className="p-6 bg-muted/20 border border-border/50 rounded-2xl space-y-4 hover:bg-muted/30 transition-colors">
                 <h4 className="text-xs font-bold tracking-wider text-muted-foreground uppercase flex items-center gap-2">
-                  <LinkIcon size={14} /> Linked Knowledge
+                  <LinkIcon size={14} /> Linked Notes
                 </h4>
-                <div className="flex flex-wrap gap-2">
-                  {linkedNoteIds.map(nId => {
-                    const n = notes.find(x => x.id === nId);
+                <div className="flex flex-col gap-2">
+                  {linkedNoteIds.map(nid => {
+                    const n = notes.find(x => x.id === nid);
                     if (!n) return null;
                     return (
-                      <div key={n.id} className="flex items-center gap-2 bg-background px-3 py-2 rounded-xl text-xs border border-border/50">
-                        <span className="truncate max-w-[200px]">{n.title || "Untitled Note"}</span>
+                      <div key={n.id} className="flex items-center justify-between bg-background px-4 py-3 rounded-xl text-sm border border-border/50">
+                        <span className="truncate max-w-[150px]">{n.title}</span>
                         <button onClick={() => setLinkedNoteIds(linkedNoteIds.filter(id => id !== n.id))} className="text-red-500 hover:text-red-400"><X size={14} /></button>
                       </div>
                     );
@@ -487,19 +533,17 @@ export function TaskDetail() {
                       }
                       e.target.value = "";
                     }}
-                    className="w-auto min-w-[200px] bg-background border border-border/50 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 text-muted-foreground"
-                    value=""
+                    className="w-full bg-background border border-border/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
                   >
-                    <option value="">+ Link a note...</option>
-                    {notes.map(n => (
-                      <option key={n.id} value={n.id}>{n.title || "Untitled Note"}</option>
+                    <option value="">Link a Note...</option>
+                    {notes.filter(n => !linkedNoteIds.includes(n.id)).map(n => (
+                      <option key={n.id} value={n.id}>{n.title}</option>
                     ))}
                   </select>
                 </div>
               </div>
-              
             </div>
-
+            )}
           </div>
         </div>
 
