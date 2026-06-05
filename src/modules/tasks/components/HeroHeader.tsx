@@ -68,25 +68,24 @@ export function HeroHeader({ priorityFilter, onPriorityFilter, dueFilter, onDueF
       if (t.status === "done" || t.status === "archived") return false;
       const dStr = t.dueDate || t.scheduledDate;
       if (!dStr) return false;
-      const d = new Date(dStr); d.setHours(0,0,0,0);
-      const td = new Date(); td.setHours(0,0,0,0);
-      return Math.round((d.getTime() - td.getTime()) / 86400000) < 0;
+      return dStr.slice(0, 10) < tDay;
     }).length,
     today: tasks.filter(t => {
       if (t.status === "done" || t.status === "archived") return false;
       const dStr = t.dueDate || t.scheduledDate;
       if (!dStr) return false;
-      const d = new Date(dStr); d.setHours(0,0,0,0);
-      const td = new Date(); td.setHours(0,0,0,0);
-      return Math.round((d.getTime() - td.getTime()) / 86400000) === 0;
+      return dStr.slice(0, 10) === tDay;
     }).length,
     tomorrow: tasks.filter(t => {
       if (t.status === "done" || t.status === "archived") return false;
       const dStr = t.dueDate || t.scheduledDate;
       if (!dStr) return false;
-      const d = new Date(dStr); d.setHours(0,0,0,0);
-      const td = new Date(); td.setHours(0,0,0,0);
-      return Math.round((d.getTime() - td.getTime()) / 86400000) === 1;
+      
+      const tmrwObj = new Date();
+      tmrwObj.setDate(tmrwObj.getDate() + 1);
+      const tmrw = tmrwObj.toISOString().slice(0, 10);
+      
+      return dStr.slice(0, 10) === tmrw;
     }).length,
   };
 
@@ -129,7 +128,7 @@ export function HeroHeader({ priorityFilter, onPriorityFilter, dueFilter, onDueF
         </div>
       </div> */}
       
-      {hasPills && (
+      {(hasPills || Object.values(dueCounts).some(c => c > 0)) && (
         <div className="hero-text mt-8 flex flex-wrap justify-center items-center gap-3">
           {(["urgent", "high", "medium", "low"] as const).map(p => {
             if (counts[p] === 0) return null;
@@ -153,12 +152,13 @@ export function HeroHeader({ priorityFilter, onPriorityFilter, dueFilter, onDueF
               </button>
             );
           })}
-        </div>
-      )}
 
-      {/* Due Date Filters */}
-      <div className="hero-text mt-4 flex flex-wrap justify-center items-center gap-3">
-        {(["overdue", "today", "tomorrow"] as const).map(d => {
+          {/* Separator if both exist */}
+          {hasPills && Object.values(dueCounts).some(c => c > 0) && (
+            <div className="w-px h-6 bg-border mx-1" />
+          )}
+
+          {(["overdue", "today", "tomorrow"] as const).map(d => {
           if (dueCounts[d] === 0) return null;
           
           let cfg = { label: "", dot: "", active: "", hover: "" };
@@ -185,7 +185,8 @@ export function HeroHeader({ priorityFilter, onPriorityFilter, dueFilter, onDueF
             </button>
           );
         })}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

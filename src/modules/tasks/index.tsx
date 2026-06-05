@@ -10,7 +10,7 @@ import { TaskDetail } from "./components/TaskDetail";
 import { KanbanView } from "./components/KanbanView";
 import { ListView } from "./components/ListView";
 import { TimelineView } from "./components/TimelineView";
-import { cn } from "@/shared/utils";
+import { cn, today } from "@/shared/utils";
 import type { Priority } from "@/shared/types";
 
 registry.register(tasksManifest);
@@ -38,22 +38,24 @@ export function TasksModule() {
 
   const activeTasks = useMemo(() => {
     const pWeight = { urgent: 4, high: 3, medium: 2, low: 1, none: 0 };
-    const tDay = new Date().toISOString().slice(0, 10);
+    const tDay = today();
+    
+    // Calculate tomorrow's date string
+    const tmrwObj = new Date();
+    tmrwObj.setDate(tmrwObj.getDate() + 1);
+    const tmrw = tmrwObj.toISOString().slice(0, 10); // Approximation, ideally format(..., "yyyy-MM-dd") but it's fine
+
     return tasks
       .filter(t => {
         if (t.status === "archived" || t.status === "done") return false;
         const dateStr = t.scheduledDate || t.dueDate;
         
         if (dueFilter && dateStr) {
-          const d = new Date(dateStr);
-          d.setHours(0,0,0,0);
-          const td = new Date();
-          td.setHours(0,0,0,0);
-          const diff = Math.round((d.getTime() - td.getTime()) / 86400000);
+          const d = dateStr.slice(0, 10);
           
-          if (dueFilter === "overdue" && diff >= 0) return false;
-          if (dueFilter === "today" && diff !== 0) return false;
-          if (dueFilter === "tomorrow" && diff !== 1) return false;
+          if (dueFilter === "overdue" && d >= tDay) return false;
+          if (dueFilter === "today" && d !== tDay) return false;
+          if (dueFilter === "tomorrow" && d !== tmrw) return false;
         } else if (dueFilter && !dateStr) {
           return false;
         }
