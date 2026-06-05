@@ -55,11 +55,11 @@ function RingTimer({
   const stateLabel = isIdle ? "READY FOR DEEP WORK" : isFocusing ? "FLOW STATE ACTIVE" : isPaused ? "SESSION PAUSED" : "RESTING";
 
   return (
-    <div className="flex flex-col items-center gap-12 w-full py-10 relative z-10">
+    <div className="flex flex-col items-center justify-center gap-6 w-full h-full relative z-10">
       {/* Decorative ambient glow */}
       {(isFocusing || isBreak) && (
         <div 
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full blur-[120px] opacity-20 pointer-events-none -z-10 transition-colors duration-1000"
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] rounded-full blur-[100px] opacity-20 pointer-events-none -z-10 transition-colors duration-1000"
           style={{ backgroundColor: ringColor }}
         />
       )}
@@ -108,8 +108,8 @@ function RingTimer({
 
       {/* Idle Configuration (Task, Goal, Duration) */}
       {isIdle && (
-        <div className="flex flex-col items-center gap-6 w-full max-w-lg animate-in fade-in slide-in-from-bottom-4 duration-700">
-          <div className="w-full bg-background/40 backdrop-blur-3xl border border-border/50 rounded-[2rem] p-6 shadow-2xl flex flex-col gap-5 relative overflow-hidden">
+        <div className="flex flex-col items-center gap-4 w-full max-w-lg animate-in fade-in slide-in-from-bottom-4 duration-700 mt-2">
+          <div className="w-full bg-background/40 backdrop-blur-3xl border border-border/50 rounded-3xl p-4 shadow-xl flex flex-col gap-4 relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
             
             <input
@@ -117,33 +117,33 @@ function RingTimer({
               onChange={(e) => onGoalChange(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && onStart()}
               placeholder="Set a deep intention..."
-              className="w-full text-center bg-transparent text-xl font-medium text-foreground focus:outline-none placeholder:text-muted-foreground/40 transition-colors relative z-10"
+              className="w-full text-center bg-transparent text-lg font-medium text-foreground focus:outline-none placeholder:text-muted-foreground/40 transition-colors relative z-10"
             />
             
             <div className="w-full h-px bg-border/40 relative z-10" />
 
-            <div className="flex items-center gap-3 w-full relative z-10">
-              <div className="flex-1 bg-background/50 border border-border/40 rounded-2xl relative group hover:border-primary/30 transition-colors">
-                <Compass className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4 group-hover:text-primary transition-colors" />
+            <div className="flex items-center gap-2 w-full relative z-10">
+              <div className="flex-1 bg-background/50 border border-border/40 rounded-xl relative group hover:border-primary/30 transition-colors">
+                <Compass className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4 group-hover:text-primary transition-colors" />
                 <select
                   value={selTask}
                   onChange={(e) => onTaskChange(e.target.value)}
-                  className="w-full bg-transparent pl-10 pr-4 py-3 text-sm focus:outline-none appearance-none cursor-pointer font-medium text-foreground"
+                  className="w-full bg-transparent pl-9 pr-4 py-2 text-xs focus:outline-none appearance-none cursor-pointer font-medium text-foreground"
                 >
                   <option value="">No specific task</option>
                   {tasks.map((t: any) => <option key={t.id} value={t.id}>{t.title}</option>)}
                 </select>
-                <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/50 w-4 h-4 pointer-events-none" />
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/50 w-4 h-4 pointer-events-none" />
               </div>
 
-              <div className="flex bg-background/50 border border-border/40 rounded-2xl p-1 shrink-0">
+              <div className="flex bg-background/50 border border-border/40 rounded-xl p-1 shrink-0">
                 {[25, 45, 60].map(m => (
                   <button
                     key={m}
                     onClick={() => onFocusMinsChange(m)}
                     className={cn(
-                      "px-3 py-2 rounded-xl text-[13px] font-bold transition-all duration-300",
-                      focusMins === m ? "bg-primary text-primary-foreground shadow-md" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                      "px-2 py-1.5 rounded-lg text-[11px] font-bold transition-all duration-300",
+                      focusMins === m ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                     )}
                   >{m}m</button>
                 ))}
@@ -154,15 +154,15 @@ function RingTimer({
       )}
 
       {/* Controls */}
-      <div className="flex items-center justify-center gap-5 mt-2 z-20">
+      <div className="flex items-center justify-center gap-5 z-20 shrink-0">
         {isIdle && (
           <button
             onClick={onStart}
-            className="group relative flex items-center gap-3 px-12 py-5 rounded-full bg-foreground text-background font-black tracking-wider uppercase overflow-hidden hover:scale-[1.02] active:scale-[0.98] transition-all shadow-2xl"
+            className="group relative flex items-center gap-3 px-10 py-4 rounded-full bg-foreground text-background font-black tracking-wider uppercase overflow-hidden hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl"
           >
             <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-            <Play fill="currentColor" size={18} />
-            <span className="text-[13px] relative z-10">Engage Focus</span>
+            <Play fill="currentColor" size={16} />
+            <span className="text-xs relative z-10">Engage Focus</span>
           </button>
         )}
 
@@ -297,25 +297,22 @@ export default function FocusModule() {
   }, [sessions]);
 
   return (
-    <main ref={containerRef} className="relative w-full h-full overflow-y-auto overflow-x-hidden bg-background">
+    <main ref={containerRef} className="relative w-full h-full overflow-hidden bg-background flex flex-col p-6 lg:p-8 gap-4">
       {/* Background Ambience */}
       <div className="fixed inset-0 pointer-events-none -z-10 bg-[radial-gradient(ellipse_at_top_right,rgba(var(--primary)/0.03),transparent_50%)]" />
 
       {/* Cinematic Hero AIDA Attention */}
-      <section className="reveal-item w-full max-w-6xl mx-auto pt-16 md:pt-24 px-6 md:px-12 flex flex-col items-center text-center mb-24">
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 text-primary border border-primary/20 text-xs font-black tracking-[0.2em] uppercase mb-6 shadow-[0_0_20px_rgba(var(--primary)/0.15)]">
-          <Brain size={14} /> Cognitive Engine
+      <section className="reveal-item w-full flex flex-col items-center text-center shrink-0">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 text-[10px] font-black tracking-[0.2em] uppercase mb-2 shadow-[0_0_20px_rgba(var(--primary)/0.15)]">
+          <Brain size={12} /> Cognitive Engine
         </div>
-        <h1 className="text-[clamp(2.5rem,6vw,5.5rem)] font-black tracking-tighter text-foreground leading-[1.05] max-w-4xl mx-auto">
-          Engineer Your <span className="text-transparent bg-clip-text bg-gradient-to-br from-primary to-primary/60 inline-block align-bottom pb-2">Focus.</span>
+        <h1 className="text-3xl md:text-4xl font-black tracking-tighter text-foreground leading-[1.05]">
+          Engineer Your <span className="text-transparent bg-clip-text bg-gradient-to-br from-primary to-primary/60 inline-block align-bottom pb-1">Focus.</span>
         </h1>
-        <p className="mt-6 text-lg md:text-xl text-muted-foreground font-medium max-w-2xl mx-auto leading-relaxed">
-          The ultimate deep work environment. Drop distractions, set your intention, and execute with precision.
-        </p>
       </section>
 
       {/* Primary Timer Engine (Interest) */}
-      <section className="reveal-item w-full max-w-6xl mx-auto px-6 md:px-12 mb-32 flex justify-center">
+      <section className="reveal-item flex-1 min-h-0 w-full max-w-5xl mx-auto flex justify-center items-center">
         <RingTimer
           secondsLeft={secondsLeft} totalSeconds={totalSeconds} state={state}
           goal={goal} onGoalChange={fStore.setGoal}
@@ -332,47 +329,47 @@ export default function FocusModule() {
       </section>
 
       {/* Gapless Bento Grid (Desire) */}
-      <section className="w-full max-w-6xl mx-auto px-6 md:px-12 pb-32">
-        <div className="grid grid-cols-1 lg:grid-cols-12 auto-rows-auto gap-5 grid-flow-dense">
+      <section className="w-full max-w-5xl mx-auto shrink-0 h-[220px] lg:h-[260px]">
+        <div className="grid grid-cols-1 lg:grid-cols-12 h-full gap-4 grid-flow-dense">
           
           {/* Main Stat Block */}
-          <div className="reveal-item lg:col-span-8 bg-surface-1/40 backdrop-blur-2xl border border-border/40 rounded-[2.5rem] p-8 md:p-10 flex flex-col justify-between group overflow-hidden relative shadow-xl hover:shadow-2xl transition-all duration-700">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-[80px] group-hover:bg-primary/10 transition-colors duration-700 pointer-events-none" />
+          <div className="reveal-item lg:col-span-7 bg-surface-1/40 backdrop-blur-2xl border border-border/40 rounded-3xl p-6 flex flex-col justify-between group overflow-hidden relative shadow-xl hover:shadow-2xl transition-all duration-700">
+            <div className="absolute top-0 right-0 w-48 h-48 bg-primary/5 rounded-full blur-[60px] group-hover:bg-primary/10 transition-colors duration-700 pointer-events-none" />
             
-            <div className="flex items-center gap-3 mb-8 relative z-10">
-              <div className="p-3 bg-primary/10 rounded-2xl text-primary"><Flame size={24} strokeWidth={2.5} /></div>
-              <h3 className="text-lg font-black tracking-wide uppercase text-foreground">Performance</h3>
+            <div className="flex items-center gap-2 mb-4 relative z-10">
+              <div className="p-2 bg-primary/10 rounded-xl text-primary"><Flame size={20} strokeWidth={2.5} /></div>
+              <h3 className="text-sm font-black tracking-wide uppercase text-foreground">Performance</h3>
             </div>
             
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 w-full mt-auto relative z-10">
+            <div className="grid grid-cols-4 gap-4 w-full mt-auto relative z-10">
               <div>
-                <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground mb-1">Today</p>
-                <p className="text-3xl md:text-4xl font-black tabular-nums text-foreground">{fmtMins(stats.todayMinutes)}</p>
+                <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-0.5">Today</p>
+                <p className="text-2xl font-black tabular-nums text-foreground">{fmtMins(stats.todayMinutes)}</p>
               </div>
               <div>
-                <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground mb-1">Sessions</p>
-                <p className="text-3xl md:text-4xl font-black tabular-nums text-foreground">{stats.todaySessions}</p>
+                <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-0.5">Sessions</p>
+                <p className="text-2xl font-black tabular-nums text-foreground">{stats.todaySessions}</p>
               </div>
               <div>
-                <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground mb-1">Week</p>
-                <p className="text-3xl md:text-4xl font-black tabular-nums text-foreground">{fmtMins(stats.weekMinutes)}</p>
+                <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-0.5">Week</p>
+                <p className="text-2xl font-black tabular-nums text-foreground">{fmtMins(stats.weekMinutes)}</p>
               </div>
               <div>
-                <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground mb-1">Streak</p>
-                <div className="flex items-baseline gap-1.5">
-                  <p className="text-3xl md:text-4xl font-black tabular-nums text-primary">{stats.currentStreak}d</p>
-                  {stats.currentStreak > 2 && <Sparkles size={16} className="text-primary animate-pulse" />}
+                <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-0.5">Streak</p>
+                <div className="flex items-baseline gap-1">
+                  <p className="text-2xl font-black tabular-nums text-primary">{stats.currentStreak}d</p>
+                  {stats.currentStreak > 2 && <Sparkles size={12} className="text-primary animate-pulse" />}
                 </div>
               </div>
             </div>
 
             {/* Streak Tracker */}
-            <div className="w-full mt-10 p-4 bg-background/50 rounded-2xl border border-border/50 flex items-center justify-between gap-1 relative z-10">
+            <div className="w-full mt-6 p-3 bg-background/50 rounded-xl border border-border/50 flex items-center justify-between gap-1 relative z-10">
               {streakDays.map((d, i) => (
                 <div key={i} title={d.d} className="flex-1 flex justify-center">
                   <div className={cn(
-                    "w-full max-w-[20px] h-2 rounded-full transition-all duration-500",
-                    d.has ? "bg-primary shadow-[0_0_10px_rgba(var(--primary)/0.5)]" : "bg-border/40"
+                    "w-full max-w-[16px] h-1.5 rounded-full transition-all duration-500",
+                    d.has ? "bg-primary shadow-[0_0_8px_rgba(var(--primary)/0.5)]" : "bg-border/40"
                   )} />
                 </div>
               ))}
@@ -380,29 +377,29 @@ export default function FocusModule() {
           </div>
 
           {/* History / Log Block */}
-          <div className="reveal-item lg:col-span-4 bg-surface-1/40 backdrop-blur-2xl border border-border/40 rounded-[2.5rem] p-8 md:p-10 flex flex-col shadow-xl hover:shadow-2xl transition-all duration-700 relative z-10">
-            <div className="flex items-center gap-3 mb-8">
-              <div className="p-3 bg-muted rounded-2xl text-foreground"><Activity size={24} strokeWidth={2.5} /></div>
-              <h3 className="text-lg font-black tracking-wide uppercase text-foreground">Recent Flow</h3>
+          <div className="reveal-item lg:col-span-5 bg-surface-1/40 backdrop-blur-2xl border border-border/40 rounded-3xl p-6 flex flex-col shadow-xl hover:shadow-2xl transition-all duration-700 relative z-10 overflow-hidden">
+            <div className="flex items-center gap-2 mb-4 shrink-0">
+              <div className="p-2 bg-muted rounded-xl text-foreground"><Activity size={20} strokeWidth={2.5} /></div>
+              <h3 className="text-sm font-black tracking-wide uppercase text-foreground">Recent Flow</h3>
             </div>
             
-            <div className="flex flex-col gap-4 flex-1">
+            <div className="flex flex-col gap-2 flex-1 overflow-y-auto pr-2 scrollbar-hide">
               {recentSessions.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-center opacity-50">
-                  <Target size={32} className="mb-3 text-muted-foreground" />
-                  <p className="text-sm font-medium">No sessions recorded yet.</p>
+                <div className="flex-1 flex flex-col items-center justify-center text-center opacity-50 h-full min-h-[100px]">
+                  <Target size={24} className="mb-2 text-muted-foreground" />
+                  <p className="text-xs font-medium">No sessions recorded yet.</p>
                 </div>
               ) : (
                 recentSessions.map(s => (
-                  <div key={s.id} className="group relative flex items-start gap-4 p-4 rounded-2xl bg-background/40 hover:bg-background/80 border border-transparent hover:border-border/50 transition-all">
-                    <div className="mt-1 w-2.5 h-2.5 rounded-full bg-primary shrink-0 shadow-[0_0_8px_rgba(var(--primary)/0.6)]" />
+                  <div key={s.id} className="group relative flex items-start gap-3 p-3 rounded-xl bg-background/40 hover:bg-background/80 border border-transparent hover:border-border/50 transition-all shrink-0">
+                    <div className="mt-1 w-2 h-2 rounded-full bg-primary shrink-0 shadow-[0_0_8px_rgba(var(--primary)/0.6)]" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-foreground truncate">{s.goal || "Deep Work"}</p>
-                      <div className="flex items-center gap-3 mt-1.5 opacity-70 group-hover:opacity-100 transition-opacity">
-                        <span className="text-[11px] font-semibold flex items-center gap-1"><Clock size={10} /> {s.actualMinutes}m</span>
-                        <span className="text-[11px] font-medium flex items-center gap-1"><Timer size={10} /> {format(parseISO(s.startedAt!), "h:mm a")}</span>
+                      <p className="text-xs font-bold text-foreground truncate">{s.goal || "Deep Work"}</p>
+                      <div className="flex items-center gap-3 mt-1 opacity-70 group-hover:opacity-100 transition-opacity">
+                        <span className="text-[10px] font-semibold flex items-center gap-1"><Clock size={10} /> {s.actualMinutes}m</span>
+                        <span className="text-[10px] font-medium flex items-center gap-1"><Timer size={10} /> {format(parseISO(s.startedAt!), "h:mm")}</span>
                         {(s.interruptCount ?? 0) > 0 && (
-                          <span className="text-[11px] font-bold text-amber-500 flex items-center gap-1 bg-amber-500/10 px-1.5 py-0.5 rounded-md"><ZapOff size={10} /> {s.interruptCount}</span>
+                          <span className="text-[10px] font-bold text-amber-500 flex items-center gap-1 bg-amber-500/10 px-1.5 py-0.5 rounded"><ZapOff size={10} /> {s.interruptCount}</span>
                         )}
                       </div>
                     </div>
@@ -414,9 +411,6 @@ export default function FocusModule() {
 
         </div>
       </section>
-
-      {/* Deep Footer Spacer */}
-      <div className="h-24 w-full" />
     </main>
   );
 }

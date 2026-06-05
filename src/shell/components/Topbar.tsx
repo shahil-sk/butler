@@ -106,7 +106,7 @@ export function Topbar() {
             title="New Task (⌘N)"
           >
             <Plus size={14} strokeWidth={3} />
-            <span className="hidden sm:inline">Add Task</span>
+            <span className="hidden sm:inline"> </span>
             <span className="inline sm:hidden">Add</span>
           </button>
 
