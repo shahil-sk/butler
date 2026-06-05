@@ -98,7 +98,7 @@ export function TaskCard({ task, onOpen, onToggleComplete, onPriorityClick }: Pr
     >
       <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
       
-      <div className="relative z-10 flex items-start justify-between gap-4 mb-4">
+      <div className="relative z-10 flex items-start justify-between gap-3 mb-4">
         <button
           onClick={(e) => { 
             e.stopPropagation(); 
@@ -107,7 +107,6 @@ export function TaskCard({ task, onOpen, onToggleComplete, onPriorityClick }: Pr
               return depTask && depTask.status !== "done";
             });
             if (hasIncompleteBlocker && task.status !== "done") {
-              // Jitter animation using a simple CSS transform or GSAP
               import("gsap").then((gsap) => {
                 gsap.default.fromTo(cardRef.current, 
                   { x: -8 }, 
@@ -121,33 +120,27 @@ export function TaskCard({ task, onOpen, onToggleComplete, onPriorityClick }: Pr
         >
           {task.status === "done" ? <CheckCircle2 size={24} className="text-emerald-500" /> : <Circle size={24} />}
         </button>
-        <div className="flex flex-wrap gap-2 justify-end items-center flex-1">
-          <span className={cn("px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest", statusConfig[task.status]?.classes || statusConfig.todo.classes)}>
+        <div className="flex flex-wrap items-center gap-2 justify-end flex-1">
+          <span className={cn("px-2 py-1 rounded-full text-[10px] font-semibold uppercase tracking-[0.08em]", statusConfig[task.status]?.classes || statusConfig.todo.classes)}>
             {statusConfig[task.status]?.label || "To Do"}
           </span>
           {prio && (
             <span 
               onClick={onPriorityClick ? (e) => onPriorityClick(e, task.priority!) : undefined}
-              className={cn("w-6 h-6 flex items-center justify-center rounded-full text-[10px] font-bold uppercase shrink-0", prio.classes, onPriorityClick && "cursor-pointer hover:scale-110 transition-transform")}
+              className={cn("w-6 h-6 flex items-center justify-center rounded-full text-[10px] font-semibold uppercase shrink-0", prio.classes, onPriorityClick && "cursor-pointer hover:scale-105 transition-transform")}
             >
               {prio.label}
             </span>
           )}
           {project && (
-            <span className="px-3 py-1 rounded-full bg-muted/50 text-muted-foreground text-[10px] font-bold uppercase tracking-widest truncate max-w-[120px]">
+            <span className="px-2 py-1 rounded-full bg-muted/40 text-muted-foreground text-[10px] font-semibold uppercase tracking-[0.08em] truncate max-w-[110px]">
               {project.name}
             </span>
           )}
-          {dueStatus && (
-            <span className={cn("flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border", dueStatus.class)}>
-              {dueStatus.icon}
-              {dueStatus.label}
-            </span>
-          )}
-          {!dueStatus && targetDateStr && (
-            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest">
-              <Calendar size={12} />
-              {formatTaskDate(targetDateStr)}
+          {(dueStatus || targetDateStr) && (
+            <span className={cn("flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold tracking-[0.08em]", dueStatus ? dueStatus.class : "bg-primary/10 text-primary")}> 
+              {dueStatus ? dueStatus.icon : <Calendar size={12} />}
+              {dueStatus ? dueStatus.label : targetDateStr ? formatTaskDate(targetDateStr) : ""}
             </span>
           )}
         </div>
@@ -169,8 +162,8 @@ export function TaskCard({ task, onOpen, onToggleComplete, onPriorityClick }: Pr
         )}
       </div>
 
-      {/* Integration Meta Bar - Pinned to bottom to avoid overlapping with arrow */}
-      <div className="relative z-10 flex flex-wrap items-center gap-4 text-xs font-semibold text-muted-foreground/70 pr-10 shrink-0">
+      {/* Integration Meta Bar - smaller and less crowded */}
+      <div className="relative z-10 flex flex-wrap items-center gap-3 text-xs text-muted-foreground/70 pr-10 shrink-0">
         {subtasks.length > 0 && (
           <div className="flex items-center gap-1.5">
             <GitBranch size={14} />
@@ -179,15 +172,15 @@ export function TaskCard({ task, onOpen, onToggleComplete, onPriorityClick }: Pr
         )}
         {task.dependencies && task.dependencies.length > 0 && (
           <div 
-            className="flex items-center gap-1.5 text-orange-500/70 cursor-help"
+            className="flex items-center gap-1.5 text-orange-500/80 cursor-help"
             title={`Blocked by:\n${task.dependencies.map(id => allTasks.find(t => t.id === id)?.title || "Unknown Task").join("\n")}`}
           >
             <Network size={14} />
-            <span>{task.dependencies.length} Blockers</span>
+            <span>{task.dependencies.length}</span>
           </div>
         )}
         {task.recurrence && (
-          <div className="flex items-center gap-1.5 text-blue-500/70" title={`Repeats ${task.recurrence.frequency}`}>
+          <div className="flex items-center gap-1.5 text-blue-500/80" title={`Repeats ${task.recurrence.frequency}`}>
             {task.recurrence.frequency === 'daily' ? <Sun size={14} /> : 
              task.recurrence.frequency === 'weekly' ? <CalendarDays size={14} /> : 
              task.recurrence.frequency === 'monthly' ? <CalendarRange size={14} /> : 
