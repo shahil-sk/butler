@@ -73,7 +73,7 @@ export function TasksModule() {
         if (pA !== pB) return pB - pA;
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
-  }, [tasks]);
+  }, [tasks, dueFilter]);
 
   const handleToggleComplete = useCallback((id: string) => {
     const task = tasks.find((t) => t.id === id);
